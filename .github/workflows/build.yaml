@@ -84,6 +84,7 @@ jobs:
           fi
           echo "✅ 检测到版本号:  $VERSION"
           echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build dist
         if: steps.version_check.outputs.should_build == 'true'
@@ -98,9 +99,9 @@ jobs:
         run: |
           git add dist
           if git diff --cached --quiet; then
-            git commit --allow-empty -m "build+tag"
+            git commit --allow-empty -m "build+${{ steps.version_check.outputs.version }}"
           else
-            git commit -m "build+tag"
+            git commit -m "build+${{ steps.version_check.outputs.version }}"
           fi
           git push origin HEAD:main
 

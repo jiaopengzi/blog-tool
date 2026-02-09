@@ -13,6 +13,12 @@ on:
     tags:
       - "*"
 
+  # build.yaml 完成后自动触发
+  workflow_run:
+    workflows: ["Build Dist And Tag"]
+    types:
+      - completed
+
   # 手动触发
   workflow_dispatch:
 
