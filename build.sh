@@ -5,6 +5,9 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : 将所有脚本合并为一个脚本
 
+# 执行合并编译并上传到指定服务器
+# bash build.sh && scp ../blog-tool-dev.sh ../blog-tool.sh ../blog-tool-billing-center.sh <user>@<host>:/home/<user>/
+
 # shellcheck disable=SC1091
 
 # 当前脚本所在目录绝对路径
@@ -15,15 +18,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 source "$ROOT_DIR/options/_.sh"
 
 # 定义输出文件
-OUTPUT_FILE_DEV="../blog-tool-dev.sh"                       # 开发版
-OUTPUT_FILE_USER="../blog-tool.sh"                          # 用户版
-OUTPUT_FILE_BILLING_CENTER="../blog-tool-billing-center.sh" # 计费中心版
-DEV_SH="config/dev.sh"                                      # 开发配置文件路径
-USER_SH="config/user.sh"                                    # 用户配置文件路径
-USER_BILLING_CENTER_SH="config/user_billing_center.sh"      # 计费中心用户配置文件路径
-LOG_SH="utils/log.sh"                                       # 日志记录脚本路径
-COMMENT_SRC_TEXT="#"                                        # 处理注释的源文本
-COMMENT_TAR_TEXT="#!!!"                                     # 处理注释的目标文本
+OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/dist}"
+OUTPUT_FILE_DEV="$OUTPUT_DIR/blog-tool-dev.sh"                       # 开发版
+OUTPUT_FILE_USER="$OUTPUT_DIR/blog-tool.sh"                          # 用户版
+OUTPUT_FILE_BILLING_CENTER="$OUTPUT_DIR/blog-tool-billing-center.sh" # 计费中心版
+DEV_SH="config/dev.sh"                                               # 开发配置文件路径
+USER_SH="config/user.sh"                                             # 用户配置文件路径
+USER_BILLING_CENTER_SH="config/user_billing_center.sh"               # 计费中心用户配置文件路径
+LOG_SH="utils/log.sh"                                                # 日志记录脚本路径
+COMMENT_SRC_TEXT="#"                                                 # 处理注释的源文本
+COMMENT_TAR_TEXT="#!!!"                                              # 处理注释的目标文本
 
 # 添加注释块
 add_comment_block() {
@@ -738,6 +742,8 @@ build() {
 
 # 执行构建
 main() {
+    mkdir -p "$OUTPUT_DIR"
+
     # 不存在则创建输出文件
     if [[ ! -f "$OUTPUT_FILE_DEV" ]]; then
         touch "$OUTPUT_FILE_DEV"
@@ -763,6 +769,3 @@ main() {
 
 # 入口函数
 main
-
-# 执行合并编译并上传到指定服务器
-# bash build.sh && scp ../blog-tool-dev.sh ../blog-tool.sh ../blog-tool-billing-center.sh <user>@<host>:/home/<user>/

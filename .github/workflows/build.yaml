@@ -1,0 +1,101 @@
+# FilePath    : blog-tool/.github/workflows/build.yaml
+# Author      : jiaopengzi
+# Blog        : https://jiaopengzi.com
+# Copyright   : Copyright (c) 2026 by jiaopengzi, All Rights Reserved.
+# Description : CI/CD
+
+name: Build Dist And Tag
+
+on:
+  # CHANGELOG.md 有变化时触发
+  push:
+    branches:
+      - main
+    paths:
+      - "CHANGELOG.md"
+
+  # 手动触发, 用于生成 dist 并打 tag
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:13
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check changelog version
+        id: version_check
+        run: |
+          # 参数校验: 不允许传参
+          if [ $# -gt 0 ]; then
+            echo "❌ 错误: 此命令无需手动传入版本号。"
+            echo "   只需运行: git savetag"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 检查 CHANGELOG.md 是否存在
+          if [ ! -f "CHANGELOG.md" ]; then
+            echo "❌ 错误: 找不到 CHANGELOG.md 文件" >&2
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION=$(sed -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | head -n 1)
+          if [ -z "$VERSION" ]; then
+            echo "❌ 错误: 无法从 CHANGELOG.md 中提取版本号。" >&2
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SEMVER_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if ! printf '%s' "$VERSION" | grep -E -q "$SEMVER_RE"; then
+            echo "❌ 错误: 提取的版本号 '$VERSION' 不符合要求; 必须以小写字母 v 开头(例如 v1.2.3), 且遵循语义化版本规范(SemVer)." >&2
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "❌ 错误: Git 标签 '$VERSION' 已存在，请更新 CHANGELOG.md 中的版本号。" >&2
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "✅ 检测到版本号:  $VERSION"
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build dist
+        if: steps.version_check.outputs.should_build == 'true'
+        run: |
+          chmod +x ./build.sh
+          ./build.sh
+
+      - name: Commit dist
+        if: steps.version_check.outputs.should_build == 'true'
+        run: |
+          git add dist
+          if git diff --cached --quiet; then
+            git commit --allow-empty -m "build+tag"
+          else
+            git commit -m "build+tag"
+          fi
+          git push origin HEAD:main
+
+      - name: Create tag
+        if: steps.version_check.outputs.should_build == 'true'
+        run: |
+          chmod +x ./.gitalias/savetag.sh
+          TAG_ONLY=true ./.gitalias/savetag.sh

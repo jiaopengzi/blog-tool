@@ -1,0 +1,45 @@
+# FilePath    : blog-tool/.github/workflows/sync_gitee.yaml
+# Author      : jiaopengzi
+# Blog        : https://jiaopengzi.com
+# Copyright   : Copyright (c) 2026 by jiaopengzi, All Rights Reserved.
+# Description : CI/CD - 同步代码到 Gitee
+
+name: Sync Gitee
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+
+  # 手动触发
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.GITEE_SSH_PRIVATE_KEY }}
+
+      - name: Add Gitee host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
+
+      - name: Push to Gitee
+        run: |
+          git remote add gitee git@gitee.com:jiaopengzi/blog-tool.git
+          git push gitee main --tags
