@@ -29,23 +29,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Install git
         run: |
           apt-get update
           apt-get install -y git
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Configure git
+        working-directory: ${{ github.workspace }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Check changelog version
         id: version_check
+        working-directory: ${{ github.workspace }}
         run: |
           # 参数校验: 不允许传参
           if [ $# -gt 0 ]; then
@@ -84,12 +86,14 @@ jobs:
 
       - name: Build dist
         if: steps.version_check.outputs.should_build == 'true'
+        working-directory: ${{ github.workspace }}
         run: |
           chmod +x ./build.sh
           ./build.sh
 
       - name: Commit dist
         if: steps.version_check.outputs.should_build == 'true'
+        working-directory: ${{ github.workspace }}
         run: |
           git add dist
           if git diff --cached --quiet; then
@@ -101,6 +105,7 @@ jobs:
 
       - name: Create tag
         if: steps.version_check.outputs.should_build == 'true'
+        working-directory: ${{ github.workspace }}
         run: |
           chmod +x ./.gitalias/savetag.sh
           TAG_ONLY=true ./.gitalias/savetag.sh
