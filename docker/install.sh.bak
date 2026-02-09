@@ -1,0 +1,319 @@
+#!/bin/bash
+# FilePath    : blog-tool/docker/install.sh
+# Author      : jiaopengzi
+# Blog        : https://jiaopengzi.com
+# Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
+# Description : 安装docker
+
+# DEFAULT_DOWNLOAD_URL="https://download.docker.com" # 官方源
+# DEFAULT_HUB_URL="https://hub.docker.com"           # 官方 Docker Hub
+# DOCKER_CE_TEST_DOWNLOAD_FILE="linux/debian/gpg"    # 测试文件路径(相对于镜像源根目录)
+
+# # Docker CE 镜像源列表
+# DOCKER_CE_SOURCES=(
+#     "https://mirrors.aliyun.com/docker-ce"           # 阿里云
+#     "https://mirrors.tencent.com/docker-ce"          # 腾讯云
+#     "https://mirrors.163.com/docker-ce"              # 网易云
+#     "https://mirrors.cernet.edu.cn/docker-ce"        # 中国教育网
+#     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce" # 清华大学
+#     "https://mirrors.huaweicloud.com/docker-ce"      # 华为云
+#     "https://mirrors.cmecloud.cn/docker-ce"          # 中国移动云
+#     "https://mirrors.volces.com/docker"              # 火山引擎
+#     "https://mirror.azure.cn/docker-ce"              # Azure 中国
+#     "https://mirrors.pku.edu.cn/docker-ce"           # 北京大学
+#     "https://mirrors.zju.edu.cn/docker-ce"           # 浙江大学
+#     "https://mirrors.nju.edu.cn/docker-ce"           # 南京大学
+#     "https://mirror.sjtu.edu.cn/docker-ce"           # 上海交通大学
+#     "https://mirrors.cqupt.edu.cn/docker-ce"         # 重庆邮电大学
+#     "https://mirrors.ustc.edu.cn/docker-ce"          # 中国科学技术大学
+#     "https://mirror.iscas.ac.cn/docker-ce"           # 中国科学院
+#     "https://download.docker.com"                    # 官方源
+# )
+
+# # 安装 docker 到宿主机
+# install_docker_bak() {
+#     # 启动代理服务
+#     if [ -f "$PROXY_SERVICE" ]; then
+#         sudo systemctl start xray-core-proxy.service # 使用代理更新源
+#     fi
+
+#     # 卸载旧版本
+#     # 参考：https://docs.docker.com/engine/install/debian/
+#     for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do sudo apt remove $pkg; done
+
+#     # Add Docker's official GPG key:
+#     apt_update
+
+#     sudo apt install -y ca-certificates curl
+#     sudo install -m 0755 -d /etc/apt/keyrings
+
+#     if [ -f "$PROXY_SERVICE" ]; then
+#         # 使用代理
+#         sudo -E curl -x "$PROXY_LOCAL_URL" -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+#         # sudo -E curl -x "$PROXY_LOCAL_URL" -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+#     else
+#         sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+#         # sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+#     fi
+
+#     sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+#     # Add the repository to Apt sources:
+#     # shellcheck disable=SC1091
+#     # debian
+#     echo \
+#         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+#   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |
+#         sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+#     # # shellcheck disable=SC1091
+#     # # ubuntu
+#     # echo \
+#     #   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+#     # $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |
+#     #   sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+#     apt_update
+
+#     # 安装 docker
+#     apt_install_y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+#     # 启动 docker
+#     sudo systemctl start docker
+
+#     # 设置 docker 开机启动
+#     sudo systemctl enable docker
+
+#     # 查看 docker 是否开机启动
+#     sudo systemctl is-enabled docker
+
+#     # 校验 docker 是否安装成功
+#     # sudo docker run hello-world
+
+#     # 停止代理服务
+#     if [ -f "$PROXY_SERVICE" ]; then
+#         sudo systemctl stop xray-core-proxy.service # 使用代理更新源
+#     fi
+
+#     # 查看 docker 版本
+#     # 如果 docker 没有返回版本号则安装失败
+#     if ! sudo docker --version; then
+#         log_error "docker安装失败"
+#         exit 1
+#     fi
+
+#     log_info "docker安装完成"
+# }
+
+# # 测试并找出最快的 Docker CE 镜像源
+# find_fastest_docker_mirror() {
+#     declare -A results   # 用于存储每个源的下载时间的关联数组
+#     fastest_source=""    # 最快的源
+#     fastest_time=9999999 # 最快的时间, 初始为一个很大的数值, 避免未赋值比较
+
+#     # 循环测试每个镜像源
+#     for mirror in "${DOCKER_CE_SOURCES[@]}"; do
+#         # 拼接完整的测试 URL
+#         test_url="${mirror}/${DOCKER_CE_TEST_DOWNLOAD_FILE}"
+
+#         # 使用 curl 测试下载时间(不保存文件,只返回总耗时, 单位秒)
+#         # -s: silent, -o /dev/null: 不输出到文件, -w '%{time_total}': 输出总时间
+#         download_time=$(curl -s -o /dev/null -w '%{time_total}' "$test_url" 2>/dev/null || echo 9999)
+
+#         # 判断是否超时或失败(如返回了默认的 9999 或大于 10 秒可能为无效源)
+#         if [[ $(echo "$download_time >= 10" | bc) -eq 1 ]] || [[ "$download_time" == "9999" ]]; then
+#             # log_error "测试源 $mirror 失败或超时"
+#             results["$mirror"]="失败或超时"
+#         else
+#             # log_info "测试源 $mirror 成功, 耗时 ${download_time} 秒"
+#             results["$mirror"]="$download_time"
+
+#             # 判断是否为目前最快的
+#             if (($(echo "$download_time < $fastest_time" | bc -l))); then
+#                 fastest_time="$download_time"
+#                 fastest_source="$mirror"
+#             fi
+#         fi
+#     done
+
+#     log_debug "测试完成, 结果如下："
+
+#     # 输出所有源的结果
+#     for mirror in "${DOCKER_CE_SOURCES[@]}"; do
+#         time=${results["$mirror"]}
+#         if [[ "$time" == "失败或超时" ]]; then
+#             log_debug "测试源 $mirror 失败或超时"
+#         else
+#             # 使用 printf -v 将格式化的字符串写入变量, 然后通过 log_info 输出
+#             printf -v formatted_msg "  🟩 %s : %.3f 秒" "$mirror" "$time"
+#             log_debug "$formatted_msg"
+#         fi
+#     done
+
+#     # 输出最快的源
+#     if [[ -n "$fastest_source" ]]; then
+#         log_debug "🏆 最快的 Docker CE 镜像源是：$fastest_source (耗时 ${fastest_time} 秒)"
+#     else
+#         log_error "没有找到可用的镜像源"
+#     fi
+
+#     echo "$fastest_source"
+# }
+
+# ====================== 上述为原来代码留存后续使用 ======================
+
+# 设置 docker daemon 配置
+set_daemon_config() {
+    log_debug "run set_daemon_config"
+
+    # 检查 /etc/docker/daemon.json 文件是否存在, 如果不存在就创建它
+    if [ ! -f "/etc/docker/daemon.json" ]; then
+        sudo mkdir -p /etc/docker
+        echo '{}' | sudo tee /etc/docker/daemon.json >/dev/null
+    else
+        # 备份原文件, 加上时间戳防止覆盖
+        sudo cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%Y%m%d%H%M%S)"
+    fi
+
+    # 使用 jq 设置日志配置
+    # live-restore: 启用后即使 docker 守护进程停止, 容器也会继续运行
+    # 使用 json-file 日志驱动, 限制日志文件大小为 100MB, 保留 7 个轮转文件, 并添加 production 标签
+    sudo jq '
+    .["live-restore"] = true |
+    .["log-driver"] = "json-file" |
+    .["log-opts"]["max-size"] = "100m" |
+    .["log-opts"]["max-file"] = "7" |
+    .["log-opts"]["labels"] = "production"' /etc/docker/daemon.json | sudo tee /etc/docker/daemon.json.tmp >/dev/null
+
+    # 验证配置文件语法是否正确; 判断回显是否包含 "configuration OK" 内容
+    if sudo dockerd --validate --config-file /etc/docker/daemon.json.tmp 2>&1 | grep -q "configuration OK"; then
+        log_info "docker 日志配置语法验证通过"
+    else
+        log_error "docker 日志配置语法验证失败, 请检查 /etc/docker/daemon.json.tmp 文件"
+        sudo rm -f /etc/docker/daemon.json.tmp
+        return 1
+    fi
+
+    sudo mv /etc/docker/daemon.json.tmp /etc/docker/daemon.json
+
+    # 重启 docker 服务使配置生效
+    log_info "docker 正在重启..."
+    sudo systemctl restart docker
+
+    log_info "docker daemon 配置设置完成, 请查看 /etc/docker/daemon.json 文件"
+}
+
+# 执行 docker 安装和配置
+__install_docker() {
+    log_debug "run __install_docker"
+
+    # 脚本下载地址根据网络环境选择
+    local script_url
+    if [[ $(curl -s ipinfo.io/country) == "CN" ]]; then
+        log_debug "检测到国内网络环境, 使用国内源安装 docker"
+        log_info "**特别鸣谢 https://linuxmirrors.cn 提供的 Docker 安装脚本**"
+        script_url="https://linuxmirrors.cn/docker.sh"
+    else
+        log_debug "检测到非国内网络环境, 使用官方源安装 docker"
+        script_url="https://get.docker.com"
+    fi
+
+    local script_file="./install-docker.sh"
+
+    # 下载脚本
+    if ! sudo curl -fsSL --retry 2 --retry-delay 3 --connect-timeout 5 --max-time 10 "$script_url" -o "$script_file"; then
+        log_debug "下载命令: sudo curl -fsSL --retry 2 --retry-delay 3 --connect-timeout 5 --max-time 10 $script_url -o $script_file"
+        log_error "下载Docker安装脚本失败"
+        return 1
+    fi
+
+    # 给脚本执行权限
+    sudo chmod +x "$script_file"
+
+    # 直接执行脚本，而不是用source
+    if sudo bash "$script_file" 2>&1 | tee -a ./install.log; then
+        log_info "docker 安装完成"
+
+        # 设置 docker 日志配置
+        set_daemon_config
+    else
+        log_error "docker 安装失败"
+        return 1
+    fi
+
+    # 移除安装脚本
+    sudo rm -f "$script_file"
+}
+
+# 卸载 docker
+__uninstall_docker() {
+    log_debug "run __uninstall_docker"
+
+    # 停止服务
+    sudo systemctl stop docker || true
+
+    # 卸载 docker
+    sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || true
+
+    # 自动删除无用依赖
+    sudo apt autoremove -y
+
+    log_info "docker 卸载完成"
+
+    is_remove=$(read_user_input "是否需要移除 docker 的历史数据 docker (默认n) [y|n]? " "n")
+
+    if [[ "$is_remove" == "y" ]]; then
+        # 删除相关数据
+        sudo rm -rf /var/lib/docker
+        sudo rm -rf /var/lib/containerd
+
+        # 删除 apt 源和 keyring
+        sudo rm /etc/apt/sources.list.d/docker.list
+        sudo rm /etc/apt/keyrings/docker.asc
+
+        log_info "已移除 docker 历史数据"
+    else
+        log_info "未移除 docker 历史数据"
+    fi
+}
+
+# 卸载 docker
+uninstall_docker() {
+    log_debug "run uninstall_docker"
+
+    is_uninstall=$(read_user_input "是否卸载 docker (默认n) [y|n]? " "n")
+    if [[ "$is_uninstall" == "y" ]]; then
+        __uninstall_docker
+    else
+        log_info "未卸载 docker"
+    fi
+}
+
+# docker 安装入口函数
+install_docker() {
+    log_debug "run install_docker"
+
+    # 判断是否安装了 docker
+    if command -v docker >/dev/null 2>&1; then
+        log_warn "检测到已安装 Docker"
+
+        local is_install
+        is_install=$(read_user_input "是否需要卸载后重新安装 docker (默认n) [y|n]? " "n")
+
+        if [[ "$is_install" == "y" ]]; then
+            log_debug "开始卸载 docker"
+
+            # 卸载 docker
+            __uninstall_docker
+
+            # 执行安装
+            __install_docker
+        else
+            log_info "跳过 docker 重新安装步骤"
+            return
+        fi
+    else
+        # 执行安装
+        __install_docker
+    fi
+}

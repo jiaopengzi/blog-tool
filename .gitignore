@@ -1,0 +1,20 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+logs
+tmp
+.idea
+uploads
+bin
+.VSCodeCounter
+
+# python 目录 下的忽略规则
+python/__pycache__/
+python/*.pyc
+python/*.pyo
+python/.pytest_cache/
+python/.venv/
+python/venv/
