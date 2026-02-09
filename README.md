@@ -32,6 +32,8 @@ sudo bash blog-tool.sh
 
 工具下载好后直接使用如上命令执行即可看到命令面板。
 
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/3724fa21-6bb3-43ae-854f-f747ea89ddfe" />
+
 ## 技术栈
 
 | 组件 | 技术 | 说明 |
