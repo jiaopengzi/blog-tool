@@ -95,8 +95,18 @@ docker_build_server() {
 
         git_clone_cd "blog-server-dev"
 
-        # 运行 Dockerfile
-        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-server:build" -f Dockerfile_dev .
+        # # 运行 Dockerfile
+        # sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-server:build" -f Dockerfile_dev .
+
+        # 查看私钥路径前16个字符, 确保环境变量传递正确
+        log_info "SIGN_PRIVATE_KEY 前16个字符: ${SIGN_PRIVATE_KEY:0:16}"
+
+        # 使用 BuildKit 构建, 以支持 --secret 参数传递签名密钥
+        # 在容器中的 Makefile 里会使用这个密钥对产物进行签名, 以确保产物的安全性和可信度
+        sudo DOCKER_BUILDKIT=1 docker build --no-cache \
+            --secret id=sign_key,src="$SIGN_PRIVATE_KEY" \
+            -t "$REGISTRY_REMOTE_SERVER/blog-server:build" \
+            -f Dockerfile_dev .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
