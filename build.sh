@@ -740,22 +740,36 @@ build() {
     echo "合并完成, 输出文件：$target_file"
 }
 
+# 初始化输出文件(存在则删除后重建)
+# 参数: $@: 文件路径列表
+init_output_files() {
+    for file in "$@"; do
+        [[ -f "$file" ]] && rm -f "$file"
+        touch "$file"
+    done
+}
+
+# 复制构建产物到上级目录(存在则删除后重建)
+# 参数: $@: 源文件路径列表
+copy_to_parent_dir() {
+    local parent_dir
+    parent_dir="$(dirname "$ROOT_DIR")"
+    for file in "$@"; do
+        local filename
+        filename=$(basename "$file")
+        local target="$parent_dir/$filename"
+        [[ -f "$target" ]] && rm -f "$target"
+        cp -f "$file" "$target"
+        echo "已复制到：$target"
+    done
+}
+
 # 执行构建
 main() {
     mkdir -p "$OUTPUT_DIR"
 
-    # 不存在则创建输出文件
-    if [[ ! -f "$OUTPUT_FILE_DEV" ]]; then
-        touch "$OUTPUT_FILE_DEV"
-    fi
-
-    if [[ ! -f "$OUTPUT_FILE_USER" ]]; then
-        touch "$OUTPUT_FILE_USER"
-    fi
-
-    if [[ ! -f "$OUTPUT_FILE_BILLING_CENTER" ]]; then
-        touch "$OUTPUT_FILE_BILLING_CENTER"
-    fi
+    # 初始化输出文件(存在则删除后重建)
+    init_output_files "$OUTPUT_FILE_DEV" "$OUTPUT_FILE_USER" "$OUTPUT_FILE_BILLING_CENTER"
 
     # 构建开发版
     build "$OUTPUT_FILE_DEV" "dev"
@@ -765,6 +779,9 @@ main() {
 
     # 构建计费中心版
     build "$OUTPUT_FILE_BILLING_CENTER" "billing_center"
+
+    # 复制构建产物到上级目录
+    copy_to_parent_dir "$OUTPUT_FILE_DEV" "$OUTPUT_FILE_USER" "$OUTPUT_FILE_BILLING_CENTER"
 }
 
 # 入口函数

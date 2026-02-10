@@ -5,6 +5,7 @@
         "appendfsync",
         "appendonly",
         "autoclean",
+        "BUILDKIT",
         "CERTIFICATEAUTHORITIES",
         "commitish",
         "dadd",
