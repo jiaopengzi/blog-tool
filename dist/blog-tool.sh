@@ -4384,29 +4384,6 @@ remove_server_volume() {
     fi
 }
 
-docker_build_server() {
-    log_debug "run docker_build_server"
-
-    # shellcheck disable=SC2329
-    run() {
-        cd "$ROOT_DIR" || exit
-
-        git_clone_cd "blog-server-dev"
-
-        log_info "SIGN_PRIVATE_KEY 前16个字符: ${SIGN_PRIVATE_KEY:0:16}"
-
-        sudo DOCKER_BUILDKIT=1 docker build --no-cache \
-            --secret id=sign_key,src="$SIGN_PRIVATE_KEY" \
-            -t "$REGISTRY_REMOTE_SERVER/blog-server:build" \
-            -f Dockerfile_dev .
-
-        cd "$ROOT_DIR" || exit
-        log_debug "脚本所在目录 $(pwd)"
-    }
-
-    log_timer "构建 blog-server 镜像" run
-}
-
 docker_create_server_temp_container() {
     log_debug "run docker_create_server_temp_container"
 

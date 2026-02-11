@@ -661,6 +661,7 @@ OPTIONS_ALL=(
     "构建并推送 server client:docker_build_push_server_client"
     "server 产物复制到本地:server_artifacts_copy_to_local"
     "构建并推送 server:docker_build_push_server"
+    "仅构建 server:docker_build_server"
     "仅推送 server:docker_push_server"
     "client 产物复制到本地:client_artifacts_copy_to_local"
     "构建并推送 client:docker_build_push_client"
@@ -7096,8 +7097,13 @@ docker_build_server_env() {
 }
 
 # 构建 blog_server 镜像
+# 参数: $1: (可选)签名私钥文件路径, 未传则使用 SIGN_PRIVATE_KEY 变量
+# 单独调用需要传递环境变量 SIGN_PRIVATE_KEY, key 需要使用绝对路径 示例:
+# sudo SIGN_PRIVATE_KEY=/your/path/cert_key.pem bash blog-tool-dev.sh docker_build_server
 docker_build_server() {
     log_debug "run docker_build_server"
+
+    local sign_key="${1:-$SIGN_PRIVATE_KEY}"
 
     # shellcheck disable=SC2329
     run() {
@@ -7109,12 +7115,12 @@ docker_build_server() {
         # sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-server:build" -f Dockerfile_dev .
 
         # 查看私钥路径前16个字符, 确保环境变量传递正确
-        log_info "SIGN_PRIVATE_KEY 前16个字符: ${SIGN_PRIVATE_KEY:0:16}"
+        log_info "sign_key 前16个字符: ${sign_key:0:16}"
 
         # 使用 BuildKit 构建, 以支持 --secret 参数传递签名密钥
         # 在容器中的 Makefile 里会使用这个密钥对产物进行签名, 以确保产物的安全性和可信度
         sudo DOCKER_BUILDKIT=1 docker build --no-cache \
-            --secret id=sign_key,src="$SIGN_PRIVATE_KEY" \
+            --secret id=sign_key,src="$sign_key" \
             -t "$REGISTRY_REMOTE_SERVER/blog-server:build" \
             -f Dockerfile_dev .
 

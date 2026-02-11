@@ -77,6 +77,7 @@ OPTIONS_ALL=(
     "构建并推送 server client:docker_build_push_server_client"
     "server 产物复制到本地:server_artifacts_copy_to_local"
     "构建并推送 server:docker_build_push_server"
+    "仅构建 server:docker_build_server"
     "仅推送 server:docker_push_server"
     "client 产物复制到本地:client_artifacts_copy_to_local"
     "构建并推送 client:docker_build_push_client"
