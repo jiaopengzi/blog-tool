@@ -263,7 +263,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 # shellcheck disable=SC2034
 
 RUN_MODE="pro"
@@ -2998,52 +2998,64 @@ docker_clear_cache() {
 set_daemon_config() {
     log_debug "run set_daemon_config"
 
-    if [ ! -f "/etc/docker/daemon.json" ]; then
-        sudo mkdir -p /etc/docker
-        echo '{}' | sudo tee /etc/docker/daemon.json >/dev/null
+    local target_dir="/etc/docker"
+    local target_file="/etc/docker/daemon.json"
+    local validate_cmd="sudo dockerd --validate --config-file"
+
+    if [ ! -f "$target_file" ]; then
+        log_debug "docker daemon 配置文件不存在, 创建新文件"
+        sudo mkdir -p "$target_dir"
+        echo '{}' | sudo tee "$target_file" >/dev/null
     else
-        sudo cp /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%Y%m%d%H%M%S)"
+        log_debug "docker daemon 配置文件已存在, 进行备份"
+        sudo cp "$target_file" "${target_file}.bak.$(date +%Y%m%d%H%M%S)"
     fi
 
-    local common_config='
-    .["live-restore"] = true |
-    .["log-driver"] = "json-file" |
-    .["log-opts"]["max-size"] = "100m" |
-    .["log-opts"]["max-file"] = "7" |
-    .["log-opts"]["labels"] = "production"'
+    local tmp_file="$target_file.tmp"
 
-    local jq_filter
-    if [[ $(curl -s ipinfo.io/country) == "CN" ]]; then
-        log_debug "检测到国内网络环境, 使用国内源安装 docker"
+    cat >"$tmp_file" <<'EOF'
+{
+  "live-restore": true,
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "7",
+    "labels": "production"
+  }
+EOF
 
-        jq_filter="$common_config
-        | .[\"registry-mirrors\"] = [
-            \"https://mirror.ccs.tencentyun.com\",
-            \"https://docker.xuanyuan.me\",
-            \"https://docker.1ms.run\"
-        ]"
-    else
-        log_debug "检测到非国内网络环境, 使用官方源安装 docker"
-
-        jq_filter="$common_config"
+    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
+        log_debug "检测到国内网络环境, 使用国内镜像加速"
+        cat >>"$tmp_file" <<'EOF'
+  ,
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com",
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me"
+  ]
+EOF
     fi
 
-    sudo jq "$jq_filter" /etc/docker/daemon.json | sudo tee /etc/docker/daemon.json.tmp >/dev/null
+    cat >>"$tmp_file" <<'EOF'
+}
+EOF
 
-    if sudo dockerd --validate --config-file /etc/docker/daemon.json.tmp 2>&1 | grep -q "configuration OK"; then
+    if $validate_cmd "$tmp_file" >/dev/null 2>&1; then
         log_debug "docker 日志配置语法验证通过"
     else
-        log_error "docker 日志配置语法验证失败, 请检查 /etc/docker/daemon.json.tmp 文件"
-        sudo rm -f /etc/docker/daemon.json.tmp
+        log_error "docker 日志配置语法验证失败, 请检查 $tmp_file 文件"
+        log_error "文件内容:"
+        sudo cat "$tmp_file"
+        sudo rm -f "$tmp_file"
         return 1
     fi
 
-    sudo mv /etc/docker/daemon.json.tmp /etc/docker/daemon.json
+    sudo mv "$tmp_file" "$target_file"
 
     log_info "docker 正在重启..."
-    sudo systemctl restart docker
+    sudo systemctl restart docker 2>/dev/null || sudo service docker restart 2>/dev/null
 
-    log_info "docker daemon 配置设置完成, 请查看 /etc/docker/daemon.json 文件"
+    log_info "如果您需要修改配置, 请编辑 $target_file 文件并重启 docker 服务"
 }
 
 pull_docker_image_pro_db() {
@@ -3126,6 +3138,8 @@ __install_docker() {
         log_error "docker 安装失败"
         return 1
     fi
+
+    log_info "docker 安装完成, 开始设置 docker daemon 配置"
 
     set_daemon_config
 

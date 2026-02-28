@@ -77,6 +77,8 @@ __install_docker() {
         return 1
     fi
 
+    log_info "docker 安装完成, 开始设置 docker daemon 配置"
+
     # 设置 docker 日志配置
     set_daemon_config
 
