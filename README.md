@@ -1,10 +1,10 @@
 # blog-tool
 
-博客系统一键部署工具，通过 Docker 在 Debian 服务器上自动化部署完整的博客系统。
+博客系统一键部署工具，通过 Docker 在 Debian Ubuntu 服务器上自动化部署完整的博客系统。
 
 ## 系统要求
 
-- **操作系统**: Debian 13 (Trixie)+
+- **操作系统**: Debian 13 (Trixie)+ | Ubuntu 24.04+
 - **架构**: x86_64 (amd64)
 - **权限**: root 或具有 sudo 权限的用户
 
