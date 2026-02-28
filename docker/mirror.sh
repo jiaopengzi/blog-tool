@@ -5,7 +5,7 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : Docker 镜像源测速脚本
 
-DOCKER_CE_TEST_DOWNLOAD_FILE="linux/debian/gpg" # 测试文件路径(相对于镜像源根目录)
+DOCKER_CE_TEST_DOWNLOAD_FILE="linux/$(get_docker_repo_path)/gpg" # 测试文件路径(相对于镜像源根目录)
 
 # 测试并找出最快的 Docker CE 镜像源 (并发抢占式版本)
 find_fastest_docker_mirror() {
@@ -18,7 +18,7 @@ find_fastest_docker_mirror() {
 
     # 关联数组: PID -> Source URL
     declare -A pids_to_sources
-    log_info "正在启动对所有 Docker CE 镜像源的并发测试..."
+    log_info "正在启动对所有 Docker CE 镜像源进行并发测速..."
 
     # 1. 并发启动所有测试任务
     for item in "${DOCKER_CE_SOURCES[@]}"; do

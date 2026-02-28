@@ -48,7 +48,7 @@ HOST_NAME=""    # 默认主机名, 通过 check_dev_var 交互式加载
 SSH_PORT=""     # 默认 SSH 端口, 通过 check_dev_var 交互式加载
 GATEWAY_IPV4="" # 默认网关, 通过 check_dev_var 交互式加载
 
-# 系统版本
-OLD_SYS_VERSION="bookworm" # Debian 12
-NEW_SYS_VERSION="trixie"   # Debian 13
-NEW_SYS_VERSION_NUM="13"   # Debian 数字版本
+# # 系统版本 (默认值, 会被 system/detect.sh 的 init_system_detection 覆盖)
+# OLD_SYS_VERSION="bookworm" # Debian 12
+# NEW_SYS_VERSION="trixie"   # Debian 13
+# NEW_SYS_VERSION_NUM="13"   # Debian 数字版本

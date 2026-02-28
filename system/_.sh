@@ -8,6 +8,7 @@
 # shellcheck disable=SC1091
 SYSTEM_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SYSTEM_SCRIPT_DIR/apt.sh"
+source "$SYSTEM_SCRIPT_DIR/detect.sh"
 source "$SYSTEM_SCRIPT_DIR/software.sh"
 source "$SYSTEM_SCRIPT_DIR/ssh.sh"
 source "$SYSTEM_SCRIPT_DIR/sys.sh"

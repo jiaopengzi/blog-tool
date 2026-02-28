@@ -34,12 +34,12 @@ add_backports_apt_source() {
         sudo sed -i '/# Backports 仓库开始/,/# Backports 仓库结束/d' "$sources_list"
     fi
 
-    # 添加 backports 仓库
-    {
-        echo "# Backports 仓库开始"
-        echo "deb http://deb.debian.org/debian $OLD_SYS_VERSION-backports main contrib non-free-firmware"
-        echo "# Backports 仓库结束"
-    } | sudo tee -a "$sources_list"
+    #    # 添加 backports 仓库
+    #    {
+    #        echo "# Backports 仓库开始"
+    #        get_backports_source
+    #        echo "# Backports 仓库结束"
+    #    } | sudo tee -a "$sources_list"
 
     apt_update
 }
