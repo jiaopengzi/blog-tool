@@ -37,11 +37,11 @@ set_daemon_config() {
         # 国内环境, 在公共配置基础上添加 registry-mirrors
         # 腾讯的只支持内网访问
         jq_filter="$common_config
-    | .[\"registry-mirrors\"] = [
-        \"https://mirror.ccs.tencentyun.com\",
-        \"https://docker.xuanyuan.me\"
-        \"https://docker.1ms.run\"
-    ]"
+        | .[\"registry-mirrors\"] = [
+            \"https://mirror.ccs.tencentyun.com\",
+            \"https://docker.xuanyuan.me\",
+            \"https://docker.1ms.run\"
+        ]"
     else
         log_debug "检测到非国内网络环境, 使用官方源安装 docker"
 
