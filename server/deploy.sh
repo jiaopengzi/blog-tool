@@ -253,35 +253,36 @@ docker_push_server() {
     # 3. 推送到私有仓库
     docker_tag_push_private_registry "blog-server" "$version"
 
-    # 4. 更新 changelog
-    sync_repo_by_tag "blog-server" "$version" "$GIT_GITHUB"
-    sync_repo_by_tag "blog-server" "$version" "$GIT_GITEE"
+    echo "暂时不发布到生产环境, 仅推送到私有仓库"
 
-    # 5. 发布到生产环境
-    if [ "$is_dev" = false ]; then
-        # 推送到 Docker Hub
-        docker_tag_push_docker_hub "blog-server" "$version"
+    # # 4. 更新 changelog
+    # sync_repo_by_tag "blog-server" "$version" "$GIT_GITHUB"
+    # sync_repo_by_tag "blog-server" "$version" "$GIT_GITEE"
 
-        # 产物发布到 GitHub 和 Gitee Releases
+    # # 5. 发布到生产环境
+    # if [ "$is_dev" = false ]; then
+    #     # 推送到 Docker Hub
+    #     docker_tag_push_docker_hub "blog-server" "$version"
 
-        # 打包产物
-        local zip_path
-        zip_path=$(server_artifacts_zip "$version")
+    #     # 产物发布到 GitHub 和 Gitee Releases
 
-        # 发布
-        releases_with_md_platform "blog-server" "$version" "$zip_path" "github"
-        releases_with_md_platform "blog-server" "$version" "$zip_path" "gitee"
+    #     # 打包产物
+    #     local zip_path
+    #     zip_path=$(server_artifacts_zip "$version")
 
-        # 移除压缩包
-        if [ -f "$zip_path" ]; then
-            sudo rm -f "$zip_path"
-            log_info "移除本地产物包 $zip_path 成功"
-        fi
-    else
-        # 如果不是生产环境, 复制到本地的产物包删除
-        sudo rm -rf "$DIR_APP_SERVER"
-    fi
+    #     # 发布
+    #     releases_with_md_platform "blog-server" "$version" "$zip_path" "github"
+    #     releases_with_md_platform "blog-server" "$version" "$zip_path" "gitee"
 
+    #     # 移除压缩包
+    #     if [ -f "$zip_path" ]; then
+    #         sudo rm -f "$zip_path"
+    #         log_info "移除本地产物包 $zip_path 成功"
+    #     fi
+    # else
+    #     # 如果不是生产环境, 复制到本地的产物包删除
+    #     sudo rm -rf "$DIR_APP_SERVER"
+    # fi
 }
 
 # 拉取 server 镜像

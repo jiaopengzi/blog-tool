@@ -239,6 +239,8 @@ docker_push_billing_center() {
     # 3. 推送到私有仓库
     docker_tag_push_private_registry "billing-center" "$version"
 
+    echo "不发布到生产环境, 仅推送到私有仓库"
+
     # # 4. 更新 changelog
     # sync_repo_by_tag "billing-center" "$version" "$GIT_GITHUB"
     # sync_repo_by_tag "billing-center" "$version" "$GIT_GITEE"
