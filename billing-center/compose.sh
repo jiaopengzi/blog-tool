@@ -48,7 +48,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s https://localhost/api/v1/helper/version | grep 'request_id'",
+          "curl -sk https://localhost/api/v1/helper/version | grep 'request_id'",
         ]
       interval: 10s
       timeout: 10s

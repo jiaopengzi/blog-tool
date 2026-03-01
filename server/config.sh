@@ -49,6 +49,24 @@ server_update_jwt_secret_key() {
     sudo sed -i "s%secret_key:[[:space:]]*\"[^\"]*\"%secret_key: \"$secret_key\"%" "$DATA_VOLUME_DIR/blog-server/config/jwt.yaml"
 }
 
+# 更新 server 配置文件中的数据库密码
+server_update_password_key() {
+    log_debug "run server_update_password_key"
+
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+
+    # pgsql 密码更新
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$POSTGRES_PASSWORD\"%" "$config_dir/pgsql.yaml"
+
+    # redis 密码更新(所有节点)
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$REDIS_PASSWORD\"%" "$config_dir/redis.yaml"
+
+    # es 密码更新
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$ELASTIC_PASSWORD\"%" "$config_dir/es.yaml"
+
+    log_info "server 更新数据库密码配置 success"
+}
+
 # 设置 server 主机地址
 server_set_host() {
     log_debug "run server_is_setup"
@@ -97,6 +115,9 @@ copy_server_config() {
 
     # 更新 jwt secret key
     server_update_jwt_secret_key
+
+    # 更新数据库密码配置
+    server_update_password_key
 
     # app 设置
     if [ "$web_set_db" == "y" ]; then

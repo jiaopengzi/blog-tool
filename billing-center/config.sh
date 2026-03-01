@@ -61,7 +61,22 @@ copy_billing_center_nginx_config() {
     # 修改证书目录权限
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR/billing-center/nginx/ssl/"
 
-    log_info "client 复制配置文件到 volume success"
+    log_info "billing-center 复制 nginx 配置文件到 volume success"
+}
+
+# 更新 billing-center 配置文件中的数据库密码
+server_update_password_key_billing_center() {
+    log_debug "run server_update_password_key_billing_center"
+
+    local config_dir="$DATA_VOLUME_DIR/billing-center/config"
+
+    # pgsql 密码更新
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$POSTGRES_PASSWORD_BILLING_CENTER\"%" "$config_dir/pgsql.yaml"
+
+    # redis 密码更新(所有节点)
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$REDIS_PASSWORD_BILLING_CENTER\"%" "$config_dir/redis.yaml"
+
+    log_info "billing-center 更新数据库密码配置 success"
 }
 
 # 复制 billing-center server 配置文件
@@ -87,14 +102,17 @@ copy_billing_center_server_config() {
     # 复制配置文件到 volume 目录
     cp -r "./bc-config/" "$DATA_VOLUME_DIR/billing-center/config/"
 
+    # 更新配置文件中的密码
+    server_update_password_key_billing_center
+
     # 目录已经存在，主要是修改权限
     if [ ! -d "$DATA_VOLUME_DIR" ]; then
         # 如果不存在则创建
         setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
     fi
 
-    # 修改证书目录权限
+    # 修改配置目录权限
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR/billing-center/config/"
 
-    log_info "billing-center 复制配置文件到 volume success"
+    log_info "billing-center 复制后端配置文件到 volume success"
 }

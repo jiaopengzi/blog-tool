@@ -271,24 +271,39 @@ docker_push_billing_center() {
     # fi
 }
 
+# # 拉取 billing_center 镜像
+# docker_pull_billing_center() {
+#     log_debug "run docker_pull_billing_center"
+
+#     local version=${1-latest}
+
+#     # 根据运行模式拉取不同仓库的镜像
+#     if run_mode_is_dev; then
+#         # shellcheck disable=SC2329
+#         run() {
+#             timeout_retry_docker_pull "$REGISTRY_REMOTE_SERVER/billing-center" "$version"
+#             # sudo docker pull "$REGISTRY_REMOTE_SERVER/billing-center:$version"
+#         }
+#         docker_private_registry_login_logout run
+#     else
+#         timeout_retry_docker_pull "$DOCKER_HUB_OWNER/billing-center" "$version"
+#         # sudo docker pull "$DOCKER_HUB_OWNER/billing-center:$version"
+#     fi
+# }
+
 # 拉取 billing_center 镜像
 docker_pull_billing_center() {
     log_debug "run docker_pull_billing_center"
 
     local version=${1-latest}
 
-    # 根据运行模式拉取不同仓库的镜像
-    if run_mode_is_dev; then
-        # shellcheck disable=SC2329
-        run() {
-            timeout_retry_docker_pull "$REGISTRY_REMOTE_SERVER/billing-center" "$version"
-            # sudo docker pull "$REGISTRY_REMOTE_SERVER/billing-center:$version"
-        }
-        docker_private_registry_login_logout run
-    else
-        timeout_retry_docker_pull "$DOCKER_HUB_OWNER/billing-center" "$version"
-        # sudo docker pull "$DOCKER_HUB_OWNER/billing-center:$version"
-    fi
+    # billing_center 只从私有仓库拉取, 不区分运行模式
+    # shellcheck disable=SC2329
+    run() {
+        timeout_retry_docker_pull "$REGISTRY_REMOTE_SERVER/billing-center" "$version"
+        # sudo docker pull "$REGISTRY_REMOTE_SERVER/billing-center:$version"
+    }
+    docker_private_registry_login_logout run
 }
 
 # 构建 billing_center 推送镜像

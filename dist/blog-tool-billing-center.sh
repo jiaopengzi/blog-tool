@@ -1768,118 +1768,130 @@ check_url_accessible() {
 # shellcheck disable=SC2034
 
 generate_strong_password() {
-    log_debug "run generate_strong_password"
+	log_debug "run generate_strong_password"
 
-    openssl rand -hex 32
+	openssl rand -hex 32
 }
 
 is_weak_password() {
-    log_debug "run is_weak_password"
+	log_debug "run is_weak_password"
 
-    local password="$1"
-    local password_length=${#password}
+	local password="$1"
+	local password_length=${#password}
 
-    if [[ -z "$password" ]]; then
-        return 0
-    fi
+	if [[ -z "$password" ]]; then
+		return 0
+	fi
 
-    if (( password_length < 16 )); then
-        return 0
-    fi
+	if ((password_length < 16)); then
+		return 0
+	fi
 
-    local -a weak_list=(
-        "123456"
-        "12345678"
-        "1234567890"
-        "0123456789"
-        "password"
-        "qwerty"
-        "abc123"
-        "admin123"
-        "root123"
-        "123456789"
-        "1234567890123456"
-    )
+	local -a weak_list=(
+		"123456"
+		"12345678"
+		"1234567890"
+		"0123456789"
+		"password"
+		"qwerty"
+		"abc123"
+		"admin123"
+		"root123"
+		"123456789"
+		"1234567890123456"
+	)
 
-    local weak
-    for weak in "${weak_list[@]}"; do
-        if [[ "$password" == "$weak" ]]; then
-            return 0
-        fi
-    done
+	local weak
+	for weak in "${weak_list[@]}"; do
+		if [[ "$password" == "$weak" ]]; then
+			return 0
+		fi
+	done
 
-    local first_char="${password:0:1}"
-    local same_char_pattern
-    same_char_pattern=$(printf '%*s' "$password_length" '' | tr ' ' "$first_char")
-    if [[ "$password" == "$same_char_pattern" ]]; then
-        return 0
-    fi
+	local first_char="${password:0:1}"
+	local same_char_pattern
+	same_char_pattern=$(printf '%*s' "$password_length" '' | tr ' ' "$first_char")
+	if [[ "$password" == "$same_char_pattern" ]]; then
+		return 0
+	fi
 
-    return 1
+	return 1
+}
+
+_handle_existing_password() {
+	local var_name="$1"
+	local config_file="$2"
+	local description="$3"
+	local password user_choice
+
+	IFS= read -r password <"$config_file"
+
+	if is_weak_password "$password"; then
+		log_warn "$description 强度不足, 建议替换为强密码"
+		user_choice=$(read_user_input "⚠️  $description 当前为弱密码, 是否自动生成强密码替换? (y/n, 默认: y): " "y")
+
+		if [[ "$user_choice" == "y" ]]; then
+			password=$(generate_strong_password)
+			over_write_set_owner "$JPZ_UID" "$JPZ_GID" 600 "$password" "$config_file"
+			log_debug "✅ 已自动生成强密码并写入 $config_file"
+		else
+			log_warn "⚠️  用户选择保留弱密码: $description"
+		fi
+	else
+		log_debug "$description 密码强度检查通过"
+	fi
+
+	printf -v "$var_name" '%s' "$password"
+}
+
+_generate_new_password() {
+	local var_name="$1"
+	local config_file="$2"
+	local description="$3"
+	local password
+
+	password=$(generate_strong_password)
+	over_write_set_owner "$JPZ_UID" "$JPZ_GID" 600 "$password" "$config_file"
+	log_info "✅ 已自动生成 $description 并写入 $config_file"
+
+	printf -v "$var_name" '%s' "$password"
 }
 
 check_password_security() {
-    log_debug "run check_password_security"
+	log_debug "run check_password_security"
 
-    if ! run_mode_is_pro; then
-        log_debug "非 pro 模式, 跳过密码安全检查"
-        return 0
-    fi
+	if [[ ! -d "$BLOG_TOOL_ENV" ]]; then
+		mkdir -p "$BLOG_TOOL_ENV"
+	fi
 
-    if [[ ! -d "$BLOG_TOOL_ENV" ]]; then
-        mkdir -p "$BLOG_TOOL_ENV"
-    fi
+	local -a password_map=(
+		"POSTGRES_PASSWORD:postgres_password:PostgreSQL 数据库密码"
+		"REDIS_PASSWORD:redis_password:Redis 密码"
+		"ELASTIC_PASSWORD:elastic_password:Elasticsearch 密码"
+		"KIBANA_PASSWORD:kibana_password:Kibana 密码"
+		"POSTGRES_PASSWORD_BILLING_CENTER:postgres_password_billing_center:计费中心 PostgreSQL 数据库密码"
+		"REDIS_PASSWORD_BILLING_CENTER:redis_password_billing_center:计费中心 Redis 密码"
+	)
 
-    local -a password_map=(
-        "POSTGRES_PASSWORD:postgres_password:PostgreSQL 数据库密码"
-        "REDIS_PASSWORD:redis_password:Redis 密码"
-        "ELASTIC_PASSWORD:elastic_password:Elasticsearch 密码"
-        "KIBANA_PASSWORD:kibana_password:Kibana 密码"
-        "POSTGRES_PASSWORD_BILLING_CENTER:postgres_password_billing_center:计费中心 PostgreSQL 数据库密码"
-        "REDIS_PASSWORD_BILLING_CENTER:redis_password_billing_center:计费中心 Redis 密码"
-    )
+	local entry var_name file_name description
+	local config_file
 
-    local entry var_name file_name description
-    local config_file password
+	for entry in "${password_map[@]}"; do
+		IFS=':' read -r var_name file_name description <<<"$entry"
 
-    for entry in "${password_map[@]}"; do
-        IFS=':' read -r var_name file_name description <<< "$entry"
+		if ! declare -p "$var_name" &>/dev/null; then
+			log_debug "$var_name 变量不存在, 跳过(可能不在当前构建版本中)"
+			continue
+		fi
 
-        if ! declare -p "$var_name" &>/dev/null; then
-            log_debug "$var_name 变量不存在, 跳过(可能不在当前构建版本中)"
-            continue
-        fi
+		config_file="$BLOG_TOOL_ENV/$file_name"
 
-        config_file="$BLOG_TOOL_ENV/$file_name"
-
-        if [[ -f "$config_file" ]]; then
-            IFS= read -r password < "$config_file"
-
-            if is_weak_password "$password"; then
-                log_warn "$description 强度不足, 建议替换为强密码"
-                local user_choice
-                user_choice=$(read_user_input "⚠️  $description 当前为弱密码, 是否自动生成强密码替换? (y/n, 默认: y): " "y")
-
-                if [[ "$user_choice" == "y" ]]; then
-                    password=$(generate_strong_password)
-                    over_write_set_owner "$JPZ_UID" "$JPZ_GID" 600 "$password" "$config_file"
-                    log_info "✅ 已自动生成强密码并写入 $config_file"
-                else
-                    log_warn "⚠️  用户选择保留弱密码: $description"
-                fi
-            else
-                log_debug "$description 密码强度检查通过"
-            fi
-
-            printf -v "$var_name" '%s' "$password"
-        else
-            password=$(generate_strong_password)
-            over_write_set_owner "$JPZ_UID" "$JPZ_GID" 600 "$password" "$config_file"
-            log_info "✅ 已自动生成强密码并写入 $config_file"
-
-            printf -v "$var_name" '%s' "$password"
-        fi
-    done
+		if [[ -f "$config_file" ]]; then
+			_handle_existing_password "$var_name" "$config_file" "$description"
+		else
+			_generate_new_password "$var_name" "$config_file" "$description"
+		fi
+	done
 }
 
 export LC_ALL=C.UTF-8
@@ -3922,7 +3934,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -s https://localhost/api/v1/helper/version | grep 'request_id'",
+          "curl -sk https://localhost/api/v1/helper/version | grep 'request_id'",
         ]
       interval: 10s
       timeout: 10s
@@ -3988,7 +4000,19 @@ copy_billing_center_nginx_config() {
 
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR/billing-center/nginx/ssl/"
 
-    log_info "client 复制配置文件到 volume success"
+    log_info "billing-center 复制 nginx 配置文件到 volume success"
+}
+
+server_update_password_key_billing_center() {
+    log_debug "run server_update_password_key_billing_center"
+
+    local config_dir="$DATA_VOLUME_DIR/billing-center/config"
+
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$POSTGRES_PASSWORD_BILLING_CENTER\"%" "$config_dir/pgsql.yaml"
+
+    sudo sed -i "s%password:[[:space:]]*\"[^\"]*\"%password: \"$REDIS_PASSWORD_BILLING_CENTER\"%" "$config_dir/redis.yaml"
+
+    log_info "billing-center 更新数据库密码配置 success"
 }
 
 copy_billing_center_server_config() {
@@ -4011,13 +4035,15 @@ copy_billing_center_server_config() {
 
     cp -r "./bc-config/" "$DATA_VOLUME_DIR/billing-center/config/"
 
+    server_update_password_key_billing_center
+
     if [ ! -d "$DATA_VOLUME_DIR" ]; then
         setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
     fi
 
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR/billing-center/config/"
 
-    log_info "billing-center 复制配置文件到 volume success"
+    log_info "billing-center 复制后端配置文件到 volume success"
 }
 
 docker_rmi_billing_center() {
@@ -4199,15 +4225,11 @@ docker_pull_billing_center() {
 
     local version=${1-latest}
 
-    if run_mode_is_dev; then
-        # shellcheck disable=SC2329
-        run() {
-            timeout_retry_docker_pull "$REGISTRY_REMOTE_SERVER/billing-center" "$version"
-        }
-        docker_private_registry_login_logout run
-    else
-        timeout_retry_docker_pull "$DOCKER_HUB_OWNER/billing-center" "$version"
-    fi
+    # shellcheck disable=SC2329
+    run() {
+        timeout_retry_docker_pull "$REGISTRY_REMOTE_SERVER/billing-center" "$version"
+    }
+    docker_private_registry_login_logout run
 }
 
 wait_billing_center_start() {
