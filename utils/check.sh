@@ -381,6 +381,9 @@ check() {
     check_dir
     update_run_mode
 
+    # 检查密码安全性
+    check_password_security
+
     # 解码 python 脚本内容到临时文件
     decode_py_base64_main
 }
