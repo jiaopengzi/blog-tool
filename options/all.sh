@@ -16,7 +16,8 @@ OPTIONS_ALL=(
     "添加 Backports 源:add_backports_apt_source"
     "删除 Backports 源:del_backports_apt_source"
     "安装依赖软件:install_common_software"
-    "配置 ssh:set_ssh_config"
+    "设置 ssh 含公钥:set_ssh_config"
+    "仅更新 SSH 配置:only_update_ssh_config"
     "安装所有更新:install_all_update"
     "系统常规升级:apt_full_upgrade"
     "系统大版本升级:update_apt_source_and_full_upgrade"
@@ -204,6 +205,9 @@ OPTIONS_USER=(
 )
 
 OPTIONS_USER_NOT_SHOW=(
+    "设置 ssh 含公钥:set_ssh_config"
+    "仅更新 SSH 配置:only_update_ssh_config"
+
     "手动安装 docker:manual_install_docker"
     "拉取生产数据库镜像:pull_docker_image_pro_db"
 
@@ -305,6 +309,9 @@ OPTIONS_BILLING_CENTER=(
 )
 
 OPTIONS_BILLING_CENTER_NOT_SHOW=(
+    "设置 ssh 含公钥:set_ssh_config"
+    "仅更新 SSH 配置:only_update_ssh_config"
+
     "手动安装 docker:manual_install_docker"
     "最快 docker ce 源:find_fastest_docker_mirror"
     "设置 daemon:set_daemon_config"
