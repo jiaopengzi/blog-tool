@@ -48,4 +48,4 @@ jobs:
       - name: Push to Gitee
         run: |
           git remote add gitee git@gitee.com:jiaopengzi/blog-tool.git
-          git push gitee main --tags
+          git push --force-with-lease gitee main --tags
