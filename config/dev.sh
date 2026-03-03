@@ -38,9 +38,9 @@ GITEE_TOKEN=""                       # gitee token
 
 # docker 镜像版本
 IMG_VERSION_ALPINE="latest"
-IMG_VERSION_GOLANG="1.25.6-alpine"
+IMG_VERSION_GOLANG="1.26.0-alpine"
 IMG_VERSION_NODE="22.22.0"
-IMG_VERSION_NGINX="1.29.0-alpine"
+IMG_VERSION_NGINX="1.29.5-alpine"
 IMG_VERSION_REGISTRY="3"
 IMG_VERSION_HTTPD="2"
 
