@@ -357,6 +357,7 @@ docker_client_stop() {
 docker_client_restart() {
     log_debug "run docker_client_restart"
     docker_client_stop
+    copy_client_config
     docker_client_start
 }
 
