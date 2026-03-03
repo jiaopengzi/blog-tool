@@ -5,6 +5,16 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.4.0] - 2026-03-03
+
+### ✨ Feat
+
+- 拆分 ssh 设置步骤
+
+### 🐞 Fix
+
+- 密码初始化日志级别为 debug
+
 ## [v0.3.0] - 2026-03-01
 
 ### ✨ Feat
