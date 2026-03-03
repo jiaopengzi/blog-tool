@@ -14,14 +14,31 @@
 
 #### GitHub
 
+##### 最新版
+
 ```bash
 curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/main/dist/blog-tool.sh
 ```
 
+##### 指定版本
+
+```bash
+curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/v0.4.1/dist/blog-tool.sh
+```
+
 #### Gitee (国内用户)
+
+##### 最新版
 
 ```bash
 curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh
+```
+
+##### 指定版本
+
+```bash
+
+curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/v0.4.1/dist/blog-tool.sh
 ```
 
 ### 2. 工具使用
