@@ -115,7 +115,7 @@ _generate_new_password() {
 
 	password=$(generate_strong_password)
 	over_write_set_owner "$JPZ_UID" "$JPZ_GID" 600 "$password" "$config_file"
-	log_info "✅ 已自动生成 $description 并写入 $config_file"
+	log_debug "✅ 已自动生成 $description 并写入 $config_file"
 
 	# 将生成的密码赋给对应的 Shell 变量
 	printf -v "$var_name" '%s' "$password"
