@@ -320,9 +320,9 @@ GITEE_TOKEN=""                       # gitee token
 
 # docker 镜像版本
 IMG_VERSION_ALPINE="latest"
-IMG_VERSION_GOLANG="1.25.6-alpine"
+IMG_VERSION_GOLANG="1.26.0-alpine"
 IMG_VERSION_NODE="22.22.0"
-IMG_VERSION_NGINX="1.29.0-alpine"
+IMG_VERSION_NGINX="1.29.5-alpine"
 IMG_VERSION_REGISTRY="3"
 IMG_VERSION_HTTPD="2"
 
@@ -378,8 +378,8 @@ DOCKER_CE_SOURCES=(
     "https://mirrors.aliyun.com/docker-ce|阿里云公网"
     "http://mirrors.cloud.aliyuncs.com|阿里云内网"
     "http://mirrors.aliyuncs.com|阿里云内网经典"
-    # "https://mirrors.tencent.com/docker-ce|腾讯云公网"
-    # "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
+    "https://mirrors.tencent.com/docker-ce|腾讯云公网"
+    "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
     "https://mirrors.163.com/docker-ce|网易云"
     "https://mirrors.cernet.edu.cn/docker-ce|中国教育网"
     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce|清华大学"
@@ -424,14 +424,14 @@ CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
 # docker 镜像版本
-IMG_VERSION_REDIS="8.4.0"    # redis 版本
-IMG_VERSION_PGSQL="18.1"     # pgsql 版本
+IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
-# https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.2.4.zip
+# https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip
 # 优先查看分词工具是否更新到最新版本, 以分词工具的版本为准, 其他版本保持一致
-IMG_VERSION_ES="9.2.4"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.2.4" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.1"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.1" # 与 es 保持版本一致
 
 # 需要创建的运行用户
 JPZ_UID=2025    # 服务端用户

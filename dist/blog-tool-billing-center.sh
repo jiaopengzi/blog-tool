@@ -290,6 +290,8 @@ DOCKER_CE_SOURCES=(
     "https://mirrors.aliyun.com/docker-ce|阿里云公网"
     "http://mirrors.cloud.aliyuncs.com|阿里云内网"
     "http://mirrors.aliyuncs.com|阿里云内网经典"
+    "https://mirrors.tencent.com/docker-ce|腾讯云公网"
+    "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
     "https://mirrors.163.com/docker-ce|网易云"
     "https://mirrors.cernet.edu.cn/docker-ce|中国教育网"
     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce|清华大学"
@@ -325,12 +327,12 @@ fi
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
-IMG_VERSION_REDIS="8.4.0"    # redis 版本
-IMG_VERSION_PGSQL="18.1"     # pgsql 版本
+IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
-IMG_VERSION_ES="9.2.4"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.2.4" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.1"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.1" # 与 es 保持版本一致
 
 JPZ_UID=2025    # 服务端用户
 JPZ_GID=2025    # 服务端用户组
@@ -480,9 +482,6 @@ OPTIONS_BILLING_CENTER=(
 )
 
 OPTIONS_BILLING_CENTER_NOT_SHOW=(
-    "设置 ssh 含公钥:set_ssh_config"
-    "仅更新 SSH 配置:only_update_ssh_config"
-
     "手动安装 docker:manual_install_docker"
     "最快 docker ce 源:find_fastest_docker_mirror"
     "设置 daemon:set_daemon_config"
@@ -2858,49 +2857,6 @@ _update_ssh_config() {
         echo "$key $value" | sudo tee -a "$sshd_config" >/dev/null
     fi
 
-}
-
-only_update_ssh_config() {
-    log_debug "run update_ssh_config"
-
-    sshd_config=/etc/ssh/sshd_config
-    sudo cp $sshd_config{,.bak}
-
-    _update_ssh_config "PermitRootLogin" "yes" "$sshd_config"
-
-    _update_ssh_config "PasswordAuthentication" "no" "$sshd_config"
-
-    _update_ssh_config "PubkeyAuthentication" "yes" "$sshd_config"
-
-    _update_ssh_config "Port" "$SSH_PORT" "$sshd_config"
-
-    _update_ssh_config "UsePAM" "yes" "$sshd_config"
-
-    sudo systemctl restart sshd
-    log_info "SSH 配置已更新"
-    log_info "SSH 端口已修改为 $SSH_PORT"
-}
-
-set_ssh_config() {
-    log_debug "run set_ssh_config"
-
-    if [ ! -f "$ROOT_DIR/id_rsa.pub" ]; then
-        log_error "缺少 SSH 公钥文件: $ROOT_DIR/id_rsa.pub"
-        exit 1
-    fi
-
-    pub_key=$(cat "$ROOT_DIR/id_rsa.pub")
-    authorized_keys=$HOME/.ssh/authorized_keys
-
-    mkdir -p "$HOME/.ssh"
-    touch "$authorized_keys"
-    chmod 600 "$authorized_keys"
-
-    echo "$pub_key" | sudo tee -a "$authorized_keys" >/dev/null
-
-    only_update_ssh_config
-    log_info "SSH 配置已设置完成"
-    log_debug "请使用 cat $authorized_keys 查看文件是否存在公钥 "
 }
 
 update_apt_source() {

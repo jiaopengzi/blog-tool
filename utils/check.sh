@@ -329,12 +329,18 @@ update_run_mode() {
         echo "$RUN_MODE" | tee "$BLOG_TOOL_ENV/run_mode" >/dev/null
     fi
 
-    # 根据运行模式调整 RUN_MODE 为 pro 时 且 使用函数 is_mem_greater_than 判断是否大于 4G
-    # 设置为注释状态
-    if [[ "$RUN_MODE" == "pro" ]] && is_mem_greater_than 4; then
+    if [[ "$RUN_MODE" == "pro" ]] && is_mem_greater_than 8; then
+        # 根据运行模式调整 RUN_MODE 为 pro 时 且 使用函数 is_mem_greater_than 判断是否大于 8G
+        # 设置为注释状态
         ES_JAVA_OPTS_ENV="# $ES_JAVA_OPTS_ENV"
         MEM_LIMIT_ES="# $MEM_LIMIT_ES"
         MEM_LIMIT_KIBANA="# $MEM_LIMIT_KIBANA"
+    elif [[ "$RUN_MODE" == "pro" ]] && is_mem_greater_than 4; then
+        # 根据运行模式调整 RUN_MODE 为 pro 时 且 使用函数 is_mem_greater_than 判断是否大于 4G
+        # 设置为 2G 内存限制
+        ES_JAVA_OPTS_ENV="- ES_JAVA_OPTS=-Xms2g -Xmx2g"
+        MEM_LIMIT_ES="mem_limit: 2147483648"     # 内存限制 es (bytes) 2G
+        MEM_LIMIT_KIBANA="mem_limit: 2147483648" # 内存限制 kibana 2G
     fi
 }
 
