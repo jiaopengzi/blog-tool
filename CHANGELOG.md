@@ -5,6 +5,12 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.6.0] - 2026-03-03
+
+### ✨ Feat
+
+- 增加对 es 内存分配的分支
+
 ## [v0.5.0] - 2026-03-03
 
 ### 📝 Docs
