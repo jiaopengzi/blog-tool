@@ -205,9 +205,6 @@ OPTIONS_USER=(
 )
 
 OPTIONS_USER_NOT_SHOW=(
-    "设置 ssh 含公钥:set_ssh_config"
-    "仅更新 SSH 配置:only_update_ssh_config"
-
     "手动安装 docker:manual_install_docker"
     "拉取生产数据库镜像:pull_docker_image_pro_db"
 
@@ -309,9 +306,6 @@ OPTIONS_BILLING_CENTER=(
 )
 
 OPTIONS_BILLING_CENTER_NOT_SHOW=(
-    "设置 ssh 含公钥:set_ssh_config"
-    "仅更新 SSH 配置:only_update_ssh_config"
-
     "手动安装 docker:manual_install_docker"
     "最快 docker ce 源:find_fastest_docker_mirror"
     "设置 daemon:set_daemon_config"
