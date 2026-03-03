@@ -27,6 +27,10 @@ _update_ssh_config() {
 only_update_ssh_config() {
     log_debug "run update_ssh_config"
 
+    # 备份原始的 SSH 配置文件
+    sshd_config=/etc/ssh/sshd_config
+    sudo cp $sshd_config{,.bak}
+
     # root账户登录
     _update_ssh_config "PermitRootLogin" "yes" "$sshd_config"
 
@@ -61,8 +65,6 @@ set_ssh_config() {
     # 读取同目录下的 id_rsa.pub 文件内容
     pub_key=$(cat "$ROOT_DIR/id_rsa.pub")
     authorized_keys=$HOME/.ssh/authorized_keys
-    # 设置 SSH 配置
-    sshd_config=/etc/ssh/sshd_config
 
     # 向服务器添加 ssh 公钥
     mkdir -p "$HOME/.ssh"
@@ -71,9 +73,6 @@ set_ssh_config() {
 
     # 将公钥添加到 authorized_keys 文件中
     echo "$pub_key" | sudo tee -a "$authorized_keys" >/dev/null
-
-    # 备份原始的 SSH 配置文件
-    sudo cp $sshd_config{,.bak}
 
     # 更新 SSH 配置
     only_update_ssh_config
