@@ -653,6 +653,8 @@ OPTIONS_ALL=(
     "删除 redis:delete_db_redis"
     "删除 redis 计费中心:delete_db_redis_billing_center"
     "安装 es 和 kibana:install_es_kibana"
+    "更新 IK 自定义词典:update_my_dic"
+    "更新 IK 自定义词典(文件):update_my_dic_by_file"
     "删除 es 和 kibana:delete_es_kibana"
 
     # 构建编译过程镜像
@@ -2803,10 +2805,14 @@ is_valid_func() {
 }
 
 # 执行函数
+# 执行函数
+# 参数: $1: 函数名
+# 参数: $2...: (可选)透传给函数的参数
 exec_func() {
     local func="$1"
+    shift
     if declare -f "$func" >/dev/null; then
-        $func
+        $func "$@"
     else
         log_error "找不到对应的函数：$func"
         exit 1
@@ -5096,6 +5102,9 @@ plugins:
     location: file:///usr/share/elasticsearch/config/$ik_zip_name
 EOM
 
+    # 安装完插件后添加自定义词典配置
+    _setup_ik_custom_dic "$dir_node/"
+
   done
 
   # 删除临时容器
@@ -5125,6 +5134,196 @@ EOM
   fi
 
   log_info "es 复制配置文件到 volume success"
+}
+
+# ========================= IK 分词器: 基础工具函数 =========================
+
+# 为单个 ES 节点设置 IK 自定义词典配置
+# 参数: $1: node_dir - 节点目录路径(如 $DATA_VOLUME_DIR/es/node-01/)
+# 流程: 确保 analysis-ik 目录 → 确保 my.dic 存在 → 更新 IKAnalyzer.cfg.xml ext_dict
+_setup_ik_custom_dic() {
+  log_debug "run _setup_ik_custom_dic"
+
+  local node_dir="$1"
+  local ik_config_dir
+  ik_config_dir=$(_ensure_ik_config_dir "$node_dir")
+  _ensure_my_dic_file "$ik_config_dir"
+
+  # 处理 IKAnalyzer.cfg.xml: 更新 ext_dict 配置项
+  # 注意: copy_es_config 阶段 IK 插件尚未安装, 文件不存在, 需主动创建
+  local ik_cfg_file="$ik_config_dir/IKAnalyzer.cfg.xml"
+  if [[ -f "$ik_cfg_file" ]]; then
+    sudo sed -i 's|<entry key="ext_dict">[^<]*</entry>|<entry key="ext_dict">my.dic</entry>|g' "$ik_cfg_file"
+    log_info "更新 IKAnalyzer.cfg.xml ext_dict 配置: $ik_cfg_file"
+  else
+    # IK 插件启动时会读取此文件, 预先创建以确保自定义词典在首次启动即生效
+    sudo tee "$ik_cfg_file" >/dev/null <<-EOM
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+        <comment>IK Analyzer 扩展配置</comment>
+        <!--用户可以在这里配置自己的扩展字典 -->
+        <entry key="ext_dict">my.dic</entry>
+         <!--用户可以在这里配置自己的扩展停止词字典-->
+        <entry key="ext_stopwords"></entry>
+        <!--用户可以在这里配置远程扩展字典 -->
+        <!-- <entry key="remote_ext_dict">words_location</entry> -->
+        <!--用户可以在这里配置远程扩展停止词字典-->
+        <!-- <entry key="remote_ext_stopwords">words_location</entry> -->
+</properties>
+EOM
+    log_info "创建 IKAnalyzer.cfg.xml 并配置 ext_dict: $ik_cfg_file"
+  fi
+
+  # 统一赋权, 确保 analysis-ik 目录及其下所有文件权限正确
+  setup_directory "$ES_UID" "$ES_GID" 755 "$ik_config_dir"
+}
+
+# 确保单个节点的 analysis-ik 目录存在
+# 参数: $1: node_dir - 节点目录路径(如 $DATA_VOLUME_DIR/es/node-01/)
+# 返回: 通过 stdout 输出 analysis-ik 目录路径
+_ensure_ik_config_dir() {
+  log_debug "run _ensure_ik_config_dir"
+
+  local node_dir="$1"
+  local ik_config_dir="${node_dir}config/analysis-ik"
+
+  if [[ ! -d "$ik_config_dir" ]]; then
+    setup_directory "$ES_UID" "$ES_GID" 755 "$ik_config_dir"
+    log_debug "创建 IK 配置目录: $ik_config_dir"
+  fi
+
+  echo "$ik_config_dir"
+}
+
+# 确保单个节点的 my.dic 文件存在(已存在则跳过, 避免覆盖)
+# 参数: $1: ik_config_dir - analysis-ik 目录路径
+_ensure_my_dic_file() {
+  log_debug "run _ensure_my_dic_file"
+
+  local ik_config_dir="$1"
+  local my_dic_file="$ik_config_dir/my.dic"
+
+  if [[ ! -f "$my_dic_file" ]]; then
+    sudo touch "$my_dic_file"
+    sudo chown "$ES_UID:$ES_GID" "$my_dic_file"
+    log_info "创建自定义词典文件: $my_dic_file"
+  else
+    log_debug "自定义词典文件已存在, 跳过创建: $my_dic_file"
+  fi
+}
+
+# 读取词典内容: 交互式输入
+# 返回: 通过 stdout 输出词典内容
+_read_dic_content_interactive() {
+  log_debug "run _read_dic_content_interactive"
+
+  local dic_content=""
+  log_info "请输入自定义词条(每行一个词, 输入空行结束):"
+  local line
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && break
+    if [[ -z "$dic_content" ]]; then
+      dic_content="$line"
+    else
+      dic_content="$dic_content"$'\n'"$line"
+    fi
+  done
+
+  echo "$dic_content"
+}
+
+# 将词典内容写入所有 ES 节点的 my.dic 并可选重启
+# 参数: $1: dic_content - 词典内容字符串
+_write_dic_to_all_nodes() {
+  log_debug "run _write_dic_to_all_nodes"
+
+  local dic_content="$1"
+  local es_base_dir="$DATA_VOLUME_DIR/es"
+
+  if [[ -z "$dic_content" ]]; then
+    log_warn "词典内容为空, 未做任何更新"
+    return 0
+  fi
+
+  local word_count
+  word_count=$(echo "$dic_content" | wc -l)
+  log_info "待写入词条数: $word_count"
+
+  # 遍历所有节点写入 my.dic
+  local node_dir ik_config_dir my_dic_file updated_count=0
+  for node_dir in "$es_base_dir"/node-*/; do
+    [[ -d "$node_dir" ]] || continue
+
+    ik_config_dir="${node_dir}config/analysis-ik"
+    if [[ ! -d "$ik_config_dir" ]]; then
+      log_warn "analysis-ik 目录不存在, 跳过: $ik_config_dir"
+      continue
+    fi
+
+    my_dic_file="$ik_config_dir/my.dic"
+
+    # 追加写入词典内容(不覆盖原有内容)
+    echo "$dic_content" | sudo tee -a "$my_dic_file" >/dev/null
+
+    # 统一赋权, 确保 analysis-ik 目录及其下所有文件权限正确
+    setup_directory "$ES_UID" "$ES_GID" 755 "$ik_config_dir"
+    log_debug "已更新词典: $my_dic_file"
+    ((updated_count++)) || true
+  done
+
+  if [[ "$updated_count" -eq 0 ]]; then
+    log_error "未找到任何 ES 节点的 analysis-ik 目录, 请先安装 ES"
+    return 1
+  fi
+
+  log_info "已更新 $updated_count 个节点的 my.dic 词典"
+
+  # 重启 ES 使词典生效
+  local is_restart
+  is_restart=$(read_user_input "是否重启 ES 使词典生效(默认y) [y|n]? " "y")
+  if [[ "$is_restart" == "y" ]]; then
+    restart_db_es
+    log_info "ES 已重启, 自定义词典已生效"
+  else
+    log_warn "词典已写入但未重启 ES, 需手动重启后生效"
+  fi
+}
+
+# ========================= IK 分词器: 业务函数 =========================
+
+# 交互式更新所有 ES 节点的 IK 自定义词典 my.dic
+# 流程: 交互式逐行输入词条 → 写入所有节点 my.dic → 可选重启 ES
+update_my_dic() {
+  log_debug "run update_my_dic"
+
+  local dic_content
+  dic_content=$(_read_dic_content_interactive)
+  _write_dic_to_all_nodes "$dic_content"
+}
+
+# 通过文件更新所有 ES 节点的 IK 自定义词典 my.dic
+# 参数: $1: 词典文件路径(每行一个词)
+# 流程: 从文件读取词条 → 写入所有节点 my.dic → 可选重启 ES
+update_my_dic_by_file() {
+  log_debug "run update_my_dic_by_file"
+
+  local dic_source="$1"
+
+  if [[ -z "$dic_source" ]]; then
+    log_error "请指定词典文件路径, 用法: update_my_dic_by_file /path/to/words.txt"
+    return 1
+  fi
+
+  if [[ ! -f "$dic_source" ]]; then
+    log_error "词典文件不存在: $dic_source"
+    return 1
+  fi
+
+  local dic_content
+  dic_content=$(sudo cat "$dic_source")
+  log_info "从文件读取词典内容: $dic_source"
+  _write_dic_to_all_nodes "$dic_content"
 }
 
 # 创建 es 配置文件
@@ -8468,14 +8667,14 @@ main() {
         # 处理用户输入
         handle_user_input "${OPTIONS_ALL[@]}"
     else
-        # 校验是否是有效函数,
-        for arg in "$@"; do
-            if func=$(is_valid_func OPTIONS_ALL[@] "$arg"); then
-                exec_func "$func"
-            else
-                echo "未找到与输入匹配的函数名称: $arg"
-            fi
-        done
+        # 第一个参数为函数名, 其余参数透传给函数
+        local func_arg="$1"
+        shift
+        if func=$(is_valid_func OPTIONS_ALL[@] "$func_arg"); then
+            exec_func "$func" "$@"
+        else
+            echo "未找到与输入匹配的函数名称: $func_arg"
+        fi
     fi
 }
 

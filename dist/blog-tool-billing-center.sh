@@ -2014,8 +2014,9 @@ is_valid_func() {
 
 exec_func() {
     local func="$1"
+    shift
     if declare -f "$func" >/dev/null; then
-        $func
+        $func "$@"
     else
         log_error "找不到对应的函数：$func"
         exit 1
@@ -4408,13 +4409,13 @@ main() {
 
         handle_user_input "${OPTIONS_BILLING_CENTER[@]}"
     else
-        for arg in "$@"; do
-            if func=$(is_valid_func OPTIONS_BILLING_CENTER_VALID[@] "$arg"); then
-                exec_func "$func"
-            else
-                echo "未找到与输入匹配的函数名称: $arg"
-            fi
-        done
+        local func_arg="$1"
+        shift
+        if func=$(is_valid_func OPTIONS_BILLING_CENTER_VALID[@] "$func_arg"); then
+            exec_func "$func" "$@"
+        else
+            echo "未找到与输入匹配的函数名称: $func_arg"
+        fi
     fi
 }
 

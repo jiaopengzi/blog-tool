@@ -50,6 +50,7 @@
         "sadd",
         "saddr",
         "shellcheck",
+        "stopwords",
         "sysv",
         "ulimits",
         "uroot",

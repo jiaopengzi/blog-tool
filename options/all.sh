@@ -66,6 +66,8 @@ OPTIONS_ALL=(
     "删除 redis:delete_db_redis"
     "删除 redis 计费中心:delete_db_redis_billing_center"
     "安装 es 和 kibana:install_es_kibana"
+    "更新 IK 自定义词典:update_my_dic"
+    "更新 IK 自定义词典(文件):update_my_dic_by_file"
     "删除 es 和 kibana:delete_es_kibana"
 
     # 构建编译过程镜像
@@ -214,6 +216,8 @@ OPTIONS_USER_NOT_SHOW=(
     "安装 redis:install_db_redis"
     "删除 redis:delete_db_redis"
     "安装 es 和 kibana:install_es_kibana"
+    "更新 IK 自定义词典:update_my_dic"
+    "更新 IK 自定义词典(文件):update_my_dic_by_file"
     "删除 es 和 kibana:delete_es_kibana"
     "全新安装所有数据库:reset_install_database"
 
