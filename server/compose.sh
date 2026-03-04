@@ -57,7 +57,7 @@ services:
       interval: 3600s
       timeout: 10s
       retries: 3
-      start-period: 30s
+      start_period: 30s
 
 networks: # 网络配置
   $BRIDGE_SERVER: # 网络名称
