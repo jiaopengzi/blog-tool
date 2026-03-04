@@ -5,6 +5,13 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.7.0] - 2026-03-04
+
+### ✨ Feat
+
+- es 增加分词设置
+- 支持函数透传参数
+
 ## [v0.6.6] - 2026-03-04
 
 ### 🐞 Fix
