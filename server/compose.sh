@@ -54,9 +54,10 @@ services:
           "CMD-SHELL",
           "curl -s http://localhost:5426/api/v1/is-setup | grep 'request_id'",
         ]
-      interval: 10s
+      interval: 3600s
       timeout: 10s
-      retries: 120
+      retries: 3
+      start-period: 30s
 
 networks: # 网络配置
   $BRIDGE_SERVER: # 网络名称
