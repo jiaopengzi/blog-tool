@@ -437,9 +437,9 @@ EOM
           "CMD-SHELL",
           "curl -s --cacert /usr/share/elasticsearch/config/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
         ]
-      interval: 3600s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 120
       start_period: 30s
     networks: # docker 网络设置
       $BRIDGE_ES: # 网络名称
@@ -509,9 +509,9 @@ EOM
           "CMD-SHELL",
           "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
         ]
-      interval: 3600s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 120
       start_period: 30s
 
     networks: # 网络配置
