@@ -28,6 +28,9 @@ ES_NODE_COUNT="1"         # 节点数量
 ELASTIC_PASSWORD="123456" # 设置 es 的密码, 至少6个字符, 用户名为 elastic
 KIBANA_PASSWORD="123456"  # 设置 kibana 的密码, 至少6个字符, 用户名为 kibana_system
 
+# server JWT 配置
+JWT_SECRET_KEY="" # server JWT 密钥, 留空则由 check_password_security 自动生成并持久化, 勿手动修改
+
 # 日志级别：error(1) < warn(2) < info(3) < debug(4), 默认记录info及以上
 LOG_LEVEL="debug"
 

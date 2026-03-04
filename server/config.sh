@@ -38,12 +38,19 @@ server_set_es_use_ca_cert() {
 }
 
 # 设置 server es jwt secret key
+# 使用 JWT_SECRET_KEY 变量(由 check_password_security 统一管理并持久化), 避免重复安装时 key 变更导致业务问题
 server_update_jwt_secret_key() {
     log_debug "run server_update_jwt_secret_key"
-    # 生成一个随机64位的 secret key
-    local secret_key
-    secret_key="$(openssl rand -hex 32)"
-    log_debug "generated jwt secret key: $secret_key"
+
+    local secret_key="$JWT_SECRET_KEY"
+
+    # JWT_SECRET_KEY 未初始化时兜底: 临时生成但不持久化(正常流程不应走到此分支)
+    if [[ -z "$secret_key" ]]; then
+        log_warn "JWT_SECRET_KEY 未设置, 临时生成随机密钥(建议先运行 check_password_security)"
+        secret_key="$(openssl rand -hex 32)"
+    fi
+
+    log_debug "使用的 jwt secret key 前16个字符: ${secret_key:0:16}"
 
     # 使用单引号包围整个sed表达式，并且正确转义双引号
     sudo sed -i "s%secret_key:[[:space:]]*\"[^\"]*\"%secret_key: \"$secret_key\"%" "$DATA_VOLUME_DIR/blog-server/config/jwt.yaml"
@@ -69,15 +76,16 @@ server_update_password_key() {
 
 # 设置 server 主机地址
 server_set_host() {
-    log_debug "run server_is_setup"
+    log_debug "run server_set_host"
 
     local host_addr="$1"
 
     # 替换 host 地址带有双引号的情况
-    sudo sed -r -i "s|host: \"http[s]*://[a-z0-9.:]*\"|host: \"$host_addr\"|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
+    # 使用 ^ 锚定行首并捕获前导空格, 避免误匹配 billing_center_host 等含 host 的其他字段
+    sudo sed -r -i "s|^([[:space:]]*)host: \"http[s]*://[a-z0-9.:]*\"|\1host: \"$host_addr\"|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
 
     # 替换 host 地址不带双引号的情况
-    sudo sed -r -i "s|host: http[s]*://[a-z0-9.:]*|host: $host_addr|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
+    sudo sed -r -i "s|^([[:space:]]*)host: http[s]*://[a-z0-9.:]*|\1host: $host_addr|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
 
     log_info "server 设置 host=$host_addr success"
 }

@@ -149,6 +149,7 @@ check_password_security() {
 		"KIBANA_PASSWORD:kibana_password:Kibana 密码"
 		"POSTGRES_PASSWORD_BILLING_CENTER:postgres_password_billing_center:计费中心 PostgreSQL 数据库密码"
 		"REDIS_PASSWORD_BILLING_CENTER:redis_password_billing_center:计费中心 Redis 密码"
+		"JWT_SECRET_KEY:jwt_secret_key:Server JWT 密钥"
 	)
 
 	local entry var_name file_name description
