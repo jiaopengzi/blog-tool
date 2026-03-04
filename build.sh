@@ -300,14 +300,14 @@ main() {
         # 处理用户输入
         handle_user_input "\${$options_array}"
     else
-        # 校验是否是有效函数,
-        for arg in "\$@"; do
-            if func=\$(is_valid_func $options_array_valid "\$arg"); then
-                exec_func "\$func"
-            else
-                echo "未找到与输入匹配的函数名称: \$arg"
-            fi
-        done
+        # 第一个参数为函数名, 其余参数透传给函数
+        local func_arg="\$1"
+        shift
+        if func=\$(is_valid_func $options_array_valid "\$func_arg"); then
+            exec_func "\$func" "\$@"
+        else
+            echo "未找到与输入匹配的函数名称: \$func_arg"
+        fi
     fi
 }
 

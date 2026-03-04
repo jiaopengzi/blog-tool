@@ -145,10 +145,14 @@ is_valid_func() {
 }
 
 # 执行函数
+# 执行函数
+# 参数: $1: 函数名
+# 参数: $2...: (可选)透传给函数的参数
 exec_func() {
     local func="$1"
+    shift
     if declare -f "$func" >/dev/null; then
-        $func
+        $func "$@"
     else
         log_error "找不到对应的函数：$func"
         exit 1
