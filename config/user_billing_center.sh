@@ -23,5 +23,5 @@ REDIS_PASSWORD_BILLING_CENTER="123456" # redis 密码
 LOG_LEVEL="debug"
 
 # 日志文件路径, 默认在 blog-tool 根目录下
-LOG_FILE="$ROOT_DIR/blog_tool.log"
+LOG_FILE="$ROOT_DIR/log_blog_tool.txt"
 #==============================用户修改的配置(billing center) 结束==============================

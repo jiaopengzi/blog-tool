@@ -105,6 +105,7 @@ docker_build_server() {
 
         # 查看私钥路径前16个字符, 确保环境变量传递正确
         log_info "sign_key 前16个字符: ${sign_key:0:16}"
+        log_debug "自定义 key 命令: sudo SIGN_PRIVATE_KEY=/your/path/cert_key.pem bash blog-tool-dev.sh docker_build_server"
 
         # 使用 BuildKit 构建, 以支持 --secret 参数传递签名密钥
         # 在容器中的 Makefile 里会使用这个密钥对产物进行签名, 以确保产物的安全性和可信度

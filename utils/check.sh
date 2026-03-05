@@ -226,6 +226,13 @@ check_domain_ip() {
         "请输入您的域名如：example.com" \
         "$HOST_INTRANET_IP"
 
+    # 项目名称配置
+    load_interactive_config \
+        PROJECT_NAME \
+        "$BLOG_TOOL_ENV/project_name" \
+        "请输入您的项目名称如：blog-server" \
+        "$PROJECT_NAME"
+
     # 公网IP地址配置
     load_interactive_config \
         PUBLIC_IP_ADDRESS \

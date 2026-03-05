@@ -90,6 +90,24 @@ server_set_host() {
     log_info "server 设置 host=$host_addr success"
 }
 
+# 设置项目名称
+server_set_project_name() {
+    log_debug "run server_set_project_name"
+
+    local project_name="$1"
+
+    # 若仍未设置则跳过
+    if [[ -z "$project_name" ]]; then
+        log_warn "PROJECT_NAME 未设置, 跳过设置项目名称"
+        return 0
+    fi
+
+    # 替换 app.yaml 中的 name 字段(支持带/不带双引号)
+    sudo sed -r -i "s|^([[:space:]]*)name:[[:space:]]*\"?[^\"]*\"?|\1name: \"$project_name\"|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
+
+    log_info "server 设置 project name=$project_name success"
+}
+
 # 复制 blog_server 配置文件
 copy_server_config() {
     log_debug "run copy_server_config"
@@ -144,6 +162,8 @@ copy_server_config() {
 
     # 设置 host 地址
     server_set_host "https://$DOMAIN_NAME"
+    # shellcheck disable=SC2153
+    server_set_project_name "$PROJECT_NAME"
 
     # 目录已经存在，主要是修改权限
     if [ ! -d "$DATA_VOLUME_DIR" ]; then

@@ -40,6 +40,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 #==============================用户修改的配置 开始==============================
 # 域名配置
 DOMAIN_NAME=""       # 访问域名, 请确保域名已解析到当前服务器IP地址
+PROJECT_NAME=""      # 项目名称, 用于生对外展示, 请勿包含特殊字符, 例如: blog-server
 PUBLIC_IP_ADDRESS="" # 公网IP地址
 
 # pgsql 数据库配置
@@ -64,7 +65,7 @@ JWT_SECRET_KEY="" # server JWT 密钥, 留空则由 check_password_security 自�
 LOG_LEVEL="info"
 
 # 日志文件路径, 默认在 blog-tool 根目录下
-LOG_FILE="$ROOT_DIR/blog_tool.log"
+LOG_FILE="$ROOT_DIR/log_blog_tool.txt"
 #==============================用户修改的配置 结束==============================
 
 ### content from utils/log.sh
@@ -266,7 +267,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 # shellcheck disable=SC2034
 
 RUN_MODE="pro"
@@ -850,6 +851,12 @@ check_domain_ip() {
         "$BLOG_TOOL_ENV/domain_name" \
         "请输入您的域名如：example.com" \
         "$HOST_INTRANET_IP"
+
+    load_interactive_config \
+        PROJECT_NAME \
+        "$BLOG_TOOL_ENV/project_name" \
+        "请输入您的项目名称如：blog-server" \
+        "$PROJECT_NAME"
 
     load_interactive_config \
         PUBLIC_IP_ADDRESS \
@@ -3920,9 +3927,9 @@ EOM
           "CMD-SHELL",
           "curl -s --cacert /usr/share/elasticsearch/config/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
         ]
-      interval: 3600s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 120
       start_period: 30s
     networks: # docker 网络设置
       $BRIDGE_ES: # 网络名称
@@ -3984,9 +3991,9 @@ EOM
           "CMD-SHELL",
           "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
         ]
-      interval: 3600s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 120
       start_period: 30s
 
     networks: # 网络配置
@@ -4791,6 +4798,21 @@ server_set_host() {
     log_info "server 设置 host=$host_addr success"
 }
 
+server_set_project_name() {
+    log_debug "run server_set_project_name"
+
+    local project_name="$1"
+
+    if [[ -z "$project_name" ]]; then
+        log_warn "PROJECT_NAME 未设置, 跳过设置项目名称"
+        return 0
+    fi
+
+    sudo sed -r -i "s|^([[:space:]]*)name:[[:space:]]*\"?[^\"]*\"?|\1name: \"$project_name\"|g" "$DATA_VOLUME_DIR/blog-server/config/app.yaml"
+
+    log_info "server 设置 project name=$project_name success"
+}
+
 copy_server_config() {
     log_debug "run copy_server_config"
     local web_set_db="${1-n}"
@@ -4832,6 +4854,8 @@ copy_server_config() {
     fi
 
     server_set_host "https://$DOMAIN_NAME"
+    # shellcheck disable=SC2153
+    server_set_project_name "$PROJECT_NAME"
 
     if [ ! -d "$DATA_VOLUME_DIR" ]; then
         setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
