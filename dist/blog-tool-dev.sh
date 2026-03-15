@@ -317,10 +317,13 @@ REGISTRY_USER_NAME=""     # docker registry 用户名
 REGISTRY_PASSWORD=""      # 私有仓库密码
 
 # 密码和 token 变量
-DOCKER_HUB_REMOTE_SERVER="docker.io" # 远端服务器地址
-DOCKER_HUB_TOKEN=""                  # docker hub token
-GITHUB_TOKEN=""                      # github token
-GITEE_TOKEN=""                       # gitee token
+DOCKER_HUB_REMOTE_SERVER="docker.io"                 # 远端服务器地址
+DOCKER_HUB_TOKEN=""                                  # docker hub token
+GITHUB_TOKEN=""                                      # github token
+GITEE_TOKEN=""                                       # gitee token
+COSIGN_PRIVATE_KEY="${COSIGN_PRIVATE_KEY:-}"         # Cosign 私钥文件绝对路径
+COSIGN_PRIVATE_KEY_PWD="${COSIGN_PRIVATE_KEY_PWD:-}" # Cosign 私钥密码
+COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"               # Cosign 标准密码环境变量
 
 # docker 镜像版本
 IMG_VERSION_ALPINE="latest"
@@ -1136,9 +1139,11 @@ load_env_or_file_config() {
     if [ -n "${!env_var_name:-}" ]; then
         # 优先判断环境变量是否有值, 直接使用
         printf -v "$var_name" '%s' "${!env_var_name}"
+        log_debug "${var_name} 已从环境变量 ${env_var_name} 读取, 长度: $(printf '%s' "${!env_var_name}" | wc -c | awk '{print $1}')"
     else
         # 环境变量未设置, 尝试从文件加载
         load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix"
+        log_debug "${var_name} 已从配置文件读取: $config_file"
     fi
 }
 
@@ -1614,6 +1619,333 @@ semver_to_docker_tag() {
     echo "$docker_tag"
 }
 
+# 生成镜像引用.
+# 参数: $1: 镜像名称.
+# 参数: $2: 引用模式, 仅支持 tag 或 digest.
+# 参数: $3: tag 或 digest 的具体值.
+docker_build_image_reference() {
+    log_debug "run docker_build_image_reference"
+
+    local image_name="$1"
+    local ref_mode="$2"
+    local ref_value="$3"
+
+    if [ -z "$image_name" ] || [ -z "$ref_mode" ] || [ -z "$ref_value" ]; then
+        log_error "构造镜像引用失败, 参数不能为空"
+        return 1
+    fi
+
+    case "$ref_mode" in
+    tag)
+        echo "$image_name:$ref_value"
+        ;;
+    digest)
+        local digest_value="$ref_value"
+        digest_value="${digest_value#*@}"
+
+        if [[ "$digest_value" != sha256:* ]]; then
+            log_error "digest 模式的值必须以 sha256: 开头, 当前值: $ref_value"
+            return 1
+        fi
+
+        echo "$image_name@$digest_value"
+        ;;
+    *)
+        log_error "镜像引用模式仅支持 tag 或 digest, 当前模式: $ref_mode"
+        return 1
+        ;;
+    esac
+}
+
+# 检查 cosign 命令是否可用.
+docker_check_cosign() {
+    log_debug "run docker_check_cosign"
+
+    if ! command -v cosign >/dev/null 2>&1; then
+        log_error "未检测到 cosign 命令, 请先安装 cosign"
+        return 1
+    fi
+}
+
+# 输出密钥结构调试信息, 避免直接打印敏感正文.
+# 参数: $1: 密钥内容.
+# 参数: $2: 密钥用途说明.
+# 参数: $3: 调试阶段说明.
+docker_debug_key_summary() {
+    log_debug "run docker_debug_key_summary"
+
+    local key_content="$1"
+    local key_label="$2"
+    local stage_label="$3"
+
+    local key_length
+    key_length=$(printf '%s' "$key_content" | wc -c | awk '{print $1}')
+
+    local line_count
+    line_count=$(printf '%s' "$key_content" | awk 'END {print NR}')
+
+    local first_line
+    first_line=$(printf '%s' "$key_content" | head -n 1)
+
+    local last_line
+    last_line=$(printf '%s' "$key_content" | tail -n 1)
+
+    local has_literal_newline="false"
+    if printf '%s' "$key_content" | grep -q '\\n'; then
+        has_literal_newline="true"
+    fi
+
+    local wrapped_with_quotes="false"
+    if [[ "$key_content" == \"*\" ]] || [[ "$key_content" == \'*\' ]]; then
+        wrapped_with_quotes="true"
+    fi
+
+    log_debug "${key_label}${stage_label}摘要: 长度=${key_length}, 行数=${line_count}, 含字面量\\n=${has_literal_newline}, 外层引号包裹=${wrapped_with_quotes}"
+    log_debug "${key_label}${stage_label}首行: ${first_line}"
+    log_debug "${key_label}${stage_label}尾行: ${last_line}"
+}
+
+# 将密钥来源解析为可供 cosign 使用的本地文件.
+# 参数: $1: 密钥来源, 支持文件路径或 PEM 密钥内容.
+# 参数: $2: 密钥用途说明, 如私钥或公钥.
+# 返回: 输出可用的密钥文件路径.
+docker_resolve_key_file() {
+    log_debug "run docker_resolve_key_file"
+
+    local key_source="$1"
+    local key_label="$2"
+    local normalized_key=""
+
+    if [ -z "$key_source" ]; then
+        log_error "${key_label}为空, 无法解析密钥文件"
+        return 1
+    fi
+
+    if [ -f "$key_source" ]; then
+        log_debug "检测到${key_label}为文件路径, 路径首尾3位: ${key_source:0:3}...${key_source: -3}"
+        docker_debug_key_summary "$(cat "$key_source")" "$key_label" "文件内容"
+        echo "$key_source"
+        return 0
+    fi
+
+    if echo "$key_source" | grep -Eq "BEGIN .*KEY"; then
+        docker_debug_key_summary "$key_source" "$key_label" "原始输入"
+
+        local tmp_key_file
+        tmp_key_file=$(mktemp) || {
+            log_error "创建临时${key_label}文件失败"
+            return 1
+        }
+
+        chmod 600 "$tmp_key_file" || {
+            rm -f "$tmp_key_file"
+            log_error "设置临时${key_label}文件权限失败"
+            return 1
+        }
+
+        # 兼容 CI 中将多行 PEM 压成单行并使用 \n 传递的场景.
+        if printf '%s' "$key_source" | grep -q '\\n'; then
+            normalized_key=$(printf '%b' "$key_source")
+        else
+            normalized_key="$key_source"
+        fi
+
+        # 统一移除 Windows 风格回车, 避免 cosign 解析 PEM 失败.
+        normalized_key=$(printf '%s' "$normalized_key" | tr -d '\r')
+
+        docker_debug_key_summary "$normalized_key" "$key_label" "归一化后"
+
+        printf '%s' "$normalized_key" >"$tmp_key_file" || {
+            rm -f "$tmp_key_file"
+            log_error "写入临时${key_label}文件失败"
+            return 1
+        }
+
+        docker_debug_key_summary "$(cat "$tmp_key_file")" "$key_label" "落盘后"
+
+        log_debug "检测到${key_label}为 PEM 内容, 已写入临时文件: ${tmp_key_file:0:3}...${tmp_key_file: -3}"
+        echo "$tmp_key_file"
+        return 0
+    fi
+
+    log_error "${key_label}既不是有效文件路径, 也不是合法的 PEM 密钥内容"
+    return 1
+}
+
+# 获取远端镜像 digest.
+# 参数: $1: 镜像名称.
+# 参数: $2: 引用模式, 仅支持 tag 或 digest.
+# 参数: $3: tag 或 digest 的具体值.
+docker_get_digest() {
+    log_debug "run docker_get_digest"
+
+    local image_name="$1"
+    local ref_mode="$2"
+    local ref_value="$3"
+
+    if [ "$ref_mode" = "digest" ]; then
+        local digest_value="$ref_value"
+        digest_value="${digest_value#*@}"
+
+        if [[ "$digest_value" != sha256:* ]]; then
+            log_error "digest 模式的值必须以 sha256: 开头, 当前值: $ref_value"
+            return 1
+        fi
+
+        echo "$digest_value"
+        return 0
+    fi
+
+    local image_ref
+    image_ref=$(docker_build_image_reference "$image_name" "$ref_mode" "$ref_value") || return 1
+
+    local inspect_output
+    if ! inspect_output=$(sudo docker buildx imagetools inspect "$image_ref" 2>&1); then
+        log_error "获取镜像 digest 失败, 镜像: $image_ref, 输出: $inspect_output"
+        return 1
+    fi
+
+    local digest_value
+    digest_value=$(echo "$inspect_output" | awk '/^Digest:/ {print $2; exit}')
+
+    if [ -z "$digest_value" ]; then
+        log_error "未从 inspect 输出中解析到 digest, 镜像: $image_ref"
+        return 1
+    fi
+
+    log_info "获取镜像 digest 成功, 镜像: $image_ref, digest: $digest_value"
+    echo "$digest_value"
+}
+
+# 使用 Cosign 对镜像签名.
+# 参数: $1: 私钥文件路径.
+# 参数: $2: 镜像名称.
+# 参数: $3: 引用模式, 仅支持 tag 或 digest.
+# 参数: $4: tag 或 digest 的具体值.
+docker_sign_image() {
+    log_debug "run docker_sign_image"
+
+    local private_key="${1:-$COSIGN_PRIVATE_KEY}"
+    local image_name="$2"
+    local ref_mode="$3"
+    local ref_value="$4"
+    local private_key_file=""
+    local private_key_pwd="${COSIGN_PRIVATE_KEY_PWD:-}"
+    local private_key_source=""
+    local private_key_pwd_source=""
+
+    docker_check_cosign || return 1
+
+    if [ -n "${1:-}" ]; then
+        private_key_source="函数参数"
+    elif [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then
+        private_key_source="COSIGN_PRIVATE_KEY"
+    else
+        private_key_source="未命中"
+    fi
+
+    if [ -n "${COSIGN_PRIVATE_KEY_PWD:-}" ]; then
+        private_key_pwd_source="COSIGN_PRIVATE_KEY_PWD"
+    else
+        private_key_pwd_source="未命中"
+    fi
+
+    # 显示私钥路径和私钥密码的前后3位, 便于确认环境变量读取是否正确.
+    log_debug "私钥来源: ${private_key_source}"
+    log_debug "私钥密码来源: ${private_key_pwd_source}"
+    log_debug "私钥路径首尾3位: ${private_key:0:3}...${private_key: -3}"
+    log_debug "私钥密码首尾3位: ${private_key_pwd:0:3}...${private_key_pwd: -3}"
+
+    if [ -z "$private_key" ]; then
+        log_error "签名失败, 未提供私钥文件路径"
+        return 1
+    fi
+
+    if [ -z "$private_key_pwd" ]; then
+        log_error "签名失败, 未检测到可用的私钥密码变量(COSIGN_PRIVATE_KEY_PWD)"
+        return 1
+    fi
+
+    private_key_file=$(docker_resolve_key_file "$private_key" "私钥") || return 1
+
+    local image_ref
+    image_ref=$(docker_build_image_reference "$image_name" "$ref_mode" "$ref_value") || return 1
+
+    log_info "开始签名镜像: $image_ref"
+
+    if ! COSIGN_PASSWORD="$private_key_pwd" cosign sign --yes --key "$private_key_file" "$image_ref"; then
+        [ "$private_key_file" != "$private_key" ] && rm -f "$private_key_file"
+        log_error "镜像签名失败: $image_ref"
+        return 1
+    fi
+
+    [ "$private_key_file" != "$private_key" ] && rm -f "$private_key_file"
+
+    log_info "镜像签名成功: $image_ref"
+}
+
+# 使用 Cosign 验证镜像签名.
+# 参数: $1: 公钥文件路径.
+# 参数: $2: 镜像名称.
+# 参数: $3: 引用模式, 仅支持 tag 或 digest.
+# 参数: $4: tag 或 digest 的具体值.
+docker_verify_image() {
+    log_debug "run docker_verify_image"
+
+    local public_key="$1"
+    local image_name="$2"
+    local ref_mode="$3"
+    local ref_value="$4"
+    local public_key_file=""
+
+    docker_check_cosign || return 1
+
+    if [ -z "$public_key" ]; then
+        log_error "验签失败, 未提供公钥文件路径"
+        return 1
+    fi
+
+    public_key_file=$(docker_resolve_key_file "$public_key" "公钥") || return 1
+
+    local image_ref
+    image_ref=$(docker_build_image_reference "$image_name" "$ref_mode" "$ref_value") || return 1
+
+    log_info "开始验签镜像: $image_ref"
+
+    if ! cosign verify --key "$public_key_file" "$image_ref"; then
+        [ "$public_key_file" != "$public_key" ] && rm -f "$public_key_file"
+        log_error "镜像验签失败: $image_ref"
+        return 1
+    fi
+
+    [ "$public_key_file" != "$public_key" ] && rm -f "$public_key_file"
+
+    log_info "镜像验签成功: $image_ref"
+}
+
+# 在镜像推送完成后, 获取 digest 并完成签名.
+# 参数: $1: 镜像名称.
+# 参数: $2: 已推送的 tag.
+# 参数: $3: 私钥文件路径, 未传则使用 COSIGN_PRIVATE_KEY.
+docker_sign_pushed_image() {
+    log_debug "run docker_sign_pushed_image"
+
+    local image_name="$1"
+    local image_tag="$2"
+    local private_key="${3:-$COSIGN_PRIVATE_KEY}"
+
+    if [ -z "$image_name" ] || [ -z "$image_tag" ]; then
+        log_error "镜像签名失败, 镜像名称和 tag 不能为空"
+        return 1
+    fi
+
+    local image_digest
+    image_digest=$(docker_get_digest "$image_name" "tag" "$image_tag") || return 1
+    docker_sign_image "$private_key" "$image_name" "digest" "$image_digest" || return 1
+
+    log_info "镜像签名完成, 镜像: $image_name, digest: $image_digest"
+}
+
 # 镜像打标签并推送到 docker hub
 docker_tag_push_docker_hub() {
     log_debug "run docker_tag_push_docker_hub"
@@ -1638,6 +1970,7 @@ docker_tag_push_docker_hub() {
     # 转换版本号为 Docker tag 兼容格式
     local docker_tag_version
     docker_tag_version=$(semver_to_docker_tag "$version")
+    local image_name="$DOCKER_HUB_OWNER/$project"
 
     # tag 镜像
     sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$DOCKER_HUB_OWNER/$project:$docker_tag_version"
@@ -1650,6 +1983,12 @@ docker_tag_push_docker_hub() {
     waiting 5
 
     timeout_retry_docker_push "$DOCKER_HUB_OWNER" "$project" "latest"
+
+    # 推送完成后对版本镜像签名.
+    docker_sign_pushed_image "$image_name" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+        sudo docker logout "$DOCKER_HUB_REGISTRY" || true
+        return 1
+    }
 
     # 避免无法推送, 及时出登录
     sudo docker logout "$DOCKER_HUB_REGISTRY" || true
@@ -1664,6 +2003,7 @@ docker_tag_push_private_registry() {
     # 转换版本号为 Docker tag 兼容格式
     local docker_tag_version
     docker_tag_version=$(semver_to_docker_tag "$version")
+    local image_name="$REGISTRY_REMOTE_SERVER/$project"
 
     # tag 镜像
     sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$REGISTRY_REMOTE_SERVER/$project:$docker_tag_version"
@@ -1683,6 +2023,12 @@ docker_tag_push_private_registry() {
 
     timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER" "$project" "latest"
 
+    # 推送完成后对版本镜像签名.
+    docker_sign_pushed_image "$image_name" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+        sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
+        return 1
+    }
+
     # 避免无法推送,及时出登录
     sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
 }
@@ -1692,6 +2038,7 @@ docker_private_registry_login_logout() {
     log_debug "run docker_private_registry_login_logout"
 
     local run_func="$1"
+    local run_status=0
 
     # 显示回显密码的前后3位以确认变量传入正确
     log_debug "密码 首尾3位: ${REGISTRY_PASSWORD:0:3}...${REGISTRY_PASSWORD: -3}"
@@ -1700,10 +2047,12 @@ docker_private_registry_login_logout() {
     sudo docker login "$REGISTRY_REMOTE_SERVER" -u "$REGISTRY_USER_NAME" --password-stdin <<<"$REGISTRY_PASSWORD"
 
     # 执行传入的函数
-    $run_func
+    $run_func || run_status=$?
 
     # 避免无法推送,及时出登录
     sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
+
+    return "$run_status"
 }
 
 ### content from utils/ffmpeg.sh

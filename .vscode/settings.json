@@ -27,6 +27,7 @@
         "htpasswd",
         "iface",
         "iifname",
+        "imagetools",
         "INITDB",
         "ipinfo",
         "logfile",

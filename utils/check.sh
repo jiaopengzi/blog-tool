@@ -205,9 +205,11 @@ load_env_or_file_config() {
     if [ -n "${!env_var_name:-}" ]; then
         # 优先判断环境变量是否有值, 直接使用
         printf -v "$var_name" '%s' "${!env_var_name}"
+        log_debug "${var_name} 已从环境变量 ${env_var_name} 读取, 长度: $(printf '%s' "${!env_var_name}" | wc -c | awk '{print $1}')"
     else
         # 环境变量未设置, 尝试从文件加载
         load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix"
+        log_debug "${var_name} 已从配置文件读取: $config_file"
     fi
 }
 
