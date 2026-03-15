@@ -5,6 +5,20 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.9.0] - 2026-03-15
+
+### ✨ Feat
+
+- 镜像使用 cosign 签名
+
+### 🐞 Fix
+
+- 重启时更新证书
+
+### 📦 Build
+
+- 命名的更新
+
 ## [v0.8.0] - 2026-03-05
 
 ### ✨ Feat
