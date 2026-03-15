@@ -236,34 +236,34 @@ docker_push_client() {
     # 3. 推送到私有仓库
     docker_tag_push_private_registry "blog-client" "$version"
 
-    # 4. 更新 changelog
-    sync_repo_by_tag "blog-client" "$version" "$GIT_GITHUB"
-    sync_repo_by_tag "blog-client" "$version" "$GIT_GITEE"
+    # # 4. 更新 changelog
+    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITHUB"
+    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITEE"
 
-    # 5. 发布到生产环境
-    if [ "$is_dev" = false ]; then
-        # # 推送到 Docker Hub
-        docker_tag_push_docker_hub "blog-client" "$version"
+    # # 5. 发布到生产环境
+    # if [ "$is_dev" = false ]; then
+    #     # # 推送到 Docker Hub
+    #     docker_tag_push_docker_hub "blog-client" "$version"
 
-        # 产物发布到 GitHub 和 Gitee Releases
+    #     # 产物发布到 GitHub 和 Gitee Releases
 
-        # 打包产物
-        local zip_path
-        zip_path=$(client_artifacts_zip "$version")
+    #     # 打包产物
+    #     local zip_path
+    #     zip_path=$(client_artifacts_zip "$version")
 
-        # 发布
-        releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
-        releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
+    #     # 发布
+    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
+    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
 
-        # 移除压缩包
-        if [ -f "$zip_path" ]; then
-            sudo rm -f "$zip_path"
-            log_info "移除本地产物包 $zip_path 成功"
-        fi
-    else
-        # 如果不是生产环境, 复制到本地的产物包删除
-        sudo rm -rf "$DIR_APP_CLIENT"
-    fi
+    #     # 移除压缩包
+    #     if [ -f "$zip_path" ]; then
+    #         sudo rm -f "$zip_path"
+    #         log_info "移除本地产物包 $zip_path 成功"
+    #     fi
+    # else
+    #     # 如果不是生产环境, 复制到本地的产物包删除
+    #     sudo rm -rf "$DIR_APP_CLIENT"
+    # fi
 }
 
 # 拉取 client 镜像
@@ -357,7 +357,7 @@ docker_client_stop() {
 docker_client_restart() {
     log_debug "run docker_client_restart"
     docker_client_stop
-    copy_client_config
+    copy_client_config_ssl
     docker_client_start
 }
 
@@ -367,6 +367,7 @@ docker_client_install() {
 
     mkdir_client_volume
     copy_client_config
+    copy_client_config_ssl
     create_docker_compose_client
     docker_client_start
 

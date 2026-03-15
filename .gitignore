@@ -10,6 +10,9 @@ tmp
 uploads
 bin
 .VSCodeCounter
+.feat
+.debug
+.bug
 
 # python 目录 下的忽略规则
 python/__pycache__/

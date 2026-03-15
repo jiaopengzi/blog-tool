@@ -54,7 +54,7 @@ OPTIONS_ALL=(
     # 安装数据库
     "安装所有数据库:install_database"
     "删除所有数据库:delete_database"
-    "全新安装所有数据库:reset_install_database"
+    "重置所有数据库(生产禁用):reset_install_database"
     "安装所有数据库-计费中心:install_database_billing_center"
     "删除所有数据库-计费中心:delete_database_billing_center"
     "安装 pgsql:install_db_pgsql"

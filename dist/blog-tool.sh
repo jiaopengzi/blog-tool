@@ -5169,6 +5169,30 @@ copy_client_config() {
 
     docker_create_client_temp_container run_copy_config "latest"
 
+    if [ ! -d "$DATA_VOLUME_DIR" ]; then
+        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+    fi
+
+    setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 \
+        "$DATA_VOLUME_DIR/blog-client" \
+        "$DATA_VOLUME_DIR/blog-client/nginx" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
+
+    sudo sed -r -i \
+        "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
+
+    log_info "client 复制配置文件到 volume success"
+}
+
+copy_client_config_ssl() {
+
+    log_debug "run copy_client_config_ssl"
+
+    dir_ssl="$DATA_VOLUME_DIR/blog-client/nginx/ssl"
+
+    sudo rm -rf "$dir_ssl"
+
     if [ ! -d "$CERTS_NGINX" ]; then
         echo "========================================"
         echo "    请将证书 $CERTS_NGINX 文件夹放到当前目录"
@@ -5201,11 +5225,7 @@ copy_client_config() {
 
     setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 "$DATA_VOLUME_DIR/blog-client/nginx/ssl/"
 
-    sudo sed -r -i \
-        "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
-        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
-
-    log_info "client 复制配置文件到 volume success"
+    log_info "client 复制证书文件到 volume success"
 }
 
 mkdir_client_volume() {
@@ -5388,7 +5408,7 @@ docker_client_stop() {
 docker_client_restart() {
     log_debug "run docker_client_restart"
     docker_client_stop
-    copy_client_config
+    copy_client_config_ssl
     docker_client_start
 }
 
@@ -5397,6 +5417,7 @@ docker_client_install() {
 
     mkdir_client_volume
     copy_client_config
+    copy_client_config_ssl
     create_docker_compose_client
     docker_client_start
 

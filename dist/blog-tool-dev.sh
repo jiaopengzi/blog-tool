@@ -642,7 +642,7 @@ OPTIONS_ALL=(
     # 安装数据库
     "安装所有数据库:install_database"
     "删除所有数据库:delete_database"
-    "全新安装所有数据库:reset_install_database"
+    "重置所有数据库(生产禁用):reset_install_database"
     "安装所有数据库-计费中心:install_database_billing_center"
     "删除所有数据库-计费中心:delete_database_billing_center"
     "安装 pgsql:install_db_pgsql"
@@ -8245,6 +8245,34 @@ copy_client_config() {
 
     docker_create_client_temp_container run_copy_config "latest"
 
+    # 目录已经存在，主要是修改权限
+    if [ ! -d "$DATA_VOLUME_DIR" ]; then
+        # 如果不存在则创建
+        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+    fi
+
+    setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 \
+        "$DATA_VOLUME_DIR/blog-client" \
+        "$DATA_VOLUME_DIR/blog-client/nginx" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
+
+    # 修改 nginx.conf 配置文件中的 blog-server 地址为宿主机内网 IP 地址
+    sudo sed -r -i \
+        "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
+
+    log_info "client 复制配置文件到 volume success"
+}
+
+# 复制 blog_client 配置文件
+copy_client_config_ssl() {
+
+    log_debug "run copy_client_config_ssl"
+
+    dir_ssl="$DATA_VOLUME_DIR/blog-client/nginx/ssl"
+
+    sudo rm -rf "$dir_ssl"
+
     # 如果当前目录下 certs_nginx 文件夹不存在则输出提示
     if [ ! -d "$CERTS_NGINX" ]; then
         echo "========================================"
@@ -8284,12 +8312,7 @@ copy_client_config() {
     # 修改证书目录权限
     setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 "$DATA_VOLUME_DIR/blog-client/nginx/ssl/"
 
-    # 修改 nginx.conf 配置文件中的 blog-server 地址为宿主机内网 IP 地址
-    sudo sed -r -i \
-        "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
-        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
-
-    log_info "client 复制配置文件到 volume success"
+    log_info "client 复制证书文件到 volume success"
 }
 
 ### content from client/deploy.sh
@@ -8524,34 +8547,34 @@ docker_push_client() {
     # 3. 推送到私有仓库
     docker_tag_push_private_registry "blog-client" "$version"
 
-    # 4. 更新 changelog
-    sync_repo_by_tag "blog-client" "$version" "$GIT_GITHUB"
-    sync_repo_by_tag "blog-client" "$version" "$GIT_GITEE"
+    # # 4. 更新 changelog
+    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITHUB"
+    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITEE"
 
-    # 5. 发布到生产环境
-    if [ "$is_dev" = false ]; then
-        # # 推送到 Docker Hub
-        docker_tag_push_docker_hub "blog-client" "$version"
+    # # 5. 发布到生产环境
+    # if [ "$is_dev" = false ]; then
+    #     # # 推送到 Docker Hub
+    #     docker_tag_push_docker_hub "blog-client" "$version"
 
-        # 产物发布到 GitHub 和 Gitee Releases
+    #     # 产物发布到 GitHub 和 Gitee Releases
 
-        # 打包产物
-        local zip_path
-        zip_path=$(client_artifacts_zip "$version")
+    #     # 打包产物
+    #     local zip_path
+    #     zip_path=$(client_artifacts_zip "$version")
 
-        # 发布
-        releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
-        releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
+    #     # 发布
+    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
+    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
 
-        # 移除压缩包
-        if [ -f "$zip_path" ]; then
-            sudo rm -f "$zip_path"
-            log_info "移除本地产物包 $zip_path 成功"
-        fi
-    else
-        # 如果不是生产环境, 复制到本地的产物包删除
-        sudo rm -rf "$DIR_APP_CLIENT"
-    fi
+    #     # 移除压缩包
+    #     if [ -f "$zip_path" ]; then
+    #         sudo rm -f "$zip_path"
+    #         log_info "移除本地产物包 $zip_path 成功"
+    #     fi
+    # else
+    #     # 如果不是生产环境, 复制到本地的产物包删除
+    #     sudo rm -rf "$DIR_APP_CLIENT"
+    # fi
 }
 
 # 拉取 client 镜像
@@ -8645,7 +8668,7 @@ docker_client_stop() {
 docker_client_restart() {
     log_debug "run docker_client_restart"
     docker_client_stop
-    copy_client_config
+    copy_client_config_ssl
     docker_client_start
 }
 
@@ -8655,6 +8678,7 @@ docker_client_install() {
 
     mkdir_client_volume
     copy_client_config
+    copy_client_config_ssl
     create_docker_compose_client
     docker_client_start
 
