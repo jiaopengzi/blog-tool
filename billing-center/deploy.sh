@@ -78,6 +78,9 @@ docker_build_billing_center_env() {
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
+
+        # 构建完成后清理构建缓存, 以节省磁盘空间
+        docker_clear_cache
     }
 
     log_timer "构建 billing-center golang pnpm 镜像" run
@@ -99,6 +102,9 @@ docker_build_billing_center() {
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
+
+        # 构建完成后清理构建缓存, 以节省磁盘空间
+        docker_clear_cache
     }
 
     log_timer "构建 billing-center 镜像" run

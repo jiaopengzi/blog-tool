@@ -354,6 +354,31 @@ docker_sign_pushed_image() {
     log_info "镜像签名完成, 镜像: $image_name, digest: $image_digest"
 }
 
+# 删除本地已打 tag 的镜像, 保留 build 标签.
+# 参数: $1: 镜像名称.
+# 参数: $2: 版本 tag.
+docker_remove_local_tagged_images() {
+    log_debug "run docker_remove_local_tagged_images"
+
+    local image_name="$1"
+    local image_tag="$2"
+
+    if [ -z "$image_name" ] || [ -z "$image_tag" ]; then
+        log_error "删除本地 tag 镜像失败, 镜像名称和 tag 不能为空"
+        return 1
+    fi
+
+    if ! sudo docker image rm "$image_name:$image_tag" "$image_name:latest" >/dev/null 2>&1; then
+        log_warn "删除本地 tag 镜像失败, 请手动检查: $image_name:$image_tag, $image_name:latest"
+        return 1
+    fi
+
+    # 清理
+    docker_clear_cache
+
+    log_info "删除本地 tag 镜像成功: $image_name:$image_tag, $image_name:latest"
+}
+
 # 镜像打标签并推送到 docker hub
 docker_tag_push_docker_hub() {
     log_debug "run docker_tag_push_docker_hub"
@@ -398,6 +423,9 @@ docker_tag_push_docker_hub() {
         return 1
     }
 
+    # 推送和签名成功后, 清理本地版本 tag 与 latest, 保留 build 标签供后续复用.
+    docker_remove_local_tagged_images "$image_name" "$docker_tag_version" || true
+
     # 避免无法推送, 及时出登录
     sudo docker logout "$DOCKER_HUB_REGISTRY" || true
 }
@@ -436,6 +464,9 @@ docker_tag_push_private_registry() {
         sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
         return 1
     }
+
+    # 推送和签名成功后, 清理本地版本 tag 与 latest, 保留 build 标签供后续复用.
+    docker_remove_local_tagged_images "$image_name" "$docker_tag_version" || true
 
     # 避免无法推送,及时出登录
     sudo docker logout "$REGISTRY_REMOTE_SERVER" || true

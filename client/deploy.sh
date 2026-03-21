@@ -75,6 +75,9 @@ docker_build_client_env() {
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
+
+        # 构建完成后清理构建缓存, 以节省磁盘空间
+        docker_clear_cache
     }
 
     log_timer "构建 blog-client:env 镜像" run
@@ -98,6 +101,9 @@ docker_build_client() {
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
+
+        # 构建完成后清理构建缓存, 以节省磁盘空间
+        docker_clear_cache
     }
 
     log_timer "构建 blog-client 镜像" run

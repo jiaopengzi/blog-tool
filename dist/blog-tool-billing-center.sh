@@ -1386,6 +1386,27 @@ docker_sign_pushed_image() {
     log_info "镜像签名完成, 镜像: $image_name, digest: $image_digest"
 }
 
+docker_remove_local_tagged_images() {
+    log_debug "run docker_remove_local_tagged_images"
+
+    local image_name="$1"
+    local image_tag="$2"
+
+    if [ -z "$image_name" ] || [ -z "$image_tag" ]; then
+        log_error "删除本地 tag 镜像失败, 镜像名称和 tag 不能为空"
+        return 1
+    fi
+
+    if ! sudo docker image rm "$image_name:$image_tag" "$image_name:latest" >/dev/null 2>&1; then
+        log_warn "删除本地 tag 镜像失败, 请手动检查: $image_name:$image_tag, $image_name:latest"
+        return 1
+    fi
+
+    docker_clear_cache
+
+    log_info "删除本地 tag 镜像成功: $image_name:$image_tag, $image_name:latest"
+}
+
 docker_tag_push_docker_hub() {
     log_debug "run docker_tag_push_docker_hub"
     local project=$1
@@ -1420,6 +1441,8 @@ docker_tag_push_docker_hub() {
         return 1
     }
 
+    docker_remove_local_tagged_images "$image_name" "$docker_tag_version" || true
+
     sudo docker logout "$DOCKER_HUB_REGISTRY" || true
 }
 
@@ -1449,6 +1472,8 @@ docker_tag_push_private_registry() {
         sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
         return 1
     }
+
+    docker_remove_local_tagged_images "$image_name" "$docker_tag_version" || true
 
     sudo docker logout "$REGISTRY_REMOTE_SERVER" || true
 }
@@ -4445,6 +4470,8 @@ docker_build_billing_center() {
 
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
+
+        docker_clear_cache
     }
 
     log_timer "构建 billing-center 镜像" run
