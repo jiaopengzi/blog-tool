@@ -5,6 +5,21 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.11.0] - 2026-03-23
+
+### ♻️ Refactor
+
+- analysis-ik 分词插件安装方式按照官方推荐
+
+### ✨ Feat
+
+- 数据库重启版本统一
+- 重启数据库
+
+### 🐞 Fix
+
+- 数据库重启服务 es 不允许降级
+
 ## [v0.10.1] - 2026-03-23
 
 ### 📦 Build
