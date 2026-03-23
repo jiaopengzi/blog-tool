@@ -431,8 +431,8 @@ CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
 # docker 镜像版本
-IMG_VERSION_REDIS="8.6.0"    # redis 版本
-IMG_VERSION_PGSQL="18.2"     # pgsql 版本
+IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 # https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip
@@ -1438,6 +1438,26 @@ get_runtime_redis_container_name() {
 
     runtime_redis_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "redis" "$IMG_VERSION_REDIS")
     echo "redis-$runtime_redis_version-$redis_port"
+}
+
+# 获取运行期 es 容器名称.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 节点编号后缀, 如 01; 默认 01.
+# 返回: 输出当前 compose 实际版本对应的 es 容器名.
+get_runtime_es_container_name() {
+    log_debug "run get_runtime_es_container_name"
+
+    local docker_compose_file="$1"
+    local node_suffix="${2:-01}"
+    local runtime_es_version=""
+
+    if [ -z "$docker_compose_file" ]; then
+        log_error "获取运行期 es 容器名称失败, 参数不能为空"
+        return 1
+    fi
+
+    runtime_es_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "elasticsearch" "$IMG_VERSION_ES")
+    echo "es-$runtime_es_version-$node_suffix"
 }
 
 # 替换 docker compose 中指定镜像的版本号.
@@ -6250,7 +6270,9 @@ EOM
 health_check_db_es() {
   log_debug "run health_check_db_es"
 
-  local es_container="es-$IMG_VERSION_ES-01" # 第一个 ES 节点容器名
+  local es_container="" # 第一个 ES 节点容器名
+
+  es_container=$(get_runtime_es_container_name "$DOCKER_COMPOSE_FILE_ES" "01")
   log_warn "等待 Elasticsearch 启动, 这可能需要几分钟时间... 请勿中断！"
 
   # 通过 docker inspect 检查容器健康状态(依赖 docker-compose 中已配置的 healthcheck)
@@ -6293,11 +6315,213 @@ restart_db_es_by_compose() {
   restart_db_by_handlers "stop_db_es" "start_db_es"
 }
 
+# 判断 ES 是否发生版本降级.
+# 参数: $1: 当前 es 版本.
+# 参数: $2: 目标 es 版本.
+# 返回: 目标版本低于当前版本时返回 0, 否则返回 1.
+is_es_version_downgrade() {
+  log_debug "run is_es_version_downgrade"
+
+  local current_es_version="$1"
+  local target_es_version="$2"
+  local highest_version=""
+
+  if [ -z "$current_es_version" ] || [ -z "$target_es_version" ]; then
+    log_error "判断 ES 是否降级失败, 参数不能为空"
+    return 1
+  fi
+
+  highest_version=$(printf "%s\n%s\n" "$current_es_version" "$target_es_version" | sort -V | tail -n 1)
+  [ "$highest_version" == "$current_es_version" ] && [ "$current_es_version" != "$target_es_version" ]
+}
+
+# 处理 ES 版本降级时的数据兼容性.
+# 参数: $1: 当前 es 版本.
+# 参数: $2: 目标 es 版本.
+# 返回: 无需降级或已清理数据时返回 0, 用户取消时返回非 0.
+handle_es_downgrade_data() {
+  log_debug "run handle_es_downgrade_data"
+
+  local current_es_version="$1"
+  local target_es_version="$2"
+  local node_data_dir=""
+  local clear_data_choice=""
+  local has_node_data=false
+
+  if ! is_es_version_downgrade "$current_es_version" "$target_es_version"; then
+    return 0
+  fi
+
+  for node_data_dir in "$DATA_VOLUME_DIR"/es/node-*/data; do
+    if [ -d "$node_data_dir" ]; then
+      has_node_data=true
+      break
+    fi
+  done
+
+  if [ "$has_node_data" != true ]; then
+    log_warn "检测到 ES 版本降级, 但未发现节点数据目录, 跳过数据清理"
+    return 0
+  fi
+
+  clear_data_choice=$(read_user_input "\n检测到 es 从 $current_es_version 降级到 $target_es_version. Elasticsearch 不允许直接使用高版本节点数据降级启动.\n是否删除现有 es 节点数据后继续, 默认否 [y|n]: " "n")
+
+  if [ "$clear_data_choice" != "y" ]; then
+    log_error "已取消 ES 降级重启. 如需降级, 请确认删除现有 es 节点数据后重试"
+    return 1
+  fi
+
+  for node_data_dir in "$DATA_VOLUME_DIR"/es/node-*/data; do
+    [ -d "$node_data_dir" ] || continue
+    sudo rm -rf "$node_data_dir"
+    setup_directory "$ES_UID" "$ES_GID" 755 "$node_data_dir"
+  done
+
+  log_warn "已清空 ES 节点数据目录, 继续执行版本降级: $current_es_version -> $target_es_version"
+}
+
+# 同步 ES 的 IK 分词插件版本.
+# 参数: $1: 当前 es 版本.
+# 参数: $2: 目标 es 版本.
+# 返回: 完成共享插件包下载, 节点插件配置更新, 并清理旧插件目录以便重装.
+sync_es_ik_plugin_version() {
+  log_debug "run sync_es_ik_plugin_version"
+
+  local current_es_version="$1"
+  local target_es_version="$2"
+  local es_base_dir="$DATA_VOLUME_DIR/es"
+  local plugin_shared_dir="$es_base_dir/plugin"
+  local current_ik_zip_name="elasticsearch-analysis-ik-$current_es_version.zip"
+  local target_ik_zip_name="elasticsearch-analysis-ik-$target_es_version.zip"
+  local target_ik_zip_url="https://release.infinilabs.com/analysis-ik/stable/$target_ik_zip_name"
+  local target_ik_zip_shared="$plugin_shared_dir/$target_ik_zip_name"
+  local node_dir=""
+  local node_config_dir=""
+  local plugin_config_file=""
+  local updated_count=0
+
+  if [ -z "$current_es_version" ] || [ -z "$target_es_version" ]; then
+    log_error "同步 IK 分词插件版本失败, 参数不能为空"
+    return 1
+  fi
+
+  if [ "$current_es_version" == "$target_es_version" ]; then
+    log_info "IK 分词插件版本未变化, 跳过同步: $target_es_version"
+    return 0
+  fi
+
+  setup_directory "$ES_UID" "$ES_GID" 755 "$plugin_shared_dir"
+
+  if [ ! -f "$target_ik_zip_shared" ]; then
+    log_info "下载目标 IK 分词器插件: $target_ik_zip_url"
+    sudo curl -fSL -o "$target_ik_zip_shared" "$target_ik_zip_url"
+    sudo chown "$ES_UID:$ES_GID" "$target_ik_zip_shared"
+  fi
+
+  for node_dir in "$es_base_dir"/node-*/; do
+    [ -d "$node_dir" ] || continue
+
+    node_config_dir="${node_dir}config"
+    plugin_config_file="$node_config_dir/elasticsearch-plugins.yml"
+
+    if [ ! -d "$node_config_dir" ]; then
+      log_warn "ES 节点配置目录不存在, 跳过 IK 插件同步: $node_config_dir"
+      continue
+    fi
+
+    sudo cp "$target_ik_zip_shared" "$node_config_dir/$target_ik_zip_name"
+    sudo chown "$ES_UID:$ES_GID" "$node_config_dir/$target_ik_zip_name"
+    sudo rm -f "$node_config_dir/$current_ik_zip_name"
+
+    if [ -f "$plugin_config_file" ]; then
+      sudo sed -i "s|$current_ik_zip_name|$target_ik_zip_name|g" "$plugin_config_file"
+      sudo chown "$ES_UID:$ES_GID" "$plugin_config_file"
+    fi
+
+    sudo rm -rf "${node_dir}plugins/analysis-ik"
+    setup_directory "$ES_UID" "$ES_GID" 755 "$node_config_dir" "${node_dir}plugins"
+    updated_count=$((updated_count + 1))
+  done
+
+  if [ "$updated_count" -eq 0 ]; then
+    log_warn "未找到可同步 IK 分词插件的 ES 节点目录, 跳过节点插件处理"
+    return 0
+  fi
+
+  log_info "已同步 $updated_count 个 ES 节点的 IK 分词插件版本: $current_es_version -> $target_es_version"
+}
+
+# 同步 ES 的节点证书版本.
+# 参数: $1: 当前 es 版本.
+# 参数: $2: 目标 es 版本.
+# 返回: 使用现有 CA 为各节点重新生成目标版本证书, 以匹配 compose 中的证书路径.
+sync_es_cert_version() {
+  log_debug "run sync_es_cert_version"
+
+  local current_es_version="$1"
+  local target_es_version="$2"
+  local es_base_dir="$DATA_VOLUME_DIR/es"
+  local ca_cert_file="$CA_CERT_DIR/ca.crt"
+  local ca_key_file="$CA_CERT_DIR/ca.key"
+  local node_dir=""
+  local node_config_dir=""
+  local formatted_i=""
+  local target_cert_base=""
+  local ip_node=""
+  local generated_count=0
+
+  if [ -z "$current_es_version" ] || [ -z "$target_es_version" ]; then
+    log_error "同步 ES 证书版本失败, 参数不能为空"
+    return 1
+  fi
+
+  if [ "$current_es_version" == "$target_es_version" ]; then
+    log_info "ES 证书版本未变化, 跳过重新生成: $target_es_version"
+    return 0
+  fi
+
+  gen_my_ca_cert
+
+  for node_dir in "$es_base_dir"/node-*/; do
+    [ -d "$node_dir" ] || continue
+
+    formatted_i=$(basename "$node_dir" | sed 's/^node-//')
+    node_config_dir="${node_dir}config"
+    target_cert_base="es-$target_es_version-$formatted_i"
+    ip_node="$IPV4_BASE_ES.$(((10#$formatted_i + 1) % 256))"
+
+    if [ ! -d "$node_config_dir" ]; then
+      log_warn "ES 节点证书目录不存在, 跳过证书生成: $node_config_dir"
+      continue
+    fi
+
+    sudo rm -f "$node_config_dir/$target_cert_base.key" "$node_config_dir/$target_cert_base.crt"
+
+    generate_instance_cert "$target_cert_base" \
+      "$target_cert_base,localhost" \
+      "127.0.0.1,$HOST_INTRANET_IP,$ip_node,$PUBLIC_IP_ADDRESS" \
+      "$node_config_dir" \
+      "$CERT_DAYS_VALID" \
+      "$ca_cert_file" \
+      "$ca_key_file"
+
+    setup_directory "$ES_UID" "$ES_GID" 755 "$node_config_dir"
+    generated_count=$((generated_count + 1))
+  done
+
+  if [ "$generated_count" -eq 0 ]; then
+    log_warn "未找到可生成证书的 ES 节点目录, 跳过证书处理"
+    return 0
+  fi
+
+  log_info "已为 $generated_count 个 ES 节点重新生成目标版本证书: $current_es_version -> $target_es_version"
+}
+
 # 替换 es 相关 docker compose 镜像版本.
 # 参数: $1: docker compose 文件路径.
 # 参数: $2: 当前 es 版本.
 # 参数: $3: 目标 es 版本.
-# 返回: 完成 compose 文件中的全量版本替换.
+# 返回: 完成 compose 文件中的全量版本替换, 并同步 IK 分词插件与证书版本.
 replace_db_es_compose_version() {
   log_debug "run replace_db_es_compose_version"
 
@@ -6305,6 +6529,9 @@ replace_db_es_compose_version() {
   local current_es_version="$2"
   local target_es_version="$3"
 
+  handle_es_downgrade_data "$current_es_version" "$target_es_version" || return 1
+  sync_es_ik_plugin_version "$current_es_version" "$target_es_version"
+  sync_es_cert_version "$current_es_version" "$target_es_version"
   replace_docker_compose_image_version "$docker_compose_file" "elasticsearch" "$current_es_version" "$target_es_version"
 }
 

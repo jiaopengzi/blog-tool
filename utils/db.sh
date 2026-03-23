@@ -104,6 +104,26 @@ get_runtime_redis_container_name() {
     echo "redis-$runtime_redis_version-$redis_port"
 }
 
+# 获取运行期 es 容器名称.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 节点编号后缀, 如 01; 默认 01.
+# 返回: 输出当前 compose 实际版本对应的 es 容器名.
+get_runtime_es_container_name() {
+    log_debug "run get_runtime_es_container_name"
+
+    local docker_compose_file="$1"
+    local node_suffix="${2:-01}"
+    local runtime_es_version=""
+
+    if [ -z "$docker_compose_file" ]; then
+        log_error "获取运行期 es 容器名称失败, 参数不能为空"
+        return 1
+    fi
+
+    runtime_es_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "elasticsearch" "$IMG_VERSION_ES")
+    echo "es-$runtime_es_version-$node_suffix"
+}
+
 # 替换 docker compose 中指定镜像的版本号.
 # 参数: $1: docker compose 文件路径.
 # 参数: $2: 镜像名称, 如 postgres.

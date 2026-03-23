@@ -327,8 +327,8 @@ fi
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
-IMG_VERSION_REDIS="8.6.0"    # redis 版本
-IMG_VERSION_PGSQL="18.2"     # pgsql 版本
+IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 IMG_VERSION_ES="9.3.1"     # 7.17.28 8.18.1
@@ -1032,6 +1032,22 @@ get_runtime_redis_container_name() {
 
     runtime_redis_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "redis" "$IMG_VERSION_REDIS")
     echo "redis-$runtime_redis_version-$redis_port"
+}
+
+get_runtime_es_container_name() {
+    log_debug "run get_runtime_es_container_name"
+
+    local docker_compose_file="$1"
+    local node_suffix="${2:-01}"
+    local runtime_es_version=""
+
+    if [ -z "$docker_compose_file" ]; then
+        log_error "获取运行期 es 容器名称失败, 参数不能为空"
+        return 1
+    fi
+
+    runtime_es_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "elasticsearch" "$IMG_VERSION_ES")
+    echo "es-$runtime_es_version-$node_suffix"
 }
 
 replace_docker_compose_image_version() {
