@@ -17,11 +17,28 @@ stop_db_redis_billing_center() {
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true
 }
 
-# 重启 redis 容器(billing center)
+# 按当前 docker compose 直接重启 redis 容器(billing center).
+# 返回: 完成 down/up 重启流程.
+restart_db_redis_billing_center_by_compose() {
+    log_debug "run restart_db_redis_billing_center_by_compose"
+
+    restart_db_by_handlers "stop_db_redis_billing_center" "start_db_redis_billing_center"
+}
+
+# 对比版本后重启 redis 容器(billing center).
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_redis_billing_center() {
     log_debug "run restart_db_redis_billing_center"
-    stop_db_redis_billing_center
-    start_db_redis_billing_center
+
+    restart_db_with_version_choice \
+        "redis_billing_center" \
+        "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" \
+        "redis" \
+        "$IMG_VERSION_REDIS" \
+        "restart_db_redis_billing_center_by_compose" \
+        "" \
+        "stop_db_redis_billing_center" \
+        "start_db_redis_billing_center"
 }
 
 # 创建 redis 数据库(billing center)

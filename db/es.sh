@@ -575,11 +575,43 @@ stop_db_es() {
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down || true
 }
 
-# 重启 es 容器
+# 按当前 docker compose 直接重启 es 容器.
+# 返回: 完成 down/up 与健康检查流程.
+restart_db_es_by_compose() {
+  log_debug "run restart_db_es_by_compose"
+
+  restart_db_by_handlers "stop_db_es" "start_db_es"
+}
+
+# 替换 es 相关 docker compose 镜像版本.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 当前 es 版本.
+# 参数: $3: 目标 es 版本.
+# 返回: 完成 compose 文件中的全量版本替换.
+replace_db_es_compose_version() {
+  log_debug "run replace_db_es_compose_version"
+
+  local docker_compose_file="$1"
+  local current_es_version="$2"
+  local target_es_version="$3"
+
+  replace_docker_compose_image_version "$docker_compose_file" "elasticsearch" "$current_es_version" "$target_es_version"
+}
+
+# 对比版本后重启 es 容器.
+# 返回: 版本一致时直接重启; 版本不一致时先替换 compose 中镜像版本再重启.
 restart_db_es() {
   log_debug "run restart_db_es"
-  stop_db_es
-  start_db_es
+
+  restart_db_with_version_choice \
+    "es" \
+    "$DOCKER_COMPOSE_FILE_ES" \
+    "elasticsearch" \
+    "$IMG_VERSION_ES" \
+    "restart_db_es_by_compose" \
+    "replace_db_es_compose_version" \
+    "stop_db_es" \
+    "start_db_es"
 }
 
 # 安装 es kibana

@@ -431,15 +431,15 @@ CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
 # docker 镜像版本
-IMG_VERSION_REDIS="8.6.1"    # redis 版本
-IMG_VERSION_PGSQL="18.3"     # pgsql 版本
+IMG_VERSION_REDIS="8.6.0"    # redis 版本
+IMG_VERSION_PGSQL="18.2"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 # https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip
 # https://release.infinilabs.com/analysis-ik/stable
 # 优先查看分词工具是否更新到最新版本, 以分词工具的版本为准, 其他版本保持一致
-IMG_VERSION_ES="9.3.2"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.2" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.1"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.1" # 与 es 保持版本一致
 
 # 需要创建的运行用户
 JPZ_UID=2025    # 服务端用户
@@ -644,11 +644,13 @@ OPTIONS_ALL=(
     "运行私有分发镜像仓库:docker_run_registry"
 
     # 安装数据库
-    "安装所有数据库:install_database"
-    "删除所有数据库:delete_database"
-    "重置所有数据库(生产禁用):reset_install_database"
-    "安装所有数据库-计费中心:install_database_billing_center"
-    "删除所有数据库-计费中心:delete_database_billing_center"
+    "安装数据库:install_database"
+    "重启数据库:restart_database"
+    "删除数据库:delete_database"
+    "重置数据库(生产禁用):reset_install_database"
+    "安装数据库-计费中心:install_database_billing_center"
+    "重启数据库-计费中心:restart_database_billing_center"
+    "删除数据库-计费中心:delete_database_billing_center"
     "安装 pgsql:install_db_pgsql"
     "安装 pgsql 计费中心:install_db_pgsql_billing_center"
     "删除 pgsql:delete_db_pgsql"
@@ -1339,6 +1341,295 @@ check() {
 }
 
 ### content from utils/db.sh
+# 获取 docker compose 中指定镜像的版本号.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 镜像名称, 如 postgres.
+# 返回: 输出解析到的版本号; 未找到时输出空字符串.
+get_docker_compose_image_version() {
+    log_debug "run get_docker_compose_image_version"
+
+    local docker_compose_file="$1"
+    local image_name="$2"
+    local image_version=""
+
+    if [ -z "$docker_compose_file" ] || [ -z "$image_name" ]; then
+        log_error "读取 docker compose 镜像版本失败, 参数不能为空"
+        return 1
+    fi
+
+    if [ ! -f "$docker_compose_file" ]; then
+        log_warn "docker compose 文件不存在, 跳过版本读取: $docker_compose_file"
+        echo ""
+        return 0
+    fi
+
+    image_version=$(awk -v image_name="$image_name" '
+        {
+            line = $0
+            gsub(/\047/, "", line)
+
+            if (line ~ /^[[:space:]]*image:[[:space:]]*/) {
+                sub(/^[[:space:]]*image:[[:space:]]*/, "", line)
+                if (index(line, image_name ":") == 1) {
+                    sub("^" image_name ":", "", line)
+                    print line
+                    exit
+                }
+            }
+        }
+    ' "$docker_compose_file")
+
+    echo "$image_version"
+}
+
+# 获取 docker compose 中指定镜像的运行版本, 未读取到时回退到默认版本.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 镜像名称, 如 elasticsearch.
+# 参数: $3: 默认版本号.
+# 返回: 输出 compose 中的版本号; 若不存在则输出默认版本号.
+get_docker_compose_image_version_or_default() {
+    log_debug "run get_docker_compose_image_version_or_default"
+
+    local docker_compose_file="$1"
+    local image_name="$2"
+    local default_version="$3"
+    local image_version=""
+
+    image_version=$(get_docker_compose_image_version "$docker_compose_file" "$image_name")
+
+    if [ -n "$image_version" ]; then
+        echo "$image_version"
+        return 0
+    fi
+
+    echo "$default_version"
+}
+
+# 获取运行期 pgsql 容器名称.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 容器名称后缀, 如 -billing-center; 默认空.
+# 返回: 输出当前 compose 实际版本对应的 pgsql 容器名.
+get_runtime_pgsql_container_name() {
+    log_debug "run get_runtime_pgsql_container_name"
+
+    local docker_compose_file="$1"
+    local name_suffix="${2:-}"
+    local runtime_pgsql_version=""
+
+    runtime_pgsql_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "postgres" "$IMG_VERSION_PGSQL")
+    echo "pgsql-$runtime_pgsql_version$name_suffix"
+}
+
+# 获取运行期 redis 容器名称.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: redis 端口.
+# 返回: 输出当前 compose 实际版本对应的 redis 容器名.
+get_runtime_redis_container_name() {
+    log_debug "run get_runtime_redis_container_name"
+
+    local docker_compose_file="$1"
+    local redis_port="$2"
+    local runtime_redis_version=""
+
+    if [ -z "$docker_compose_file" ] || [ -z "$redis_port" ]; then
+        log_error "获取运行期 redis 容器名称失败, 参数不能为空"
+        return 1
+    fi
+
+    runtime_redis_version=$(get_docker_compose_image_version_or_default "$docker_compose_file" "redis" "$IMG_VERSION_REDIS")
+    echo "redis-$runtime_redis_version-$redis_port"
+}
+
+# 替换 docker compose 中指定镜像的版本号.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 镜像名称, 如 postgres.
+# 参数: $3: 原版本号.
+# 参数: $4: 目标版本号.
+# 返回: 成功返回 0; 文件不存在或无需替换时返回 0; 失败返回非 0.
+replace_docker_compose_image_version() {
+    log_debug "run replace_docker_compose_image_version"
+
+    local docker_compose_file="$1"
+    local image_name="$2"
+    local current_version="$3"
+    local target_version="$4"
+    local escaped_current_version=""
+    local escaped_target_version=""
+
+    if [ -z "$docker_compose_file" ] || [ -z "$image_name" ] || [ -z "$target_version" ]; then
+        log_error "替换 docker compose 镜像版本失败, 参数不能为空"
+        return 1
+    fi
+
+    if [ ! -f "$docker_compose_file" ]; then
+        log_warn "docker compose 文件不存在, 跳过版本替换: $docker_compose_file"
+        return 0
+    fi
+
+    if [ -n "$current_version" ] && [ "$current_version" == "$target_version" ]; then
+        log_info "docker compose 版本未变化, 跳过替换: $target_version"
+        return 0
+    fi
+
+    if ! grep -Fq "$current_version" "$docker_compose_file"; then
+        log_warn "未在 docker compose 中找到需要替换的版本号: $current_version"
+        return 0
+    fi
+
+    escaped_current_version=$(printf '%s\n' "$current_version" | sed 's/[][\\/.^$*+?{}|()]/\\&/g')
+    escaped_target_version=$(printf '%s\n' "$target_version" | sed 's/[\\&]/\\&/g')
+
+    if ! sed -i "s/${escaped_current_version}/${escaped_target_version}/g" "$docker_compose_file"; then
+        log_error "替换 docker compose 版本失败: $current_version -> $target_version"
+        return 1
+    fi
+
+    log_info "已更新 docker compose 文件中的全部版本号: $current_version -> $target_version"
+}
+
+# 对比脚本版本与 docker compose 版本, 并返回重启使用的版本来源.
+# 参数: $1: 服务名称.
+# 参数: $2: 当前脚本版本.
+# 参数: $3: docker compose 中的版本.
+# 返回: 输出 same, script 或 compose.
+select_db_restart_version_source() {
+    log_debug "run select_db_restart_version_source"
+
+    local service_name="$1"
+    local script_version="$2"
+    local compose_version="$3"
+    local compose_version_display="${compose_version:-未检测到}"
+    local version_choice=""
+
+    log_info "服务 $service_name 版本信息: 当前最新版本 $script_version, 历史 docker compose 版本 $compose_version_display"
+
+    if [ -z "$compose_version" ]; then
+        log_warn "服务 $service_name 未检测到历史 docker compose 版本, 将使用当前最新版本继续"
+        echo "script"
+        return 0
+    fi
+
+    if [ "$script_version" == "$compose_version" ]; then
+        echo "same"
+        return 0
+    fi
+
+    version_choice=$(read_user_input "\n检测到 $service_name 版本不一致:\n  1. 当前最新版本: $script_version\n  2. 历史 docker compose 版本: $compose_version\n请选择本次重启使用的版本, 默认使用 docker compose 版本 [1|2]: " "2")
+
+    case "$version_choice" in
+    1 | script | s)
+        log_info "服务 $service_name 已选择当前最新版本: $script_version"
+        echo "script"
+        ;;
+    2 | compose | c)
+        log_info "服务 $service_name 已选择历史 docker compose 版本: $compose_version"
+        echo "compose"
+        ;;
+    *)
+        log_error "无效的版本选择: $version_choice, 仅支持输入 1 或 2"
+        ;;
+    esac
+}
+
+# 使用停止和启动函数完成一次数据库重启.
+# 参数: $1: 停止函数名.
+# 参数: $2: 启动函数名.
+# 返回: 成功时完成 stop/start 流程.
+restart_db_by_handlers() {
+    log_debug "run restart_db_by_handlers"
+
+    local stop_func="$1"
+    local start_func="$2"
+
+    if [ -z "$stop_func" ] || [ -z "$start_func" ]; then
+        log_error "数据库重启失败, 停止函数和启动函数不能为空"
+        return 1
+    fi
+
+    if ! declare -f "$stop_func" >/dev/null; then
+        log_error "数据库重启失败, 未找到停止函数: $stop_func"
+        return 1
+    fi
+
+    if ! declare -f "$start_func" >/dev/null; then
+        log_error "数据库重启失败, 未找到启动函数: $start_func"
+        return 1
+    fi
+
+    "$stop_func"
+    "$start_func"
+}
+
+# 按版本选择策略重启数据库服务.
+# 参数: $1: 服务名称.
+# 参数: $2: docker compose 文件路径.
+# 参数: $3: 镜像名称.
+# 参数: $4: 当前脚本版本.
+# 参数: $5: 按现有 compose 直接重启的函数名.
+# 参数: $6: 版本替换函数名, 可为空; 为空时默认替换 compose 文件中的全部旧版本号.
+# 参数: $7: 停止函数名.
+# 参数: $8: 启动函数名.
+# 返回: 成功时完成重启.
+restart_db_with_version_choice() {
+    log_debug "run restart_db_with_version_choice"
+
+    local service_name="$1"
+    local docker_compose_file="$2"
+    local image_name="$3"
+    local script_version="$4"
+    local restart_compose_func="$5"
+    local replace_compose_version_func="$6"
+    local stop_func="$7"
+    local start_func="$8"
+    local compose_version=""
+    local restart_source=""
+
+    if [ -z "$service_name" ] || [ -z "$docker_compose_file" ] || [ -z "$image_name" ] || [ -z "$script_version" ] || [ -z "$restart_compose_func" ] || [ -z "$stop_func" ] || [ -z "$start_func" ]; then
+        log_error "数据库版本重启失败, 参数不能为空"
+        return 1
+    fi
+
+    if ! declare -f "$restart_compose_func" >/dev/null; then
+        log_error "数据库版本重启失败, 未找到函数: $restart_compose_func"
+        return 1
+    fi
+
+    compose_version=$(get_docker_compose_image_version "$docker_compose_file" "$image_name")
+    restart_source=$(select_db_restart_version_source "$service_name" "$script_version" "$compose_version")
+
+    if [ "$restart_source" == "same" ] || [ "$restart_source" == "compose" ]; then
+        "$restart_compose_func"
+        return 0
+    fi
+
+    if ! declare -f "$stop_func" >/dev/null; then
+        log_error "数据库版本重启失败, 未找到停止函数: $stop_func"
+        return 1
+    fi
+
+    if ! declare -f "$start_func" >/dev/null; then
+        log_error "数据库版本重启失败, 未找到启动函数: $start_func"
+        return 1
+    fi
+
+    "$stop_func"
+
+    if [ -n "$compose_version" ] && [ "$compose_version" != "$script_version" ]; then
+        if [ -n "$replace_compose_version_func" ]; then
+            if ! declare -f "$replace_compose_version_func" >/dev/null; then
+                log_error "数据库版本重启失败, 未找到函数: $replace_compose_version_func"
+                return 1
+            fi
+
+            "$replace_compose_version_func" "$docker_compose_file" "$compose_version" "$script_version"
+        else
+            replace_docker_compose_image_version "$docker_compose_file" "$image_name" "$compose_version" "$script_version"
+        fi
+    fi
+
+    "$start_func"
+}
+
 # 开发阶段重复创建数据库
 reset_install_database() {
     log_debug "run reset_install_database"
@@ -1498,6 +1789,21 @@ delete_database_billing_center() {
     else
         log_info "未删除计费中心数据库"
     fi
+}
+
+# 重启数据库
+restart_database() {
+    log_debug "run restart_database"
+    restart_db_pgsql
+    restart_db_redis
+    restart_db_es
+}
+
+# 重启数据库(billing center)
+restart_database_billing_center() {
+    log_debug "run restart_database_billing_center"
+    restart_db_pgsql_billing_center
+    restart_db_redis_billing_center
 }
 
 ### content from utils/dir_file.sh
@@ -5979,11 +6285,43 @@ stop_db_es() {
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down || true
 }
 
-# 重启 es 容器
+# 按当前 docker compose 直接重启 es 容器.
+# 返回: 完成 down/up 与健康检查流程.
+restart_db_es_by_compose() {
+  log_debug "run restart_db_es_by_compose"
+
+  restart_db_by_handlers "stop_db_es" "start_db_es"
+}
+
+# 替换 es 相关 docker compose 镜像版本.
+# 参数: $1: docker compose 文件路径.
+# 参数: $2: 当前 es 版本.
+# 参数: $3: 目标 es 版本.
+# 返回: 完成 compose 文件中的全量版本替换.
+replace_db_es_compose_version() {
+  log_debug "run replace_db_es_compose_version"
+
+  local docker_compose_file="$1"
+  local current_es_version="$2"
+  local target_es_version="$3"
+
+  replace_docker_compose_image_version "$docker_compose_file" "elasticsearch" "$current_es_version" "$target_es_version"
+}
+
+# 对比版本后重启 es 容器.
+# 返回: 版本一致时直接重启; 版本不一致时先替换 compose 中镜像版本再重启.
 restart_db_es() {
   log_debug "run restart_db_es"
-  stop_db_es
-  start_db_es
+
+  restart_db_with_version_choice \
+    "es" \
+    "$DOCKER_COMPOSE_FILE_ES" \
+    "elasticsearch" \
+    "$IMG_VERSION_ES" \
+    "restart_db_es_by_compose" \
+    "replace_db_es_compose_version" \
+    "stop_db_es" \
+    "start_db_es"
 }
 
 # 安装 es kibana
@@ -6035,11 +6373,28 @@ stop_db_pgsql_billing_center() {
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
 }
 
-# 重启 pgsql 容器(billing center)
+# 按当前 docker compose 直接重启 pgsql 容器(billing center).
+# 返回: 完成 down/up 重启流程.
+restart_db_pgsql_billing_center_by_compose() {
+  log_debug "run restart_db_pgsql_billing_center_by_compose"
+
+  restart_db_by_handlers "stop_db_pgsql_billing_center" "start_db_pgsql_billing_center"
+}
+
+# 对比版本后重启 pgsql 容器(billing center).
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_pgsql_billing_center() {
   log_debug "run restart_db_pgsql_billing_center"
-  stop_db_pgsql_billing_center
-  start_db_pgsql_billing_center
+
+  restart_db_with_version_choice \
+    "pgsql_billing_center" \
+    "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" \
+    "postgres" \
+    "$IMG_VERSION_PGSQL" \
+    "restart_db_pgsql_billing_center_by_compose" \
+    "" \
+    "stop_db_pgsql_billing_center" \
+    "start_db_pgsql_billing_center"
 }
 
 # 安装 pgsql 数据库(billing center)
@@ -6298,11 +6653,28 @@ stop_db_pgsql() {
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" down || true
 }
 
-# 重启 pgsql 容器
+# 按当前 docker compose 直接重启 pgsql 容器.
+# 返回: 完成 down/up 重启流程.
+restart_db_pgsql_by_compose() {
+  log_debug "run restart_db_pgsql_by_compose"
+
+  restart_db_by_handlers "stop_db_pgsql" "start_db_pgsql"
+}
+
+# 对比版本后重启 pgsql 容器.
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_pgsql() {
   log_debug "run restart_db_pgsql"
-  stop_db_pgsql
-  start_db_pgsql
+
+  restart_db_with_version_choice \
+    "pgsql" \
+    "$DOCKER_COMPOSE_FILE_PGSQL" \
+    "postgres" \
+    "$IMG_VERSION_PGSQL" \
+    "restart_db_pgsql_by_compose" \
+    "" \
+    "stop_db_pgsql" \
+    "start_db_pgsql"
 }
 
 # 安装 pgsql 数据库
@@ -6442,24 +6814,6 @@ toggle_pg_hba_conf() {
   log_info "$file_path 已经切换 $mode 模式."
 }
 
-# 开放 pgsql 访问权限
-open_pgsql_access_by_pg_hba.conf() {
-  log_debug "run open_pgsql_access_by_pg_hba.conf"
-
-  sudo docker stop "$POSTGRES_DOCKER_NAME"                          # 停止容器 pgsql 容器
-  toggle_pg_hba_conf open "$DATA_VOLUME_DIR/pgsql/conf/pg_hba.conf" # 切换访问权限
-  sudo docker start "$POSTGRES_DOCKER_NAME"                         # 重启容器
-}
-
-# 限制 pgsql 访问权限
-restrict_pgsql_access_by_pg_hba.conf() {
-  log_debug "run restrict_pgsql_access_by_pg_hba.conf"
-
-  sudo docker stop "$POSTGRES_DOCKER_NAME"                              # 停止容器 pgsql 容器
-  toggle_pg_hba_conf restrict "$DATA_VOLUME_DIR/pgsql/conf/pg_hba.conf" # 切换访问权限
-  sudo docker start "$POSTGRES_DOCKER_NAME"                             # 重启容器
-}
-
 # 停止并删除 pgsql 数据库
 delete_db_pgsql() {
   log_debug "run delete_db_pgsql"
@@ -6489,11 +6843,28 @@ stop_db_redis_billing_center() {
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true
 }
 
-# 重启 redis 容器(billing center)
+# 按当前 docker compose 直接重启 redis 容器(billing center).
+# 返回: 完成 down/up 重启流程.
+restart_db_redis_billing_center_by_compose() {
+    log_debug "run restart_db_redis_billing_center_by_compose"
+
+    restart_db_by_handlers "stop_db_redis_billing_center" "start_db_redis_billing_center"
+}
+
+# 对比版本后重启 redis 容器(billing center).
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_redis_billing_center() {
     log_debug "run restart_db_redis_billing_center"
-    stop_db_redis_billing_center
-    start_db_redis_billing_center
+
+    restart_db_with_version_choice \
+        "redis_billing_center" \
+        "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" \
+        "redis" \
+        "$IMG_VERSION_REDIS" \
+        "restart_db_redis_billing_center_by_compose" \
+        "" \
+        "stop_db_redis_billing_center" \
+        "start_db_redis_billing_center"
 }
 
 # 创建 redis 数据库(billing center)
@@ -6811,11 +7182,28 @@ stop_db_redis() {
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS" down || true
 }
 
-# 重启 redis 容器
+# 按当前 docker compose 直接重启 redis 容器.
+# 返回: 完成 down/up 重启流程.
+restart_db_redis_by_compose() {
+    log_debug "run restart_db_redis_by_compose"
+
+    restart_db_by_handlers "stop_db_redis" "start_db_redis"
+}
+
+# 对比版本后重启 redis 容器.
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_redis() {
     log_debug "run restart_db_redis"
-    stop_db_redis
-    start_db_redis
+
+    restart_db_with_version_choice \
+        "redis" \
+        "$DOCKER_COMPOSE_FILE_REDIS" \
+        "redis" \
+        "$IMG_VERSION_REDIS" \
+        "restart_db_redis_by_compose" \
+        "" \
+        "stop_db_redis" \
+        "start_db_redis"
 }
 
 # 创建 redis 数据库

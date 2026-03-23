@@ -17,11 +17,28 @@ stop_db_redis() {
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS" down || true
 }
 
-# 重启 redis 容器
+# 按当前 docker compose 直接重启 redis 容器.
+# 返回: 完成 down/up 重启流程.
+restart_db_redis_by_compose() {
+    log_debug "run restart_db_redis_by_compose"
+
+    restart_db_by_handlers "stop_db_redis" "start_db_redis"
+}
+
+# 对比版本后重启 redis 容器.
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_redis() {
     log_debug "run restart_db_redis"
-    stop_db_redis
-    start_db_redis
+
+    restart_db_with_version_choice \
+        "redis" \
+        "$DOCKER_COMPOSE_FILE_REDIS" \
+        "redis" \
+        "$IMG_VERSION_REDIS" \
+        "restart_db_redis_by_compose" \
+        "" \
+        "stop_db_redis" \
+        "start_db_redis"
 }
 
 # 创建 redis 数据库

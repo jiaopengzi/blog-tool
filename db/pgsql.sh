@@ -130,11 +130,28 @@ stop_db_pgsql() {
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" down || true
 }
 
-# 重启 pgsql 容器
+# 按当前 docker compose 直接重启 pgsql 容器.
+# 返回: 完成 down/up 重启流程.
+restart_db_pgsql_by_compose() {
+  log_debug "run restart_db_pgsql_by_compose"
+
+  restart_db_by_handlers "stop_db_pgsql" "start_db_pgsql"
+}
+
+# 对比版本后重启 pgsql 容器.
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
 restart_db_pgsql() {
   log_debug "run restart_db_pgsql"
-  stop_db_pgsql
-  start_db_pgsql
+
+  restart_db_with_version_choice \
+    "pgsql" \
+    "$DOCKER_COMPOSE_FILE_PGSQL" \
+    "postgres" \
+    "$IMG_VERSION_PGSQL" \
+    "restart_db_pgsql_by_compose" \
+    "" \
+    "stop_db_pgsql" \
+    "start_db_pgsql"
 }
 
 # 安装 pgsql 数据库
@@ -272,24 +289,6 @@ toggle_pg_hba_conf() {
   fi
 
   log_info "$file_path 已经切换 $mode 模式."
-}
-
-# 开放 pgsql 访问权限
-open_pgsql_access_by_pg_hba.conf() {
-  log_debug "run open_pgsql_access_by_pg_hba.conf"
-
-  sudo docker stop "$POSTGRES_DOCKER_NAME"                          # 停止容器 pgsql 容器
-  toggle_pg_hba_conf open "$DATA_VOLUME_DIR/pgsql/conf/pg_hba.conf" # 切换访问权限
-  sudo docker start "$POSTGRES_DOCKER_NAME"                         # 重启容器
-}
-
-# 限制 pgsql 访问权限
-restrict_pgsql_access_by_pg_hba.conf() {
-  log_debug "run restrict_pgsql_access_by_pg_hba.conf"
-
-  sudo docker stop "$POSTGRES_DOCKER_NAME"                              # 停止容器 pgsql 容器
-  toggle_pg_hba_conf restrict "$DATA_VOLUME_DIR/pgsql/conf/pg_hba.conf" # 切换访问权限
-  sudo docker start "$POSTGRES_DOCKER_NAME"                             # 重启容器
 }
 
 # 停止并删除 pgsql 数据库
