@@ -344,8 +344,8 @@ IMG_VERSION_REDIS="8.6.1"    # redis 版本
 IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
-IMG_VERSION_ES="9.3.1"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.1" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.2"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.2" # 与 es 保持版本一致
 
 JPZ_UID=2025    # 服务端用户
 JPZ_GID=2025    # 服务端用户组
@@ -4178,26 +4178,127 @@ mkdir_es_volume() {
   fi
 }
 
+get_es_image_with_ik() {
+  log_debug "run get_es_image_with_ik"
+
+  local es_version="$1"
+
+  if [ -z "$es_version" ]; then
+    log_error "获取 ES IK 镜像标签失败, 参数不能为空"
+    return 1
+  fi
+
+  echo "elasticsearch:$es_version"
+}
+
+prepare_es_ik_zip() {
+  log_debug "run prepare_es_ik_zip"
+
+  local es_version="$1"
+  local ik_zip_name=""
+  local ik_zip_url=""
+  local ik_zip_shared=""
+
+  if [ -z "$es_version" ]; then
+    log_error "准备 IK 分词器插件包失败, 参数不能为空"
+    return 1
+  fi
+
+  ik_zip_name="elasticsearch-analysis-ik-$es_version.zip"
+  ik_zip_url="https://release.infinilabs.com/analysis-ik/stable/$ik_zip_name"
+  ik_zip_shared="$DATA_VOLUME_DIR/es/plugin/$ik_zip_name"
+
+  setup_directory "$ES_UID" "$ES_GID" 755 "$DATA_VOLUME_DIR/es/plugin"
+
+  if [ ! -f "$ik_zip_shared" ]; then
+    log_info "下载 IK 分词器插件: $ik_zip_url"
+    sudo curl -fSL -o "$ik_zip_shared" "$ik_zip_url"
+    sudo chown "$ES_UID:$ES_GID" "$ik_zip_shared"
+  fi
+
+  echo "$ik_zip_shared"
+}
+
+ensure_es_image_with_ik() {
+  log_debug "run ensure_es_image_with_ik"
+
+  local es_version="$1"
+  local es_image=""
+  local build_context_dir="$BLOG_TOOL_ENV/es-image"
+  local ik_zip_shared=""
+  local image_has_ik_label=""
+  local image_label_version=""
+
+  if [ -z "$es_version" ]; then
+    log_error "构建 ES IK 镜像失败, 参数不能为空"
+    return 1
+  fi
+
+  es_image=$(get_es_image_with_ik "$es_version") || return 1
+
+  if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
+    image_has_ik_label=$(sudo docker image inspect --format='{{ index .Config.Labels "blog-tool.es.ik-plugin" }}' "$es_image" 2>/dev/null || true)
+    image_label_version=$(sudo docker image inspect --format='{{ index .Config.Labels "blog-tool.es.version" }}' "$es_image" 2>/dev/null || true)
+
+    if [ "$image_has_ik_label" == "true" ] && [ "$image_label_version" == "$es_version" ]; then
+      log_debug "检测到已存在带 IK 分词器的 ES 镜像: $es_image"
+      return 0
+    fi
+  fi
+
+  ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
+
+  setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$BLOG_TOOL_ENV" "$build_context_dir"
+  sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
+  sudo chown "$JPZ_UID:$JPZ_GID" "$build_context_dir/analysis-ik.zip"
+
+  sudo tee "$build_context_dir/Dockerfile" >/dev/null <<-EOM
+FROM docker.io/library/elasticsearch:$es_version
+USER root
+COPY analysis-ik.zip /tmp/analysis-ik.zip
+RUN /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \
+    && rm -f /tmp/analysis-ik.zip \
+    && chown -R $ES_UID:$ES_GID /usr/share/elasticsearch/plugins
+USER 1000:0
+LABEL blog-tool.es.ik-plugin="true"
+LABEL blog-tool.es.version="$es_version"
+EOM
+
+  log_info "开始构建带 IK 分词器的 ES 镜像: $es_image"
+  sudo DOCKER_BUILDKIT=1 docker build --pull --no-cache -t "$es_image" "$build_context_dir"
+}
+
+cleanup_es_legacy_plugin_runtime_files() {
+  log_debug "run cleanup_es_legacy_plugin_runtime_files"
+
+  local node_dir=""
+  local node_config_dir=""
+
+  for node_dir in "$DATA_VOLUME_DIR"/es/node-*/; do
+    [ -d "$node_dir" ] || continue
+
+    node_config_dir="${node_dir}config"
+    [ -d "$node_config_dir" ] || continue
+
+    sudo rm -f "$node_config_dir/elasticsearch-plugins.yml"
+    sudo rm -f "$node_config_dir"/elasticsearch-analysis-ik-*.zip
+  done
+}
+
 copy_es_config() {
   log_debug "run copy_es_config"
 
   local is_kibana=$1                       # 是否包含 kibana
   local ca_cert_file="$CA_CERT_DIR/ca.crt" # CA 证书文件
   local ca_key_file="$CA_CERT_DIR/ca.key"  # CA 私钥文件
+  local es_image=""
 
   gen_my_ca_cert
 
-  sudo docker create --name temp_container_es -m 512MB "elasticsearch:$IMG_VERSION_ES" >/dev/null 2>&1 || true
+  ensure_es_image_with_ik "$IMG_VERSION_ES" || return 1
+  es_image=$(get_es_image_with_ik "$IMG_VERSION_ES") || return 1
 
-  local ik_zip_name="elasticsearch-analysis-ik-$IMG_VERSION_ES.zip"
-  local ik_zip_url="https://release.infinilabs.com/analysis-ik/stable/$ik_zip_name"
-  local ik_zip_shared="$DATA_VOLUME_DIR/es/plugin/$ik_zip_name"
-  if [ ! -f "$ik_zip_shared" ]; then
-    log_info "下载 IK 分词器插件: $ik_zip_url"
-    setup_directory "$ES_UID" "$ES_GID" 755 "$DATA_VOLUME_DIR/es/plugin"
-    sudo curl -fSL -o "$ik_zip_shared" "$ik_zip_url"
-    sudo chown "$ES_UID:$ES_GID" "$ik_zip_shared"
-  fi
+  sudo docker create --name temp_container_es -m 512MB "$es_image" >/dev/null 2>&1 || true
 
   local i
   for ((i = 1; i <= ES_NODE_COUNT; i++)); do
@@ -4208,12 +4309,11 @@ copy_es_config() {
 
     local dir_node="$DATA_VOLUME_DIR/es/node-$formattedI"
 
-    sudo rm -rf "$dir_node"                                                                         # 删除原来的配置文件
-    setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data" "$dir_node/plugins" # 创建目录
-    sudo docker cp temp_container_es:/usr/share/elasticsearch/config "$dir_node"                    # 配置
-    sudo docker cp temp_container_es:/usr/share/elasticsearch/data "$dir_node"                      # 数据
-    sudo docker cp temp_container_es:/usr/share/elasticsearch/plugins "$dir_node"                   # 插件
-    sudo cp "$ca_cert_file" "$dir_node/config/ca.crt"                                               # CA 证书
+    sudo rm -rf "$dir_node"                                                      # 删除原来的配置文件
+    setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data"  # 创建目录
+    sudo docker cp temp_container_es:/usr/share/elasticsearch/config "$dir_node" # 配置
+    sudo docker cp temp_container_es:/usr/share/elasticsearch/data "$dir_node"   # 数据
+    sudo cp "$ca_cert_file" "$dir_node/config/ca.crt"                            # CA 证书
 
     generate_instance_cert "es-$IMG_VERSION_ES-$formattedI" \
       "es-$IMG_VERSION_ES-$formattedI,localhost" \
@@ -4223,26 +4323,14 @@ copy_es_config() {
       "$ca_cert_file" \
       "$ca_key_file"
 
-    setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data" "$dir_node/plugins"
-
-    sudo cp "$ik_zip_shared" "$dir_node/config/$ik_zip_name"
-    sudo chown "$ES_UID:$ES_GID" "$dir_node/config/$ik_zip_name"
-
-    sudo touch "$dir_node/config/elasticsearch-plugins.yml"
-    sudo chown "$ES_UID:$ES_GID" "$dir_node/config/elasticsearch-plugins.yml"
-    sudo tee -a "$dir_node/config/elasticsearch-plugins.yml" >/dev/null <<-EOM
-# 参考 https://www.elastic.co/guide/en/elasticsearch/plugins/current/manage-plugins-using-configuration-file.html
-plugins:
-  - id: analysis-ik # ik 分词器
-    # 版本管理地址: https://release.infinilabs.com/analysis-ik/stable/
-    location: file:///usr/share/elasticsearch/config/$ik_zip_name
-EOM
+    setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data"
 
     _setup_ik_custom_dic "$dir_node/"
 
   done
 
   sudo docker rm -f temp_container_es >/dev/null 2>&1 || true
+  cleanup_es_legacy_plugin_runtime_files
 
   if [ "$is_kibana" = "y" ]; then
     sudo docker create --name temp_container_kibana -m 512MB "kibana:$IMG_VERSION_KIBANA" >/dev/null 2>&1 || true
@@ -4477,7 +4565,6 @@ EOM
     volumes:
       - $dir_node/data:/usr/share/elasticsearch/data
       - $dir_node/config:/usr/share/elasticsearch/config
-      - $dir_node/plugins:/usr/share/elasticsearch/plugins
     user: "$ES_UID:$ES_GID"
 EOM
     if [ "$i" -eq 1 ]; then
@@ -4626,6 +4713,7 @@ health_check_db_es() {
   log_debug "run health_check_db_es"
 
   local es_container="" # 第一个 ES 节点容器名
+  local kibana_password_masked=""
 
   es_container=$(get_runtime_es_container_name "$DOCKER_COMPOSE_FILE_ES" "01")
   log_warn "等待 Elasticsearch 启动, 这可能需要几分钟时间... 请勿中断！"
@@ -4636,7 +4724,8 @@ health_check_db_es() {
 
   log_info "Elasticsearch 启动完成"
 
-  log_debug "设置 kibana_system 用户密码为 $KIBANA_PASSWORD"
+  kibana_password_masked="${KIBANA_PASSWORD:0:3}***${KIBANA_PASSWORD: -3}"
+  log_debug "设置 kibana_system 用户密码为 $kibana_password_masked"
 
   until sudo docker exec "$es_container" curl -s --cacert /usr/share/elasticsearch/config/ca.crt -u "elastic:$ELASTIC_PASSWORD" -X POST -H "Content-Type: application/json" "https://localhost:9200/_security/user/kibana_system/_password" -d "{\"password\":\"$KIBANA_PASSWORD\"}" 2>/dev/null | grep -q "^{}"; do
     waiting 5
@@ -4645,6 +4734,13 @@ health_check_db_es() {
 
 start_db_es() {
   log_debug "run start_db_es"
+
+  local runtime_es_version=""
+
+  runtime_es_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_ES" "elasticsearch" "$IMG_VERSION_ES")
+  ensure_es_image_with_ik "$runtime_es_version" || return 1
+  cleanup_es_legacy_plugin_runtime_files
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" up -d
 
   health_check_db_es
@@ -4723,16 +4819,6 @@ sync_es_ik_plugin_version() {
 
   local current_es_version="$1"
   local target_es_version="$2"
-  local es_base_dir="$DATA_VOLUME_DIR/es"
-  local plugin_shared_dir="$es_base_dir/plugin"
-  local current_ik_zip_name="elasticsearch-analysis-ik-$current_es_version.zip"
-  local target_ik_zip_name="elasticsearch-analysis-ik-$target_es_version.zip"
-  local target_ik_zip_url="https://release.infinilabs.com/analysis-ik/stable/$target_ik_zip_name"
-  local target_ik_zip_shared="$plugin_shared_dir/$target_ik_zip_name"
-  local node_dir=""
-  local node_config_dir=""
-  local plugin_config_file=""
-  local updated_count=0
 
   if [ -z "$current_es_version" ] || [ -z "$target_es_version" ]; then
     log_error "同步 IK 分词插件版本失败, 参数不能为空"
@@ -4744,45 +4830,10 @@ sync_es_ik_plugin_version() {
     return 0
   fi
 
-  setup_directory "$ES_UID" "$ES_GID" 755 "$plugin_shared_dir"
+  ensure_es_image_with_ik "$target_es_version" || return 1
+  cleanup_es_legacy_plugin_runtime_files
 
-  if [ ! -f "$target_ik_zip_shared" ]; then
-    log_info "下载目标 IK 分词器插件: $target_ik_zip_url"
-    sudo curl -fSL -o "$target_ik_zip_shared" "$target_ik_zip_url"
-    sudo chown "$ES_UID:$ES_GID" "$target_ik_zip_shared"
-  fi
-
-  for node_dir in "$es_base_dir"/node-*/; do
-    [ -d "$node_dir" ] || continue
-
-    node_config_dir="${node_dir}config"
-    plugin_config_file="$node_config_dir/elasticsearch-plugins.yml"
-
-    if [ ! -d "$node_config_dir" ]; then
-      log_warn "ES 节点配置目录不存在, 跳过 IK 插件同步: $node_config_dir"
-      continue
-    fi
-
-    sudo cp "$target_ik_zip_shared" "$node_config_dir/$target_ik_zip_name"
-    sudo chown "$ES_UID:$ES_GID" "$node_config_dir/$target_ik_zip_name"
-    sudo rm -f "$node_config_dir/$current_ik_zip_name"
-
-    if [ -f "$plugin_config_file" ]; then
-      sudo sed -i "s|$current_ik_zip_name|$target_ik_zip_name|g" "$plugin_config_file"
-      sudo chown "$ES_UID:$ES_GID" "$plugin_config_file"
-    fi
-
-    sudo rm -rf "${node_dir}plugins/analysis-ik"
-    setup_directory "$ES_UID" "$ES_GID" 755 "$node_config_dir" "${node_dir}plugins"
-    updated_count=$((updated_count + 1))
-  done
-
-  if [ "$updated_count" -eq 0 ]; then
-    log_warn "未找到可同步 IK 分词插件的 ES 节点目录, 跳过节点插件处理"
-    return 0
-  fi
-
-  log_info "已同步 $updated_count 个 ES 节点的 IK 分词插件版本: $current_es_version -> $target_es_version"
+  log_info "已切换为构建期预装 IK 分词器镜像: $current_es_version -> $target_es_version"
 }
 
 sync_es_cert_version() {
