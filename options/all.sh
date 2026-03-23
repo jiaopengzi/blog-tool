@@ -52,11 +52,13 @@ OPTIONS_ALL=(
     "运行私有分发镜像仓库:docker_run_registry"
 
     # 安装数据库
-    "安装所有数据库:install_database"
-    "删除所有数据库:delete_database"
-    "重置所有数据库(生产禁用):reset_install_database"
-    "安装所有数据库-计费中心:install_database_billing_center"
-    "删除所有数据库-计费中心:delete_database_billing_center"
+    "安装数据库:install_database"
+    "重启数据库:restart_database"
+    "删除数据库:delete_database"
+    "重置数据库(生产禁用):reset_install_database"
+    "安装数据库-计费中心:install_database_billing_center"
+    "重启数据库-计费中心:restart_database_billing_center"
+    "删除数据库-计费中心:delete_database_billing_center"
     "安装 pgsql:install_db_pgsql"
     "安装 pgsql 计费中心:install_db_pgsql_billing_center"
     "删除 pgsql:delete_db_pgsql"
@@ -220,6 +222,7 @@ OPTIONS_USER_NOT_SHOW=(
     "更新 IK 自定义词典(文件):update_my_dic_by_file"
     "删除 es 和 kibana:delete_es_kibana"
     "全新安装所有数据库:reset_install_database"
+    "重启所有数据库:restart_database"
 
     # 拉取
     "拉取 server 镜像:docker_pull_server"
@@ -276,8 +279,8 @@ OPTIONS_BILLING_CENTER=(
 
     # 安装数据库
     "拉取生产数据库镜像:pull_docker_image_pro_db_billing_center"
-    "安装所有数据库-计费中心:install_database_billing_center"
-    "删除所有数据库-计费中心:delete_database_billing_center"
+    "安装数据库-计费中心:install_database_billing_center"
+    "删除数据库-计费中心:delete_database_billing_center"
 
     # 拉取镜像
     "拉取 billing center 镜像:docker_pull_billing_center"
@@ -324,6 +327,7 @@ OPTIONS_BILLING_CENTER_NOT_SHOW=(
     "删除 pgsql 计费中心:delete_db_pgsql_billing_center"
     "安装 redis 计费中心:install_db_redis_billing_center"
     "删除 redis 计费中心:delete_db_redis_billing_center"
+    "重启数据库-计费中心:restart_database_billing_center"
 )
 
 # 合并数组用于 is_valid_func

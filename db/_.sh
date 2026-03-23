@@ -8,5 +8,7 @@
 # shellcheck disable=SC1091
 DB_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$DB_SCRIPT_DIR/es.sh"
+source "$DB_SCRIPT_DIR/pgsql_billing_center.sh"
 source "$DB_SCRIPT_DIR/pgsql.sh"
+source "$DB_SCRIPT_DIR/redis_billing_center.sh"
 source "$DB_SCRIPT_DIR/redis.sh"

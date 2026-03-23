@@ -165,3 +165,18 @@ delete_database_billing_center() {
         log_info "未删除计费中心数据库"
     fi
 }
+
+# 重启数据库
+restart_database() {
+    log_debug "run restart_database"
+    restart_db_pgsql
+    restart_db_redis
+    restart_db_es
+}
+
+# 重启数据库(billing center)
+restart_database_billing_center() {
+    log_debug "run restart_database_billing_center"
+    restart_db_pgsql_billing_center
+    restart_db_redis_billing_center
+}
