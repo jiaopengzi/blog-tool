@@ -14,6 +14,10 @@ start_db_pgsql_billing_center() {
 # 停止 pgsql 容器(billing center)
 stop_db_pgsql_billing_center() {
   log_debug "run stop_db_pgsql_billing_center"
+
+  # 权限设置
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
 }
 

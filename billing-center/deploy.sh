@@ -361,6 +361,9 @@ docker_billing_center_start() {
     log_debug "run docker_billing_center_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_BILLING_CENTER" up -d
 
+    # 修改配置目录权限
+    setup_directory "$JPZ_UID" "$JPZ_GID" 700 "$DATA_VOLUME_DIR/billing-center/config/"
+
     # 等待 billing_center 启动
     wait_billing_center_start
 }

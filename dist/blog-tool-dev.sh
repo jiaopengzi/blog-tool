@@ -6408,6 +6408,9 @@ start_db_es() {
   ensure_es_image_with_ik "$runtime_es_version" || return 1
   cleanup_es_legacy_plugin_runtime_files
 
+  # 权限设置
+  setup_directory "$ES_UID" "$ES_GID" 700 "$DATA_VOLUME_DIR/es" # 创建目录
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" up -d
 
   # 进行健康检查
@@ -6665,6 +6668,10 @@ start_db_pgsql_billing_center() {
 # 停止 pgsql 容器(billing center)
 stop_db_pgsql_billing_center() {
   log_debug "run stop_db_pgsql_billing_center"
+
+  # 权限设置
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
 }
 
@@ -6939,6 +6946,10 @@ EOL
 # 启动 pgsql 容器
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  # 权限设置
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" up -d
 }
 
@@ -7129,6 +7140,10 @@ delete_db_pgsql() {
 # 启动 redis 容器(billing center)
 start_db_redis_billing_center() {
     log_debug "run start_db_redis_billing_center"
+
+    # 权限设置
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" up -d # 启动容器
 }
 
@@ -7468,6 +7483,10 @@ delete_db_redis_billing_center() {
 # 启动 redis 容器
 start_db_redis() {
     log_debug "run start_db_redis"
+
+    # 权限设置
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS" up -d # 启动容器
 }
 
@@ -8363,6 +8382,9 @@ docker_billing_center_start() {
     log_debug "run docker_billing_center_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_BILLING_CENTER" up -d
 
+    # 修改配置目录权限
+    setup_directory "$JPZ_UID" "$JPZ_GID" 700 "$DATA_VOLUME_DIR/billing-center/config/"
+
     # 等待 billing_center 启动
     wait_billing_center_start
 }
@@ -9131,6 +9153,9 @@ docker_server_start() {
     log_debug "run docker_server_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_SERVER" -p "$DOCKER_COMPOSE_PROJECT_NAME_SERVER" up -d
 
+    # 修改配置目录权限
+    setup_directory "$SERVER_UID" "$SERVER_GID" 700 "$DATA_VOLUME_DIR/blog-server"
+
     # 等待 server 启动
     wait_server_start
 }
@@ -9735,6 +9760,12 @@ show_panel() {
 docker_client_start() {
     log_debug "run docker_client_start"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_CLIENT" -p "$DOCKER_COMPOSE_PROJECT_NAME_CLIENT" up -d
+
+    # 修改证书目录权限
+    setup_directory "$CLIENT_UID" "$CLIENT_GID" 700 \
+        "$DATA_VOLUME_DIR/blog-client" \
+        "$DATA_VOLUME_DIR/blog-client/nginx" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
 
     # 显示面板信息
     show_panel

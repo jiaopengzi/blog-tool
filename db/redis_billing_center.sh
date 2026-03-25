@@ -8,6 +8,10 @@
 # 启动 redis 容器(billing center)
 start_db_redis_billing_center() {
     log_debug "run start_db_redis_billing_center"
+
+    # 权限设置
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" up -d # 启动容器
 }
 

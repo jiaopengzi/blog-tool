@@ -349,6 +349,12 @@ docker_client_start() {
     log_debug "run docker_client_start"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_CLIENT" -p "$DOCKER_COMPOSE_PROJECT_NAME_CLIENT" up -d
 
+    # 修改证书目录权限
+    setup_directory "$CLIENT_UID" "$CLIENT_GID" 700 \
+        "$DATA_VOLUME_DIR/blog-client" \
+        "$DATA_VOLUME_DIR/blog-client/nginx" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
+
     # 显示面板信息
     show_panel
 }

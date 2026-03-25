@@ -360,6 +360,9 @@ docker_server_start() {
     log_debug "run docker_server_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_SERVER" -p "$DOCKER_COMPOSE_PROJECT_NAME_SERVER" up -d
 
+    # 修改配置目录权限
+    setup_directory "$SERVER_UID" "$SERVER_GID" 700 "$DATA_VOLUME_DIR/blog-server"
+
     # 等待 server 启动
     wait_server_start
 }

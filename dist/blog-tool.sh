@@ -4741,6 +4741,8 @@ start_db_es() {
   ensure_es_image_with_ik "$runtime_es_version" || return 1
   cleanup_es_legacy_plugin_runtime_files
 
+  setup_directory "$ES_UID" "$ES_GID" 700 "$DATA_VOLUME_DIR/es" # 创建目录
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" up -d
 
   health_check_db_es
@@ -5065,6 +5067,9 @@ EOL
 
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" up -d
 }
 
@@ -5227,6 +5232,9 @@ delete_db_pgsql() {
 
 start_db_redis() {
     log_debug "run start_db_redis"
+
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS" up -d # 启动容器
 }
 
@@ -5894,6 +5902,8 @@ docker_server_start() {
     log_debug "run docker_server_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_SERVER" -p "$DOCKER_COMPOSE_PROJECT_NAME_SERVER" up -d
 
+    setup_directory "$SERVER_UID" "$SERVER_GID" 700 "$DATA_VOLUME_DIR/blog-server"
+
     wait_server_start
 }
 
@@ -6282,6 +6292,11 @@ show_panel() {
 docker_client_start() {
     log_debug "run docker_client_start"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_CLIENT" -p "$DOCKER_COMPOSE_PROJECT_NAME_CLIENT" up -d
+
+    setup_directory "$CLIENT_UID" "$CLIENT_GID" 700 \
+        "$DATA_VOLUME_DIR/blog-client" \
+        "$DATA_VOLUME_DIR/blog-client/nginx" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
 
     show_panel
 }

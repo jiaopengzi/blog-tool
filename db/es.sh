@@ -678,6 +678,9 @@ start_db_es() {
   ensure_es_image_with_ik "$runtime_es_version" || return 1
   cleanup_es_legacy_plugin_runtime_files
 
+  # 权限设置
+  setup_directory "$ES_UID" "$ES_GID" 700 "$DATA_VOLUME_DIR/es" # 创建目录
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" up -d
 
   # 进行健康检查

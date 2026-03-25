@@ -3949,6 +3949,9 @@ start_db_pgsql_billing_center() {
 
 stop_db_pgsql_billing_center() {
   log_debug "run stop_db_pgsql_billing_center"
+
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
 }
 
@@ -4196,6 +4199,9 @@ EOL
 
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" up -d
 }
 
@@ -4246,6 +4252,9 @@ toggle_pg_hba_conf() {
 
 start_db_redis_billing_center() {
     log_debug "run start_db_redis_billing_center"
+
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" up -d # 启动容器
 }
 
@@ -4925,6 +4934,8 @@ wait_billing_center_start() {
 docker_billing_center_start() {
     log_debug "run docker_billing_center_install"
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_BILLING_CENTER" up -d
+
+    setup_directory "$JPZ_UID" "$JPZ_GID" 700 "$DATA_VOLUME_DIR/billing-center/config/"
 
     wait_billing_center_start
 }

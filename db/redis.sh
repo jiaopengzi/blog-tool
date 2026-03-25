@@ -8,6 +8,10 @@
 # 启动 redis 容器
 start_db_redis() {
     log_debug "run start_db_redis"
+
+    # 权限设置
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis"
+
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS" up -d # 启动容器
 }
 

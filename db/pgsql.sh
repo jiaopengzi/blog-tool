@@ -121,6 +121,10 @@ EOL
 # 启动 pgsql 容器
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  # 权限设置
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL" up -d
 }
 
