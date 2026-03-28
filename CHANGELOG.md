@@ -5,6 +5,12 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.12.0] - 2026-03-28
+
+### ✨ Feat
+
+- 增加修改后端服务日志级别，同时去冗余。
+
 ## [v0.11.1] - 2026-03-25
 
 ### 🐞 Fix
