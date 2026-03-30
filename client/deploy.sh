@@ -84,8 +84,11 @@ docker_build_client_env() {
 }
 
 # 构建 blog_client 镜像
+# $1: dockerfile 文件名, 可选, 默认为 Dockerfile.dev; 传入 Dockerfile 时使用开源仓库 blog-client
 docker_build_client() {
     log_debug "run docker_build_client"
+
+    local dockerfile="${1:-Dockerfile.dev}"
 
     # shellcheck disable=SC2329
     run() {
@@ -93,10 +96,16 @@ docker_build_client() {
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
 
-        git_clone_cd "blog-client-dev"
+        # 根据 dockerfile 参数决定 clone 的仓库
+        local repo_name="blog-client-dev"
+        if [ "$dockerfile" != "Dockerfile.dev" ]; then
+            repo_name="blog-client"
+        fi
+
+        git_clone_cd "$repo_name"
 
         # 运行 Dockerfile
-        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-client:build" -f Dockerfile.dev .
+        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-client:build" -f "$dockerfile" .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
@@ -228,8 +237,11 @@ client_artifacts_zip() {
 }
 
 # 推送 client 镜像到远端服务器
+# $1: dockerfile 文件名, 可选, 默认为 Dockerfile.dev; 传入 Dockerfile 时同时推送到 Docker Hub 并发布 Releases
 docker_push_client() {
     log_debug "run docker_push_client"
+
+    local dockerfile="${1:-Dockerfile.dev}"
 
     # 1. 复制产物到本地
     client_artifacts_copy_to_local
@@ -239,37 +251,37 @@ docker_push_client() {
     version_info=$(client_artifacts_version)
     read -r version is_dev <<<"$version_info"
 
-    # 3. 推送到私有仓库
-    docker_tag_push_private_registry "blog-client" "$version"
+    # 3. dev 模式：推送到私有仓库
+    if [ "$dockerfile" = "Dockerfile.dev" ]; then
+        docker_tag_push_private_registry "blog-client" "$version"
+    fi
 
-    # # 4. 更新 changelog
-    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITHUB"
-    # sync_repo_by_tag "blog-client" "$version" "$GIT_GITEE"
+    # 4. 使用开源 Dockerfile 时, 推送到 Docker Hub 并发布 Releases
+    if [ "$dockerfile" = "Dockerfile" ]; then
+        if [ "$is_dev" = false ]; then
+            # 推送到 Docker Hub
+            docker_tag_push_docker_hub "blog-client" "$version"
 
-    # # 5. 发布到生产环境
-    # if [ "$is_dev" = false ]; then
-    #     # # 推送到 Docker Hub
-    #     docker_tag_push_docker_hub "blog-client" "$version"
+            # 产物发布到 GitHub 和 Gitee Releases
 
-    #     # 产物发布到 GitHub 和 Gitee Releases
+            # 打包产物
+            local zip_path
+            zip_path=$(client_artifacts_zip "$version")
 
-    #     # 打包产物
-    #     local zip_path
-    #     zip_path=$(client_artifacts_zip "$version")
+            # 发布
+            releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
+            releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
 
-    #     # 发布
-    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "github"
-    #     releases_with_md_platform "blog-client" "$version" "$zip_path" "gitee"
-
-    #     # 移除压缩包
-    #     if [ -f "$zip_path" ]; then
-    #         sudo rm -f "$zip_path"
-    #         log_info "移除本地产物包 $zip_path 成功"
-    #     fi
-    # else
-    #     # 如果不是生产环境, 复制到本地的产物包删除
-    #     sudo rm -rf "$DIR_APP_CLIENT"
-    # fi
+            # 移除压缩包
+            if [ -f "$zip_path" ]; then
+                sudo rm -f "$zip_path"
+                log_info "移除本地产物包 $zip_path 成功"
+            fi
+        else
+            # 如果不是生产环境, 复制到本地的产物包删除
+            sudo rm -rf "$DIR_APP_CLIENT"
+        fi
+    fi
 }
 
 # 拉取 client 镜像
@@ -293,11 +305,14 @@ docker_pull_client() {
 }
 
 # 构建 client 推送镜像
+# $1: dockerfile 文件名, 可选, 默认为 Dockerfile.dev; 传入 Dockerfile 时使用开源仓库并推送到 Docker Hub
 docker_build_push_client() {
     log_debug "run docker_build_push_client"
 
-    docker_build_client
-    docker_push_client
+    local dockerfile="${1:-Dockerfile.dev}"
+
+    docker_build_client "$dockerfile"
+    docker_push_client "$dockerfile"
 }
 
 # 启动 server client 面板服务信息
