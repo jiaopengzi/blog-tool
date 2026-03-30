@@ -6224,7 +6224,11 @@ docker_build_client() {
             repo_name="blog-client"
         fi
 
-        git_clone_cd "$repo_name"
+        if [ "${GITHUB_ACTIONS}" = "true" ]; then
+            cd "$GITHUB_WORKSPACE" || exit
+        else
+            git_clone_cd "$repo_name"
+        fi
 
         sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-client:build" -f "$dockerfile" .
 

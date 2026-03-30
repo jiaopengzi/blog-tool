@@ -102,7 +102,12 @@ docker_build_client() {
             repo_name="blog-client"
         fi
 
-        git_clone_cd "$repo_name"
+        # GitHub Actions 中代码已由 checkout 拉取,跳过 clone 直接进入工作目录
+        if [ "${GITHUB_ACTIONS}" = "true" ]; then
+            cd "$GITHUB_WORKSPACE" || exit
+        else
+            git_clone_cd "$repo_name"
+        fi
 
         # 运行 Dockerfile
         sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-client:build" -f "$dockerfile" .
