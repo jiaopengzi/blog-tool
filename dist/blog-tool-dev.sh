@@ -375,6 +375,7 @@ BASE_SOFTWARE_LIST=(
     cron
     jq
     python3
+    cosign
 )
 
 # 检测是否安装软件的标志目录

@@ -282,6 +282,7 @@ BASE_SOFTWARE_LIST=(
     cron
     jq
     python3
+    cosign
 )
 
 IS_INSTALL_SOFTWARE=""
