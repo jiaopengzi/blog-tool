@@ -821,6 +821,24 @@ check_dev_var() {
         "运行模式" \
         "false"
 
+    load_env_or_file_config \
+        DOCKER_HUB_TOKEN \
+        DOCKER_HUB_TOKEN \
+        "$BLOG_TOOL_ENV/docker_hub_token" \
+        "docker hub token"
+
+    load_env_or_file_config \
+        GITHUB_TOKEN \
+        GITHUB_TOKEN \
+        "$BLOG_TOOL_ENV/github_token" \
+        "github token"
+
+    load_env_or_file_config \
+        GITEE_TOKEN \
+        GITEE_TOKEN \
+        "$BLOG_TOOL_ENV/gitee_token" \
+        "gitee token"
+
     if run_mode_is_pro; then
         return 0
     fi
@@ -869,24 +887,6 @@ check_dev_var() {
         "$BLOG_TOOL_ENV/gateway_ipv4" \
         "请输入默认网关如：10.0.0.1" \
         "$(ip route | awk '/default/ {print $3; exit}')"
-
-    load_env_or_file_config \
-        DOCKER_HUB_TOKEN \
-        DOCKER_HUB_TOKEN \
-        "$BLOG_TOOL_ENV/docker_hub_token" \
-        "docker hub token"
-
-    load_env_or_file_config \
-        GITHUB_TOKEN \
-        GITHUB_TOKEN \
-        "$BLOG_TOOL_ENV/github_token" \
-        "github token"
-
-    load_env_or_file_config \
-        GITEE_TOKEN \
-        GITEE_TOKEN \
-        "$BLOG_TOOL_ENV/gitee_token" \
-        "gitee token"
 }
 
 update_run_mode() {
