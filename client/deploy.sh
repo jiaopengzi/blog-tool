@@ -109,8 +109,12 @@ docker_build_client() {
             git_clone_cd "$repo_name"
         fi
 
-        # 运行 Dockerfile
-        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-client:build" -f "$dockerfile" .
+        # 运行 Dockerfile（GitHub Actions 中无私有 registry，直接用本地 tag）
+        local img_tag="$REGISTRY_REMOTE_SERVER/blog-client:build"
+        if [ "${GITHUB_ACTIONS}" = "true" ]; then
+            img_tag="blog-client:build"
+        fi
+        sudo docker build --no-cache -t "$img_tag" -f "$dockerfile" .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
@@ -137,8 +141,12 @@ docker_create_client_temp_container() {
         sudo docker rm -f temp_container_blog_client >/dev/null 2>&1 || true
     fi
 
-    # 创建临时容器
-    sudo docker create -u "$CLIENT_UID:$CLIENT_GID" --name temp_container_blog_client "$(get_img_prefix)/blog-client:$version" >/dev/null 2>&1 || true
+    # 创建临时容器（GitHub Actions 中无私有 registry，直接用本地 tag）
+    local img_name="$(get_img_prefix)/blog-client:$version"
+    if [ "${GITHUB_ACTIONS}" = "true" ]; then
+        img_name="blog-client:$version"
+    fi
+    sudo docker create -u "$CLIENT_UID:$CLIENT_GID" --name temp_container_blog_client "$img_name" >/dev/null 2>&1 || true
 
     # 执行传入的函数
     $run_func
