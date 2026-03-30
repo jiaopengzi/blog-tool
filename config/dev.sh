@@ -32,9 +32,9 @@ REGISTRY_PASSWORD=""      # 私有仓库密码
 
 # 密码和 token 变量
 DOCKER_HUB_REMOTE_SERVER="docker.io"                 # 远端服务器地址
-DOCKER_HUB_TOKEN=""                                  # docker hub token
-GITHUB_TOKEN=""                                      # github token
-GITEE_TOKEN=""                                       # gitee token
+DOCKER_HUB_TOKEN="${DOCKER_HUB_TOKEN:-}"             # docker hub token
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"                     # github token
+GITEE_TOKEN="${GITEE_TOKEN:-}"                       # gitee token
 COSIGN_PRIVATE_KEY="${COSIGN_PRIVATE_KEY:-}"         # Cosign 私钥文件绝对路径
 COSIGN_PRIVATE_KEY_PWD="${COSIGN_PRIVATE_KEY_PWD:-}" # Cosign 私钥密码
 COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"               # Cosign 标准密码环境变量
