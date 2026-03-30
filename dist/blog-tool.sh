@@ -1767,8 +1767,13 @@ docker_tag_push_docker_hub() {
     docker_tag_version=$(semver_to_docker_tag "$version")
     local image_name="$DOCKER_HUB_OWNER/$project"
 
-    sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$DOCKER_HUB_OWNER/$project:$docker_tag_version"
-    sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$DOCKER_HUB_OWNER/$project:latest"
+    local build_img_source="$REGISTRY_REMOTE_SERVER/$project:build"
+    if [ "${GITHUB_ACTIONS}" = "true" ]; then
+        build_img_source="$project:build"
+    fi
+
+    sudo docker tag "$build_img_source" "$DOCKER_HUB_OWNER/$project:$docker_tag_version"
+    sudo docker tag "$build_img_source" "$DOCKER_HUB_OWNER/$project:latest"
 
     timeout_retry_docker_push "$DOCKER_HUB_OWNER" "$project" "$docker_tag_version"
 

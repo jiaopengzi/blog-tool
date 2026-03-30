@@ -2324,9 +2324,15 @@ docker_tag_push_docker_hub() {
     docker_tag_version=$(semver_to_docker_tag "$version")
     local image_name="$DOCKER_HUB_OWNER/$project"
 
+    # 确定 build 镜像来源（GitHub Actions 中无私有 registry，直接用本地 tag）
+    local build_img_source="$REGISTRY_REMOTE_SERVER/$project:build"
+    if [ "${GITHUB_ACTIONS}" = "true" ]; then
+        build_img_source="$project:build"
+    fi
+
     # tag 镜像
-    sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$DOCKER_HUB_OWNER/$project:$docker_tag_version"
-    sudo docker tag "$REGISTRY_REMOTE_SERVER/$project:build" "$DOCKER_HUB_OWNER/$project:latest"
+    sudo docker tag "$build_img_source" "$DOCKER_HUB_OWNER/$project:$docker_tag_version"
+    sudo docker tag "$build_img_source" "$DOCKER_HUB_OWNER/$project:latest"
 
     # 推送镜像到 docker hub
     timeout_retry_docker_push "$DOCKER_HUB_OWNER" "$project" "$docker_tag_version"
