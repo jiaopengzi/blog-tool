@@ -67,7 +67,7 @@ docker_build_client_env() {
     run() {
         cd "$ROOT_DIR" || exit
 
-        git_clone_cd "blog-client-dev"
+        git_clone_cd "blog-client"
 
         # 运行 Dockerfile.env
         sudo docker build --no-cache -t blog-client:env -f Dockerfile.env .
@@ -97,10 +97,7 @@ docker_build_client() {
         log_debug "脚本所在目录 $(pwd)"
 
         # 根据 dockerfile 参数决定 clone 的仓库
-        local repo_name="blog-client-dev"
-        if [ "$dockerfile" != "Dockerfile.dev" ]; then
-            repo_name="blog-client"
-        fi
+        local repo_name="blog-client"
 
         # GitHub Actions 中代码已由 checkout 拉取,跳过 clone 直接进入工作目录
         if [ "${GITHUB_ACTIONS}" = "true" ]; then
