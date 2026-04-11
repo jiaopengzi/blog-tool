@@ -2012,24 +2012,8 @@ artifacts_releases() {
         return
     fi
 
-    for file_path in "${file_paths[@]}"; do
-        if [ -z "$file_path" ]; then
-            log_error "未指定有效的文件路径"
-            exit 1
-        fi
-        if [ ! -f "$file_path" ]; then
-            log_error "文件未找到：$file_path"
-            exit 1
-        fi
-
-        if [ "$platform" = "github" ]; then
-            upload_to_github_release "$api_prefix" "$token" "$tag" "$file_path" "$upload_url"
-        elif [ "$platform" = "gitee" ]; then
-            upload_to_gitee_release "$api_prefix" "$token" "$repo_owner" "$repo_name" "$release_id" "$file_path"
-        fi
-    done
-
-    log_info "🎉 所有文件上传流程完成"
+    
+    log_info "🎉 release 完成"
 }
 
 common_upload_with_logging() {
