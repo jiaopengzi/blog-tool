@@ -12,33 +12,16 @@
 
 ### 1. 获取工具
 
-#### GitHub
-
-##### 最新版
-
-```bash
-curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/main/dist/blog-tool.sh
-```
-
-##### 指定版本
-
-```bash
-curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/v0.4.1/dist/blog-tool.sh
-```
-
 #### Gitee (国内用户)
-
-##### 最新版
 
 ```bash
 curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh
 ```
 
-##### 指定版本
+#### GitHub
 
 ```bash
-
-curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/v0.4.1/dist/blog-tool.sh
+curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/main/dist/blog-tool.sh
 ```
 
 ### 2. 工具使用
@@ -57,9 +40,9 @@ sudo bash blog-tool.sh
 | --- | --- | --- |
 | 后端 | blog-server (Go) | Docker 容器化部署 |
 | 前端 | blog-client (Nginx) | Docker 容器化部署 |
-| 数据库 | PostgreSQL 18+ | 支持自定义配置 |
-| 缓存 | Redis 8.4+ | 支持单节点和集群模式 |
-| 搜索引擎 | Elasticsearch 9.2+ | 支持多节点集群、IK 分词器、Kibana |
+| 数据库 | PostgreSQL 18.3 | 支持自定义配置 |
+| 缓存 | Redis 8.6.1 | 支持单节点和集群模式 |
+| 搜索引擎 | Elasticsearch 9.3.2 | 支持多节点集群、IK 分词器、Kibana |
 | 证书 | 自签名 CA + SSL/TLS | 自动生成 |
 
 ## 构建版本
@@ -93,6 +76,21 @@ sudo bash blog-tool.sh
 ## 版本管理
 
 项目遵循[语义化版本控制](https://semver.org/lang/zh-CN/)，版本号格式为 `vX.Y.Z`。
+
+## 获取执行版本工具
+
+### Gitee (国内用户)
+
+```bash
+
+curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/v0.4.1/dist/blog-tool.sh
+```
+
+### GitHub
+
+```bash
+curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/v0.4.1/dist/blog-tool.sh
+```
 
 ## 许可证
 
