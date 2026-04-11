@@ -1913,16 +1913,21 @@ git_clone() {
     log_debug "run git_clone"
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
     log_debug "HOME $HOME"
     log_debug "whoami $(whoami)"
-    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git"
+    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git${branch:+ (branch: $branch)}"
 
     if [ -d "$project_dir" ]; then
         sudo rm -rf "$project_dir"
     fi
 
-    sudo git clone "$git_prefix/$project_dir.git"
+    if [ -n "$branch" ]; then
+        sudo git clone --branch "$branch" "$git_prefix/$project_dir.git"
+    else
+        sudo git clone "$git_prefix/$project_dir.git"
+    fi
 
     log_debug "查看 git 仓库内容\n$(ls -la "$project_dir")\n"
 }
@@ -1931,8 +1936,9 @@ git_clone_cd() {
     log_debug "run git_clone_cd"
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
-    git_clone "$project_dir" "$git_prefix"
+    git_clone "$project_dir" "$git_prefix" "$branch"
 
     cd "$project_dir" || exit
     log_debug "当前目录 $(pwd)"
@@ -6268,15 +6274,12 @@ docker_build_client() {
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"
 
-        local repo_name="blog-client-dev"
-        if [ "$dockerfile" != "Dockerfile.dev" ]; then
-            repo_name="blog-client"
-        fi
+        local repo_name="blog-client"
 
         if [ "${GITHUB_ACTIONS}" = "true" ]; then
             cd "$GITHUB_WORKSPACE" || exit
         else
-            git_clone_cd "$repo_name"
+            git_clone_cd "$repo_name" "$GIT_LOCAL" "${CI_COMMIT_BRANCH:-}"
         fi
 
         local img_tag="$REGISTRY_REMOTE_SERVER/blog-client:build"
@@ -6376,6 +6379,24 @@ docker_pull_client() {
     else
         timeout_retry_docker_pull "$DOCKER_HUB_OWNER/blog-client" "$version"
     fi
+}
+
+docker_push_client_pr_test() {
+    log_debug "run docker_push_client_pr_test"
+
+    client_artifacts_copy_to_local
+
+    local version_info
+    version_info=$(client_artifacts_version)
+    read -r version is_dev <<<"$version_info"
+
+    log_debug "PR 测试场景, 版本: $version, is_dev: $is_dev"
+
+    docker_tag_push_private_registry "blog-client" "$version"
+
+    sudo rm -rf "$DIR_APP_CLIENT"
+
+    log_info "PR 测试镜像已推送到私有仓库, 版本: $version"
 }
 
 panel_msg() {

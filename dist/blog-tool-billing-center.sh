@@ -1843,16 +1843,21 @@ git_clone() {
     log_debug "run git_clone"
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
     log_debug "HOME $HOME"
     log_debug "whoami $(whoami)"
-    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git"
+    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git${branch:+ (branch: $branch)}"
 
     if [ -d "$project_dir" ]; then
         sudo rm -rf "$project_dir"
     fi
 
-    sudo git clone "$git_prefix/$project_dir.git"
+    if [ -n "$branch" ]; then
+        sudo git clone --branch "$branch" "$git_prefix/$project_dir.git"
+    else
+        sudo git clone "$git_prefix/$project_dir.git"
+    fi
 
     log_debug "查看 git 仓库内容\n$(ls -la "$project_dir")\n"
 }
@@ -1861,8 +1866,9 @@ git_clone_cd() {
     log_debug "run git_clone_cd"
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
-    git_clone "$project_dir" "$git_prefix"
+    git_clone "$project_dir" "$git_prefix" "$branch"
 
     cd "$project_dir" || exit
     log_debug "当前目录 $(pwd)"

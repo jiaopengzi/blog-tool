@@ -86,6 +86,7 @@ OPTIONS_ALL=(
     "仅推送 server:docker_push_server"
     "client 产物复制到本地:client_artifacts_copy_to_local"
     "构建并推送 client:docker_build_push_client"
+    "构建并推送 client(PR 测试):docker_build_push_client_pr_test"
     "仅推送 client:docker_push_client"
 
     # 管理文件目录

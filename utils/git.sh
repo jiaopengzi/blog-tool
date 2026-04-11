@@ -11,19 +11,25 @@ git_clone() {
     # 参数:
     # $1: project_dir 项目目录
     # $2: git_prefix git 仓库前缀, 可选参数, 默认使用 GIT_LOCAL
+    # $3: branch 分支名称, 可选参数, 为空时 clone 默认分支
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
     log_debug "HOME $HOME"
     log_debug "whoami $(whoami)"
-    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git"
+    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git${branch:+ (branch: $branch)}"
 
     # 避免和远端仓库冲突, 先删除本地文件夹
     if [ -d "$project_dir" ]; then
         sudo rm -rf "$project_dir"
     fi
 
-    sudo git clone "$git_prefix/$project_dir.git"
+    if [ -n "$branch" ]; then
+        sudo git clone --branch "$branch" "$git_prefix/$project_dir.git"
+    else
+        sudo git clone "$git_prefix/$project_dir.git"
+    fi
 
     log_debug "查看 git 仓库内容\n$(ls -la "$project_dir")\n"
 }
@@ -34,10 +40,12 @@ git_clone_cd() {
     # 参数:
     # $1: project_dir 项目目录
     # $2: git_prefix git 仓库前缀, 可选参数, 默认使用 GIT_LOCAL
+    # $3: branch 分支名称, 可选参数, 为空时 clone 默认分支
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
-    git_clone "$project_dir" "$git_prefix"
+    git_clone "$project_dir" "$git_prefix" "$branch"
 
     # 进入项目目录
     cd "$project_dir" || exit

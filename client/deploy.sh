@@ -103,7 +103,8 @@ docker_build_client() {
         if [ "${GITHUB_ACTIONS}" = "true" ]; then
             cd "$GITHUB_WORKSPACE" || exit
         else
-            git_clone_cd "$repo_name"
+            # GitLab CI 环境下使用当前触发分支 clone, 本地执行时 clone 默认分支
+            git_clone_cd "$repo_name" "$GIT_LOCAL" "${CI_COMMIT_BRANCH:-}"
         fi
 
         # 运行 Dockerfile（GitHub Actions 中无私有 registry，直接用本地 tag）
@@ -323,6 +324,39 @@ docker_build_push_client() {
 
     docker_build_client "$dockerfile"
     docker_push_client "$dockerfile"
+}
+
+# 推送 client 镜像到私有仓库（外部 PR 测试场景）
+# 使用开源 Dockerfile 构建的镜像, 仅推送到私有仓库, 不发布到 Docker Hub 和 Releases
+docker_push_client_pr_test() {
+    log_debug "run docker_push_client_pr_test"
+
+    # 1. 复制产物到本地
+    client_artifacts_copy_to_local
+
+    # 2. 获取版本号
+    local version_info
+    version_info=$(client_artifacts_version)
+    read -r version is_dev <<<"$version_info"
+
+    log_debug "PR 测试场景, 版本: $version, is_dev: $is_dev"
+
+    # 3. 推送到私有仓库（无论是否为 dev 版本, PR 测试均只推送私有仓库）
+    docker_tag_push_private_registry "blog-client" "$version"
+
+    # 4. 清理本地产物目录
+    sudo rm -rf "$DIR_APP_CLIENT"
+
+    log_info "PR 测试镜像已推送到私有仓库, 版本: $version"
+}
+
+# 构建 client 镜像并推送到私有仓库（外部 PR 测试场景）
+# 使用开源 Dockerfile 构建, 适用于处理来自 GitHub 的外部 PR 测试, 仅推送到私有仓库
+docker_build_push_client_pr_test() {
+    log_debug "run docker_build_push_client_pr_test"
+
+    docker_build_client "Dockerfile"
+    docker_push_client_pr_test
 }
 
 # 启动 server client 面板服务信息

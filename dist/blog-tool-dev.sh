@@ -678,6 +678,7 @@ OPTIONS_ALL=(
     "仅推送 server:docker_push_server"
     "client 产物复制到本地:client_artifacts_copy_to_local"
     "构建并推送 client:docker_build_push_client"
+    "构建并推送 client(PR 测试):docker_build_push_client_pr_test"
     "仅推送 client:docker_push_client"
 
     # 管理文件目录
@@ -2509,19 +2510,25 @@ git_clone() {
     # 参数:
     # $1: project_dir 项目目录
     # $2: git_prefix git 仓库前缀, 可选参数, 默认使用 GIT_LOCAL
+    # $3: branch 分支名称, 可选参数, 为空时 clone 默认分支
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
     log_debug "HOME $HOME"
     log_debug "whoami $(whoami)"
-    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git"
+    log_debug "执行克隆命令: git clone $git_prefix/$project_dir.git${branch:+ (branch: $branch)}"
 
     # 避免和远端仓库冲突, 先删除本地文件夹
     if [ -d "$project_dir" ]; then
         sudo rm -rf "$project_dir"
     fi
 
-    sudo git clone "$git_prefix/$project_dir.git"
+    if [ -n "$branch" ]; then
+        sudo git clone --branch "$branch" "$git_prefix/$project_dir.git"
+    else
+        sudo git clone "$git_prefix/$project_dir.git"
+    fi
 
     log_debug "查看 git 仓库内容\n$(ls -la "$project_dir")\n"
 }
@@ -2532,10 +2539,12 @@ git_clone_cd() {
     # 参数:
     # $1: project_dir 项目目录
     # $2: git_prefix git 仓库前缀, 可选参数, 默认使用 GIT_LOCAL
+    # $3: branch 分支名称, 可选参数, 为空时 clone 默认分支
     local project_dir="$1"
     local git_prefix="${2:-$GIT_LOCAL}"
+    local branch="${3:-}"
 
-    git_clone "$project_dir" "$git_prefix"
+    git_clone "$project_dir" "$git_prefix" "$branch"
 
     # 进入项目目录
     cd "$project_dir" || exit
@@ -9558,7 +9567,7 @@ docker_build_client_env() {
     run() {
         cd "$ROOT_DIR" || exit
 
-        git_clone_cd "blog-client-dev"
+        git_clone_cd "blog-client"
 
         # 运行 Dockerfile.env
         sudo docker build --no-cache -t blog-client:env -f Dockerfile.env .
@@ -9588,16 +9597,14 @@ docker_build_client() {
         log_debug "脚本所在目录 $(pwd)"
 
         # 根据 dockerfile 参数决定 clone 的仓库
-        local repo_name="blog-client-dev"
-        if [ "$dockerfile" != "Dockerfile.dev" ]; then
-            repo_name="blog-client"
-        fi
+        local repo_name="blog-client"
 
         # GitHub Actions 中代码已由 checkout 拉取,跳过 clone 直接进入工作目录
         if [ "${GITHUB_ACTIONS}" = "true" ]; then
             cd "$GITHUB_WORKSPACE" || exit
         else
-            git_clone_cd "$repo_name"
+            # GitLab CI 环境下使用当前触发分支 clone, 本地执行时 clone 默认分支
+            git_clone_cd "$repo_name" "$GIT_LOCAL" "${CI_COMMIT_BRANCH:-}"
         fi
 
         # 运行 Dockerfile（GitHub Actions 中无私有 registry，直接用本地 tag）
@@ -9817,6 +9824,39 @@ docker_build_push_client() {
 
     docker_build_client "$dockerfile"
     docker_push_client "$dockerfile"
+}
+
+# 推送 client 镜像到私有仓库（外部 PR 测试场景）
+# 使用开源 Dockerfile 构建的镜像, 仅推送到私有仓库, 不发布到 Docker Hub 和 Releases
+docker_push_client_pr_test() {
+    log_debug "run docker_push_client_pr_test"
+
+    # 1. 复制产物到本地
+    client_artifacts_copy_to_local
+
+    # 2. 获取版本号
+    local version_info
+    version_info=$(client_artifacts_version)
+    read -r version is_dev <<<"$version_info"
+
+    log_debug "PR 测试场景, 版本: $version, is_dev: $is_dev"
+
+    # 3. 推送到私有仓库（无论是否为 dev 版本, PR 测试均只推送私有仓库）
+    docker_tag_push_private_registry "blog-client" "$version"
+
+    # 4. 清理本地产物目录
+    sudo rm -rf "$DIR_APP_CLIENT"
+
+    log_info "PR 测试镜像已推送到私有仓库, 版本: $version"
+}
+
+# 构建 client 镜像并推送到私有仓库（外部 PR 测试场景）
+# 使用开源 Dockerfile 构建, 适用于处理来自 GitHub 的外部 PR 测试, 仅推送到私有仓库
+docker_build_push_client_pr_test() {
+    log_debug "run docker_build_push_client_pr_test"
+
+    docker_build_client "Dockerfile"
+    docker_push_client_pr_test
 }
 
 # 启动 server client 面板服务信息
