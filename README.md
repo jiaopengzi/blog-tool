@@ -77,7 +77,7 @@ sudo bash blog-tool.sh
 
 项目遵循[语义化版本控制](https://semver.org/lang/zh-CN/)，版本号格式为 `vX.Y.Z`。
 
-## 获取执行版本工具
+## 获取指定版本工具
 
 ### Gitee (国内用户)
 
