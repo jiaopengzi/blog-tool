@@ -5,6 +5,29 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.13.0] - 2026-04-11
+
+### ⚙️ Ci
+
+- 统一 blog-client-dev 为 blog-client
+
+### ✨ Feat
+
+- 支持外部 pr 测试
+- blog-client 开源调整
+
+### 🐞 Fix
+
+- 处理 docker 警告问题
+- github action 环境变量
+- 镜像签名依赖方式统一
+- 增加镜像签名依赖
+- 增加镜像签名依赖
+- github action 推送 tag 的问题
+- github action 不使用 token 未写入的问题
+- github action 不使用 build tag 的问题
+- github action 不执行拉取代码
+
 ## [v0.12.0] - 2026-03-28
 
 ### ✨ Feat
