@@ -214,29 +214,34 @@ artifacts_releases() {
         return
     fi
 
-    # 当新建的时候啊, 遍历所有文件路径, 逐个上传
-    for file_path in "${file_paths[@]}"; do
-        # 参数检查：单个文件
-        if [ -z "$file_path" ]; then
-            log_error "未指定有效的文件路径"
-            exit 1
-        fi
-        if [ ! -f "$file_path" ]; then
-            log_error "文件未找到：$file_path"
-            exit 1
-        fi
+    # blog-client 开源不再上传附件到 release
+    # blog-server，使用 blog-tool.sh 脚本使用 docker 启动后，产物直接放在服务器上，不再上传到 release 了
 
-        # 不同平台生成 release_id
-        if [ "$platform" = "github" ]; then
-            # GitHub 平台 上传文件到 Release
-            upload_to_github_release "$api_prefix" "$token" "$tag" "$file_path" "$upload_url"
-        elif [ "$platform" = "gitee" ]; then
-            # Gitee 平台
-            upload_to_gitee_release "$api_prefix" "$token" "$repo_owner" "$repo_name" "$release_id" "$file_path"
-        fi
-    done
+    # # 当新建的时候啊, 遍历所有文件路径, 逐个上传
+    # for file_path in "${file_paths[@]}"; do
+    #     # 参数检查：单个文件
+    #     if [ -z "$file_path" ]; then
+    #         log_error "未指定有效的文件路径"
+    #         exit 1
+    #     fi
+    #     if [ ! -f "$file_path" ]; then
+    #         log_error "文件未找到：$file_path"
+    #         exit 1
+    #     fi
 
-    log_info "🎉 所有文件上传流程完成"
+    #     # 不同平台生成 release_id
+    #     if [ "$platform" = "github" ]; then
+    #         # GitHub 平台 上传文件到 Release
+    #         upload_to_github_release "$api_prefix" "$token" "$tag" "$file_path" "$upload_url"
+    #     elif [ "$platform" = "gitee" ]; then
+    #         # Gitee 平台
+    #         upload_to_gitee_release "$api_prefix" "$token" "$repo_owner" "$repo_name" "$release_id" "$file_path"
+    #     fi
+    # done
+
+    # log_info "🎉 所有文件上传流程完成"
+    
+    log_info "🎉 release 完成"
 }
 
 common_upload_with_logging() {
