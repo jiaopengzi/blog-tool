@@ -196,11 +196,13 @@ load_config_from_file_and_validate() {
 #   $2 - 变量名(如 DOCKER_HUB_TOKEN, 通常同名)
 #   $3 - 配置文件路径(如 "$BLOG_TOOL_ENV/docker_hub_token")
 #   $4 - 错误提示前缀
+#   $5 - 是否必须存在标志(可选, 默认必须存在)
 load_env_or_file_config() {
     local env_var_name=$1
     local var_name=$2
     local config_file=$3
     local error_prefix=${4:-""}
+    local must_exist=${5:-"true"}
 
     if [ -n "${!env_var_name:-}" ]; then
         # 优先判断环境变量是否有值, 直接使用
@@ -208,7 +210,7 @@ load_env_or_file_config() {
         log_debug "${var_name} 已从环境变量 ${env_var_name} 读取, 长度: $(printf '%s' "${!env_var_name}" | wc -c | awk '{print $1}')"
     else
         # 环境变量未设置, 尝试从文件加载
-        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix"
+        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist"
         log_debug "${var_name} 已从配置文件读取: $config_file"
     fi
 }
@@ -243,6 +245,9 @@ check_domain_ip() {
         "$HOST_INTRANET_IP"
 }
 
+# 检查运行模式及开发环境专属配置
+# 返回:
+#   0 - 配置检查通过
 check_dev_var() {
     log_debug "run check_dev_var"
 
@@ -253,7 +258,33 @@ check_dev_var() {
         "运行模式" \
         "false"
 
-    # 优先使用环境变量, 其次尝试从文件加载(token类) -- pro/dev 模式均需要
+    # pro 模式下 token 为可选配置, 仅在已提供时加载, 不要求必须存在
+    if run_mode_is_pro; then
+        load_env_or_file_config \
+            DOCKER_HUB_TOKEN \
+            DOCKER_HUB_TOKEN \
+            "$BLOG_TOOL_ENV/docker_hub_token" \
+            "docker hub token" \
+            "false"
+
+        load_env_or_file_config \
+            GITHUB_TOKEN \
+            GITHUB_TOKEN \
+            "$BLOG_TOOL_ENV/github_token" \
+            "github token" \
+            "false"
+
+        load_env_or_file_config \
+            GITEE_TOKEN \
+            GITEE_TOKEN \
+            "$BLOG_TOOL_ENV/gitee_token" \
+            "gitee token" \
+            "false"
+
+        return 0
+    fi
+
+    # dev 模式下 token 为必填配置, 优先使用环境变量, 否则必须从文件加载
     load_env_or_file_config \
         DOCKER_HUB_TOKEN \
         DOCKER_HUB_TOKEN \
@@ -271,10 +302,6 @@ check_dev_var() {
         GITEE_TOKEN \
         "$BLOG_TOOL_ENV/gitee_token" \
         "gitee token"
-
-    if run_mode_is_pro; then
-        return 0
-    fi
 
     if [ ! -d "$BLOG_TOOL_ENV" ]; then
         mkdir -p "$BLOG_TOOL_ENV"
