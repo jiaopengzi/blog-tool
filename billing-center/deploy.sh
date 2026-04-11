@@ -5,7 +5,8 @@
 # Copyright   : Copyright (c) 2026 by jiaopengzi, All Rights Reserved.
 # Description : billing_center 部署
 
-# 删除 billing_center 镜像
+# 删除 billing_center 镜像.
+# 返回: 0 表示执行完成, 非 0 表示停止服务或删除镜像失败.
 docker_rmi_billing_center() {
     log_debug "run docker_rmi_billing_center"
 
@@ -15,9 +16,9 @@ docker_rmi_billing_center() {
     if [[ "$is_delete" == "y" ]]; then
         docker_billing_center_stop
 
-        log_debug "执行的命令：sudo docker images --format \"table {{.Repository}}\t{{.Tag}}\t{{.ID}}\" | grep billing-center | awk '{print \$3}' | xargs sudo docker rmi -f"
+        log_debug "执行的命令：sudo docker images --format \"{{.Repository}}\t{{.Tag}}\t{{.ID}}\" | awk '$1 ~ /billing-center/ {print \$3}' | xargs -r sudo docker rmi -f"
 
-        sudo docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | grep billing-center | awk '{print $3}' | xargs sudo docker rmi -f
+        sudo docker images --format "{{.Repository}}\t{{.Tag}}\t{{.ID}}" | awk '$1 ~ /billing-center/ {print $3}' | xargs -r sudo docker rmi -f
 
         log_info "删除 billing_center 镜像完成, 请使用 sudo docker images 查看镜像明细"
     fi

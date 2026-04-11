@@ -3899,12 +3899,27 @@ add_group_user() {
 docker_clear_cache() {
     log_debug "run docker_clear_cache"
 
+    local builder_prune_output
+    local builder_prune_status
+
     sudo docker container prune -f # 删除所有停止状态的容器
     sudo docker network prune -f   # 删除所有不使用的网络
     sudo docker image prune -f     # 删除所有不使用的镜像
-    sudo docker builder prune -f   # 删除所有不使用的构建缓存
 
-    sudo docker images | grep "<none>" | awk '{print $3}' | xargs sudo docker rmi -f || true
+    builder_prune_output=$(sudo docker builder prune -f 2>&1)
+    builder_prune_status=$?
+    if [ $builder_prune_status -ne 0 ]; then
+        printf '%s\n' "$builder_prune_output" >&2
+        return $builder_prune_status
+    fi
+
+    printf '%s\n' "$builder_prune_output" | awk '
+        $0 != "WARNING: This output is designed for human readability. For machine-readable output, please use --format." {
+            print
+        }
+    '
+
+    sudo docker image ls --filter "dangling=true" --quiet | xargs -r sudo docker rmi -f || true
 }
 
 set_daemon_config() {
