@@ -9234,12 +9234,12 @@ docker_push_server() {
 
     # echo "暂时不发布到生产环境, 仅推送到私有仓库"
 
-    # 4. 更新 changelog
-    sync_repo_by_tag "blog-server" "$version" "$GIT_GITHUB"
-    sync_repo_by_tag "blog-server" "$version" "$GIT_GITEE"
+    if version_is_pro "$version" && [ "$is_dev" = false ]; then
+        # 4. 更新 changelog
+        sync_repo_by_tag "blog-server" "$version" "$GIT_GITHUB"
+        sync_repo_by_tag "blog-server" "$version" "$GIT_GITEE"
 
-    # 5. 发布到生产环境
-    if [ "$is_dev" = false ]; then
+        # 5. 发布到生产环境
         # 推送到 Docker Hub
         docker_tag_push_docker_hub "blog-server" "$version"
 
