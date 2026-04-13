@@ -143,9 +143,13 @@ timeout_retry_docker_pull() {
     # $2: version 版本号
     local image_name=$1
     local version=$2
+    local retryable_pull_pattern
 
     # 默认使用官方仓库
     local image="$image_name:$version"
+
+    # registry 或分发层偶发返回的元数据异常通常可通过重试恢复.
+    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero"
 
     log_info "开始拉取镜像: $image"
 
@@ -161,5 +165,5 @@ timeout_retry_docker_pull() {
         2 \
         "拉取 $image 成功" \
         "docker pull 失败(非 TLS/连接类错误)" \
-        "TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused"
+        "$retryable_pull_pattern"
 }
