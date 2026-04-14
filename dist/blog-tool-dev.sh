@@ -5442,7 +5442,6 @@ EOF
         cat >>"$tmp_file" <<'EOF'
   ,
   "registry-mirrors": [
-    "https://mirror.ccs.tencentyun.com",
     "https://docker.1ms.run",
     "https://docker.xuanyuan.me"
   ]
