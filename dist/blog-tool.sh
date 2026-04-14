@@ -3117,7 +3117,7 @@ timeout_retry_docker_pull() {
 
     local image="$image_name:$version"
 
-    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero"
+    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero|failed to copy|httpReadSeeker|could not fetch content descriptor|manifest unknown|no such manifest|404 Not Found|not found|received unexpected HTTP status"
 
     log_info "开始拉取镜像: $image"
 
