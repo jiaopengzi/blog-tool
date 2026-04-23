@@ -5,6 +5,17 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.0.5] - 2026-04-23
+
+### ✨ Feat
+
+- 增加重试错误类型
+
+### 🐞 Fix
+
+- 条件增加腾讯内网地址
+- 增加重试的错误类型
+
 ## [v1.0.4] - 2026-04-12
 
 ### 🐞 Fix
