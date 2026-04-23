@@ -45,12 +45,11 @@ print_dividers() {
 }
 
 # 检查是否为 UTF-8 编码
+# 优先检查 LC_ALL, 其次检查 LANG, 只要任一包含 UTF-8 即视为 UTF-8 编码
 check_utf8() {
-    local locale_output
-    locale_output=$(locale | head -n 1)
-    local value
-    value=$(echo "$locale_output" | cut -d '=' -f 2)
-    if echo "$value" | grep -q "UTF-8"; then
+    local lc_all="${LC_ALL:-}"
+    local lang="${LANG:-}"
+    if [[ "$lc_all" == *"UTF-8"* ]] || [[ "$lang" == *"UTF-8"* ]]; then
         echo true
     else
         echo false
