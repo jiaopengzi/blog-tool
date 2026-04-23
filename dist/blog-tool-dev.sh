@@ -289,7 +289,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 ### content from config/dev.sh
 # 当前文件不检测未使用的变量
 # shellcheck disable=SC2034
@@ -1060,23 +1060,37 @@ load_interactive_config() {
 
     # 如果变量未设置
     if [ -z "${!var_name}" ]; then
+        local file_value=""
+
+        # 尝试从文件读取非空值
         if [ -f "$config_file" ]; then
-            local file_value
             file_value=$(cat "$config_file")
-            if [ -z "$file_value" ]; then
-                log_error "$config_file 文件为空, 请写入有效值"
-            else
-                printf -v "$var_name" '%s' "$file_value"
-            fi
+        fi
+
+        if [ -n "$file_value" ]; then
+            # 文件存在且非空, 直接使用文件中的值
+            printf -v "$var_name" '%s' "$file_value"
         else
-            # 提示用户输入
-            printf "\n%s (默认: %s), 回车使用默认值: " "$prompt_msg" "$default_value"
-            read -r user_input
-            if [ -z "$user_input" ]; then
-                printf -v "$var_name" '%s' "$default_value"
-            else
-                printf -v "$var_name" '%s' "$user_input"
+            # 文件不存在或内容为空, 提示用户重新输入
+            if [ -f "$config_file" ] && [ -z "$file_value" ]; then
+                log_warn "$config_file 文件为空, 请重新输入"
             fi
+
+            # 循环提示, 直到用户输入非空值或默认值非空
+            while true; do
+                printf "\n%s (默认: %s), 回车使用默认值: " "$prompt_msg" "$default_value"
+                read -r user_input
+                if [ -z "$user_input" ]; then
+                    printf -v "$var_name" '%s' "$default_value"
+                else
+                    printf -v "$var_name" '%s' "$user_input"
+                fi
+                # 值非空则退出循环
+                if [ -n "${!var_name}" ]; then
+                    break
+                fi
+                log_warn "值不能为空, 请重新输入"
+            done
         fi
     fi
 
@@ -1168,12 +1182,12 @@ check_domain_ip() {
         "请输入您的域名如：example.com" \
         "$HOST_INTRANET_IP"
 
-    # 项目名称配置
+    # 项目名称配置, 默认值为 blog-server
     load_interactive_config \
         PROJECT_NAME \
         "$BLOG_TOOL_ENV/project_name" \
         "请输入您的项目名称如：blog-server" \
-        "$PROJECT_NAME"
+        "${PROJECT_NAME:-blog-server}"
 
     # 公网IP地址配置
     load_interactive_config \
@@ -3568,12 +3582,11 @@ print_dividers() {
 }
 
 # 检查是否为 UTF-8 编码
+# 优先检查 LC_ALL, 其次检查 LANG, 只要任一包含 UTF-8 即视为 UTF-8 编码
 check_utf8() {
-    local locale_output
-    locale_output=$(locale | head -n 1)
-    local value
-    value=$(echo "$locale_output" | cut -d '=' -f 2)
-    if echo "$value" | grep -q "UTF-8"; then
+    local lc_all="${LC_ALL:-}"
+    local lang="${LANG:-}"
+    if [[ "$lc_all" == *"UTF-8"* ]] || [[ "$lang" == *"UTF-8"* ]]; then
         echo true
     else
         echo false
@@ -5050,6 +5063,7 @@ install_common_software() {
 }
 
 # 安装 cosign（官方二进制，适配 Debian/Ubuntu）
+# 若网络无法访问 github.com 则跳过安装, 不阻断主流程
 install_cosign() {
     log_debug "run install_cosign"
 
@@ -5064,28 +5078,56 @@ install_cosign() {
     x86_64) arch="amd64" ;;
     aarch64) arch="arm64" ;;
     *)
-        log_error "不支持的架构: $arch"
-        return 1
+        log_warn "不支持的架构: $arch, 跳过 cosign 安装"
+        return 0
         ;;
     esac
 
+    # 获取最新版本号, 设置连接超时与最大等待时间, 避免 github 不可达时长时间阻塞
     local latest_version
-    latest_version=$(curl -fsSL https://api.github.com/repos/sigstore/cosign/releases/latest |
-        grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
+    latest_version=$(curl --connect-timeout 10 --max-time 30 -fsSL \
+        https://api.github.com/repos/sigstore/cosign/releases/latest 2>/dev/null |
+        grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/') || true
 
     if [ -z "$latest_version" ]; then
-        log_error "获取 cosign 最新版本失败"
-        return 1
+        log_warn "获取 cosign 最新版本失败, 可能是网络无法访问 github.com, 跳过安装"
+        return 0
     fi
 
     local bin_url="https://github.com/sigstore/cosign/releases/download/v${latest_version}/cosign-linux-${arch}"
 
     log_info "安装 cosign v${latest_version} (${arch})..."
+
+    # 启动等待动画, 下载期间给用户视觉反馈
+    start_spinner
+
+    # 下载超时 30 秒, 并设置最低速率限制(1 字节/秒持续 15 秒视为停滞)
+    local download_ok=true
     if command -v sudo >/dev/null 2>&1; then
-        sudo curl -fsSL "$bin_url" -o /usr/local/bin/cosign
+        if ! sudo curl --connect-timeout 10 --max-time 30 --speed-limit 1 --speed-time 15 \
+            -fsSL "$bin_url" -o /usr/local/bin/cosign; then
+            download_ok=false
+            sudo rm -f /usr/local/bin/cosign
+        fi
+    else
+        if ! curl --connect-timeout 10 --max-time 30 --speed-limit 1 --speed-time 15 \
+            -fsSL "$bin_url" -o /usr/local/bin/cosign; then
+            download_ok=false
+            rm -f /usr/local/bin/cosign
+        fi
+    fi
+
+    # 无论成功与否都先停止动画, 再输出结果日志
+    stop_spinner
+
+    if [ "$download_ok" = false ]; then
+        log_warn "下载 cosign 超时或失败, 可能是网络无法访问 github.com, 跳过安装"
+        return 0
+    fi
+
+    if command -v sudo >/dev/null 2>&1; then
         sudo chmod +x /usr/local/bin/cosign
     else
-        curl -fsSL "$bin_url" -o /usr/local/bin/cosign
         chmod +x /usr/local/bin/cosign
     fi
 
