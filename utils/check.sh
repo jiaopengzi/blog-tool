@@ -122,23 +122,37 @@ load_interactive_config() {
 
     # 如果变量未设置
     if [ -z "${!var_name}" ]; then
+        local file_value=""
+
+        # 尝试从文件读取非空值
         if [ -f "$config_file" ]; then
-            local file_value
             file_value=$(cat "$config_file")
-            if [ -z "$file_value" ]; then
-                log_error "$config_file 文件为空, 请写入有效值"
-            else
-                printf -v "$var_name" '%s' "$file_value"
-            fi
+        fi
+
+        if [ -n "$file_value" ]; then
+            # 文件存在且非空, 直接使用文件中的值
+            printf -v "$var_name" '%s' "$file_value"
         else
-            # 提示用户输入
-            printf "\n%s (默认: %s), 回车使用默认值: " "$prompt_msg" "$default_value"
-            read -r user_input
-            if [ -z "$user_input" ]; then
-                printf -v "$var_name" '%s' "$default_value"
-            else
-                printf -v "$var_name" '%s' "$user_input"
+            # 文件不存在或内容为空, 提示用户重新输入
+            if [ -f "$config_file" ] && [ -z "$file_value" ]; then
+                log_warn "$config_file 文件为空, 请重新输入"
             fi
+
+            # 循环提示, 直到用户输入非空值或默认值非空
+            while true; do
+                printf "\n%s (默认: %s), 回车使用默认值: " "$prompt_msg" "$default_value"
+                read -r user_input
+                if [ -z "$user_input" ]; then
+                    printf -v "$var_name" '%s' "$default_value"
+                else
+                    printf -v "$var_name" '%s' "$user_input"
+                fi
+                # 值非空则退出循环
+                if [ -n "${!var_name}" ]; then
+                    break
+                fi
+                log_warn "值不能为空, 请重新输入"
+            done
         fi
     fi
 
@@ -230,12 +244,12 @@ check_domain_ip() {
         "请输入您的域名如：example.com" \
         "$HOST_INTRANET_IP"
 
-    # 项目名称配置
+    # 项目名称配置, 默认值为 blog-server
     load_interactive_config \
         PROJECT_NAME \
         "$BLOG_TOOL_ENV/project_name" \
         "请输入您的项目名称如：blog-server" \
-        "$PROJECT_NAME"
+        "${PROJECT_NAME:-blog-server}"
 
     # 公网IP地址配置
     load_interactive_config \
