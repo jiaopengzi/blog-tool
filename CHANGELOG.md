@@ -5,6 +5,14 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.0.6] - 2026-04-23
+
+### 🐞 Fix
+
+- cosign 下载卡住的问题
+- 项目名称校验默认值
+- 表格对齐
+
 ## [v1.0.5] - 2026-04-23
 
 ### ✨ Feat
