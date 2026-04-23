@@ -45,13 +45,28 @@ EOF
     # 根据网络环境添加镜像加速
     if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
         log_debug "检测到国内网络环境, 使用国内镜像加速"
-        cat >>"$tmp_file" <<'EOF'
+
+        # 检测腾讯云内网镜像是否可达, 可达则置于第一位
+        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+            log_debug "腾讯云内网镜像可达, 优先使用"
+            cat >>"$tmp_file" <<'EOF'
+  ,
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com/",
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me"
+  ]
+EOF
+        else
+            log_debug "腾讯云内网镜像不可达, 使用常规镜像加速"
+            cat >>"$tmp_file" <<'EOF'
   ,
   "registry-mirrors": [
     "https://docker.1ms.run",
     "https://docker.xuanyuan.me"
   ]
 EOF
+        fi
     fi
 
     # 关闭 JSON
