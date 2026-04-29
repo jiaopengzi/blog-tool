@@ -254,7 +254,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 # shellcheck disable=SC2034
 
 RUN_MODE="pro"
@@ -282,6 +282,7 @@ BASE_SOFTWARE_LIST=(
     cron
     jq
     python3
+    bsdextrautils # 提供 script 命令, 用于为 docker pull/push 分配 PTY 以渲染分层进度条
 )
 
 IS_INSTALL_SOFTWARE=""
@@ -327,12 +328,12 @@ fi
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
-IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_REDIS="8.6.2"    # redis 版本
 IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
-IMG_VERSION_ES="9.3.2"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.2" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.3"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.3" # 与 es 保持版本一致
 
 JPZ_UID=2025    # 服务端用户
 JPZ_GID=2025    # 服务端用户组
@@ -1306,8 +1307,19 @@ delete_database_billing_center() {
 
 restart_database_billing_center() {
     log_debug "run restart_database_billing_center"
+
+    local confirm
+    confirm=$(read_user_input "重启数据库将造成服务中断, 确认继续吗(默认n) [y|n]? " "n")
+    if [[ "$confirm" != "y" ]]; then
+        log_info "已取消重启计费中心数据库"
+        return 0
+    fi
+
     restart_db_pgsql_billing_center
     restart_db_redis_billing_center
+
+    log_info "计费中心数据库重启完成, 开始重启 billing center 服务"
+    docker_billing_center_restart
 }
 
 setup_directory() {
@@ -2916,45 +2928,46 @@ retry_with_backoff() {
     local output
     local status
 
-    start_spinner
-
     while true; do
         local tmpfile
         tmpfile=$(mktemp) || {
-            stop_spinner
             log_error "创建临时文件失败"
             return 1
         }
 
-        if "$run_func" >"$tmpfile" 2>&1; then
-            stop_spinner
+        start_spinner
 
-            cat "$tmpfile"
+        "$run_func" 2>&1 | tee "$tmpfile"
+        status=${PIPESTATUS[0]}
+
+        stop_spinner
+
+        if [ "$status" -eq 0 ]; then
             rm -f "$tmpfile"
-
             log_info "$success_msg"
             return 0
-        else
-            status=$?
+        fi
 
-            output=$(cat "$tmpfile")
+        output=$(cat "$tmpfile")
+        rm -f "$tmpfile"
 
-            if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
-                if [ "$attempt" -ge "$max_retries" ]; then
-                    stop_spinner
-                    log_error "达到最大重试次数($max_retries), 操作仍失败。输出: $output"
-                    return 1
-                fi
-
-                log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
-                sleep "$delay"
-                attempt=$((attempt + 1))
-                delay=$((delay * 2))
-            else
-                stop_spinner
-                log_error "${error_msg_prefix}: $output"
+        if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
+            if [ "$attempt" -ge "$max_retries" ]; then
+                log_error "达到最大重试次数($max_retries), 操作仍失败。最后一次输出: $output"
                 return 1
             fi
+
+            log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
+
+            start_spinner
+            sleep "$delay"
+            stop_spinner
+
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+        else
+            log_error "${error_msg_prefix}: $output"
+            return 1
         fi
     done
 }
@@ -2995,7 +3008,11 @@ timeout_retry_docker_push() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker push $image"
-        sudo docker push "$image"
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker push '$image'" /dev/null
+        else
+            sudo docker push "$image"
+        fi
     }
 
     retry_with_backoff \
@@ -3022,7 +3039,11 @@ timeout_retry_docker_pull() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker pull $image"
-        sudo docker pull "$image"
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker pull '$image'" /dev/null
+        else
+            sudo docker pull "$image"
+        fi
     }
 
     retry_with_backoff \
@@ -3193,6 +3214,25 @@ log_timer() {
 
 __spinner_pid=""
 
+__spinner_scroll_set=""
+
+__spinner_trap_installed=""
+
+__spinner_cleanup_on_exit() {
+    stop_spinner 2>/dev/null || true
+}
+
+__spinner_install_trap() {
+    if [ -n "$__spinner_trap_installed" ]; then
+        return
+    fi
+    trap '__spinner_cleanup_on_exit' EXIT
+    trap '__spinner_cleanup_on_exit; trap - INT;  kill -INT  $$' INT
+    trap '__spinner_cleanup_on_exit; trap - TERM; kill -TERM $$' TERM
+    trap '__spinner_cleanup_on_exit; trap - HUP;  kill -HUP  $$' HUP
+    __spinner_trap_installed="1"
+}
+
 start_spinner() {
     if [ -n "$__spinner_pid" ]; then
         return
@@ -3200,11 +3240,26 @@ start_spinner() {
 
     local spinner_frames=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
 
+    if [ ! -t 2 ]; then
+        return
+    fi
+
+    __spinner_install_trap
+
+    local rows cols
+    rows=$(tput lines 2>/dev/null || echo 24)
+    cols=$(tput cols 2>/dev/null || echo 80)
+
+    printf "\033[1;%dr" "$((rows - 1))" >&2
+    printf "\033[%d;1H" "$((rows - 1))" >&2
+    __spinner_scroll_set="1"
+
     local spin_index=0
 
     show_spinner() {
+        printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
         while true; do
-            printf "\r%s  " "${spinner_frames[$spin_index]}" >&2
+            printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
             spin_index=$(((spin_index + 1) % ${#spinner_frames[@]}))
             sleep 0.2
         done
@@ -3212,6 +3267,8 @@ start_spinner() {
 
     show_spinner &
     __spinner_pid=$!
+
+    : "$cols"
 }
 
 stop_spinner() {
@@ -3220,9 +3277,14 @@ stop_spinner() {
             kill "$__spinner_pid" 2>/dev/null || true # kill 进程, 忽略错误防止脚本退出
             wait "$__spinner_pid" 2>/dev/null || true # 等待进程退出, 忽略错误防止脚本退出
         fi
+        __spinner_pid="" # 清空PID以避免再次停止
+    fi
 
-        printf "\r  \r" >&2 # 清除残留帧
-        __spinner_pid=""    # 清空PID以避免再次停止
+    if [ -n "$__spinner_scroll_set" ]; then
+        local rows
+        rows=$(tput lines 2>/dev/null || echo 24)
+        printf "\0337\033[%d;1H\033[2K\033[r\0338" "$rows" >&2
+        __spinner_scroll_set=""
     fi
 }
 
@@ -4152,6 +4214,152 @@ manual_select_docker_source() {
     echo "$url"
 }
 
+start_db_pgsql_billing_center() {
+  log_debug "run start_db_pgsql_billing_center"
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" up -d
+}
+
+stop_db_pgsql_billing_center() {
+  log_debug "run stop_db_pgsql_billing_center"
+
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
+}
+
+restart_db_pgsql_billing_center_by_compose() {
+  log_debug "run restart_db_pgsql_billing_center_by_compose"
+
+  restart_db_by_handlers "stop_db_pgsql_billing_center" "start_db_pgsql_billing_center"
+}
+
+restart_db_pgsql_billing_center() {
+  log_debug "run restart_db_pgsql_billing_center"
+
+  restart_db_with_version_choice \
+    "pgsql_billing_center" \
+    "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" \
+    "postgres" \
+    "$IMG_VERSION_PGSQL" \
+    "restart_db_pgsql_billing_center_by_compose" \
+    "" \
+    "stop_db_pgsql_billing_center" \
+    "start_db_pgsql_billing_center"
+}
+
+install_db_pgsql_billing_center() {
+  log_debug "run install_db_pgsql_billing_center"
+  # shellcheck disable=SC2329
+  run() {
+    local all_remove_data # 是否删除历史数据 默认不删除
+
+    all_remove_data=$(read_user_input "是否删除 pgsql_billing_center 数据库信息(默认n) [y|n]? " "n")
+
+    if [ ! -d "$DATA_VOLUME_DIR" ]; then
+      setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+    fi
+
+    setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
+    local docker_compose_file="$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER"
+
+    if [ -f "$docker_compose_file" ]; then
+      sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true # 删除容器
+      touch "$docker_compose_file"
+    fi
+
+    cat >"$docker_compose_file" <<-EOM
+services:
+  # PostgreSQL 服务
+  postgres:
+    image: 'postgres:$IMG_VERSION_PGSQL'
+    container_name: $POSTGRES_DOCKER_NAME_BILLING_CENTER
+    restart: always
+    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
+    environment:
+      POSTGRES_USER: $POSTGRES_USER_BILLING_CENTER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD_BILLING_CENTER
+      POSTGRES_DB: $POSTGRES_DB_BILLING_CENTER
+      # 初始化使用和配置有所重复,需要保留 --auth-local=trust 本地连接不需要密码  --auth-host=scram-sha-256 远程连接需要密码 --data-checksums 数据校验
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust --data-checksums"
+
+    # 使用自定义配置文件
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
+
+    volumes:
+      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf:/etc/postgresql/postgresql.conf # 自定义配置文件
+      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf # 在 postgresql.conf 配置文件中指定路径
+      # 数据目录调整,参考:https://github.com/docker-library/postgres/pull/1259
+      - $DATA_VOLUME_DIR/pgsql_billing_center/data:/var/lib/postgresql/$IMG_VERSION_PGSQL_MAJOR/docker # 数据存储目录
+      - $DATA_VOLUME_DIR/pgsql_billing_center/log:/var/log/postgresql # 日志存储目录
+
+    ports:
+      - "$POSTGRES_PORT_BILLING_CENTER:$POSTGRES_PORT_BILLING_CENTER" # 映射端口
+
+    networks: # 网络配置
+      $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
+        ipv4_address: $POSTGRES_IP_BILLING_CENTER # IP地址
+
+networks: # 网络配置
+  $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
+    driver: bridge # 网络驱动
+    name: $BRIDGE_PGSQL_BILLING_CENTER # 网络名称
+    ipam: # IP地址管理
+      config: # IP地址配置
+        - subnet: "$SUBNET_PGSQL_BILLING_CENTER" # 子网
+          gateway: "$GATEWAY_PGSQL_BILLING_CENTER" # 网关
+EOM
+
+    if [ "$all_remove_data" == "y" ]; then
+
+      sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
+      if [ ! -d "$DATA_VOLUME_DIR" ]; then
+        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+      fi
+
+      setup_directory "$DB_UID" "$DB_GID" 755 \
+        "$DATA_VOLUME_DIR/pgsql_billing_center" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/data" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/conf" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/log"
+
+      local content_postgresql_conf
+      local content_pg_hba_conf
+
+      content_postgresql_conf=$(get_content_postgresql_conf "$POSTGRES_PORT_BILLING_CENTER")
+      content_pg_hba_conf=$(get_content_pg_hba_conf "$SUBNET_PGSQL_BILLING_CENTER" "$SUBNET_BILLING_CENTER")
+
+      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_postgresql_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf"
+      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_pg_hba_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf"
+
+      log_info "已删除 pgsql_billing_center 历史数据"
+
+    else
+      log_info "未删除 pgsql_billing_center 历史数据"
+    fi
+
+    start_db_pgsql_billing_center
+
+  }
+
+  log_timer "pgsql_billing_center 启动" run
+
+  log_info "pgsql_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
+}
+
+delete_db_pgsql_billing_center() {
+  log_debug "run delete_db_pgsql_billing_center"
+
+  local is_delete
+  is_delete=$(read_user_input "确认停止 pgsql_billing_center 服务并删除数据吗(默认n) [y|n] " "n")
+
+  if [[ "$is_delete" == "y" ]]; then
+    stop_db_pgsql_billing_center
+
+    sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
+  fi
+}
+
 get_content_postgresql_conf() {
   local postgres_port=$1
 
@@ -4312,152 +4520,6 @@ toggle_pg_hba_conf() {
   fi
 
   log_info "$file_path 已经切换 $mode 模式."
-}
-
-start_db_pgsql_billing_center() {
-  log_debug "run start_db_pgsql_billing_center"
-  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" up -d
-}
-
-stop_db_pgsql_billing_center() {
-  log_debug "run stop_db_pgsql_billing_center"
-
-  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
-
-  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
-}
-
-restart_db_pgsql_billing_center_by_compose() {
-  log_debug "run restart_db_pgsql_billing_center_by_compose"
-
-  restart_db_by_handlers "stop_db_pgsql_billing_center" "start_db_pgsql_billing_center"
-}
-
-restart_db_pgsql_billing_center() {
-  log_debug "run restart_db_pgsql_billing_center"
-
-  restart_db_with_version_choice \
-    "pgsql_billing_center" \
-    "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" \
-    "postgres" \
-    "$IMG_VERSION_PGSQL" \
-    "restart_db_pgsql_billing_center_by_compose" \
-    "" \
-    "stop_db_pgsql_billing_center" \
-    "start_db_pgsql_billing_center"
-}
-
-install_db_pgsql_billing_center() {
-  log_debug "run install_db_pgsql_billing_center"
-  # shellcheck disable=SC2329
-  run() {
-    local all_remove_data # 是否删除历史数据 默认不删除
-
-    all_remove_data=$(read_user_input "是否删除 pgsql_billing_center 数据库信息(默认n) [y|n]? " "n")
-
-    if [ ! -d "$DATA_VOLUME_DIR" ]; then
-      setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-    fi
-
-    setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/pgsql_billing_center"
-
-    local docker_compose_file="$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER"
-
-    if [ -f "$docker_compose_file" ]; then
-      sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true # 删除容器
-      touch "$docker_compose_file"
-    fi
-
-    cat >"$docker_compose_file" <<-EOM
-services:
-  # PostgreSQL 服务
-  postgres:
-    image: 'postgres:$IMG_VERSION_PGSQL'
-    container_name: $POSTGRES_DOCKER_NAME_BILLING_CENTER
-    restart: always
-    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
-    environment:
-      POSTGRES_USER: $POSTGRES_USER_BILLING_CENTER
-      POSTGRES_PASSWORD: $POSTGRES_PASSWORD_BILLING_CENTER
-      POSTGRES_DB: $POSTGRES_DB_BILLING_CENTER
-      # 初始化使用和配置有所重复,需要保留 --auth-local=trust 本地连接不需要密码  --auth-host=scram-sha-256 远程连接需要密码 --data-checksums 数据校验
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust --data-checksums"
-
-    # 使用自定义配置文件
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
-
-    volumes:
-      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf:/etc/postgresql/postgresql.conf # 自定义配置文件
-      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf # 在 postgresql.conf 配置文件中指定路径
-      # 数据目录调整,参考:https://github.com/docker-library/postgres/pull/1259
-      - $DATA_VOLUME_DIR/pgsql_billing_center/data:/var/lib/postgresql/$IMG_VERSION_PGSQL_MAJOR/docker # 数据存储目录
-      - $DATA_VOLUME_DIR/pgsql_billing_center/log:/var/log/postgresql # 日志存储目录
-
-    ports:
-      - "$POSTGRES_PORT_BILLING_CENTER:$POSTGRES_PORT_BILLING_CENTER" # 映射端口
-
-    networks: # 网络配置
-      $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
-        ipv4_address: $POSTGRES_IP_BILLING_CENTER # IP地址
-
-networks: # 网络配置
-  $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
-    driver: bridge # 网络驱动
-    name: $BRIDGE_PGSQL_BILLING_CENTER # 网络名称
-    ipam: # IP地址管理
-      config: # IP地址配置
-        - subnet: "$SUBNET_PGSQL_BILLING_CENTER" # 子网
-          gateway: "$GATEWAY_PGSQL_BILLING_CENTER" # 网关
-EOM
-
-    if [ "$all_remove_data" == "y" ]; then
-
-      sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
-      if [ ! -d "$DATA_VOLUME_DIR" ]; then
-        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-      fi
-
-      setup_directory "$DB_UID" "$DB_GID" 755 \
-        "$DATA_VOLUME_DIR/pgsql_billing_center" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/data" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/conf" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/log"
-
-      local content_postgresql_conf
-      local content_pg_hba_conf
-
-      content_postgresql_conf=$(get_content_postgresql_conf "$POSTGRES_PORT_BILLING_CENTER")
-      content_pg_hba_conf=$(get_content_pg_hba_conf "$SUBNET_PGSQL_BILLING_CENTER" "$SUBNET_BILLING_CENTER")
-
-      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_postgresql_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf"
-      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_pg_hba_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf"
-
-      log_info "已删除 pgsql_billing_center 历史数据"
-
-    else
-      log_info "未删除 pgsql_billing_center 历史数据"
-    fi
-
-    start_db_pgsql_billing_center
-
-  }
-
-  log_timer "pgsql_billing_center 启动" run
-
-  log_info "pgsql_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
-}
-
-delete_db_pgsql_billing_center() {
-  log_debug "run delete_db_pgsql_billing_center"
-
-  local is_delete
-  is_delete=$(read_user_input "确认停止 pgsql_billing_center 服务并删除数据吗(默认n) [y|n] " "n")
-
-  if [[ "$is_delete" == "y" ]]; then
-    stop_db_pgsql_billing_center
-
-    sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
-  fi
 }
 
 start_db_redis_billing_center() {

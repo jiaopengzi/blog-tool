@@ -37,6 +37,7 @@ BASE_SOFTWARE_LIST=(
     cron
     jq
     python3
+    bsdextrautils # 提供 script 命令, 用于为 docker pull/push 分配 PTY 以渲染分层进度条
 )
 
 # 检测是否安装软件的标志目录

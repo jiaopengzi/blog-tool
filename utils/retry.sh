@@ -25,54 +25,56 @@ retry_with_backoff() {
     local output
     local status
 
-    # 动画开始
-    start_spinner
-
     while true; do
-        # 写人临时文件以捕获输出
+        # 写入临时文件以捕获输出, 用于失败时的 pattern 匹配
         local tmpfile
         tmpfile=$(mktemp) || {
-            stop_spinner
             log_error "创建临时文件失败"
             return 1
         }
 
-        # 执行函数, 同时显示输出并捕获
-        if "$run_func" >"$tmpfile" 2>&1; then
-            # 先停止动画
-            stop_spinner
+        # 启动等待动画(写到 stderr), 与命令实时输出(stdout, 含 docker 自身进度条) 并行展示
+        start_spinner
 
-            # 将记录的输出显示到终端
-            cat "$tmpfile"
+        # 通过 tee 将命令输出实时打到终端, 同时捕获到 tmpfile 以便失败时做 pattern 匹配
+        # 使用 PIPESTATUS[0] 获取 run_func 的真实退出码, 而非 tee 的退出码
+        "$run_func" 2>&1 | tee "$tmpfile"
+        status=${PIPESTATUS[0]}
+
+        # 命令执行完成, 停止动画
+        stop_spinner
+
+        if [ "$status" -eq 0 ]; then
             rm -f "$tmpfile"
-
-            # 打印日志
             log_info "$success_msg"
             return 0
-        else
-            status=$?
+        fi
 
-            # 记录失败时的输出
-            output=$(cat "$tmpfile")
+        # 记录失败时的输出
+        output=$(cat "$tmpfile")
+        rm -f "$tmpfile"
 
-            # 检查是否应重试: 要么无 pattern(总是重试), 要么匹配 pattern
-            if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
-                if [ "$attempt" -ge "$max_retries" ]; then
-                    stop_spinner
-                    log_error "达到最大重试次数($max_retries), 操作仍失败。输出: $output"
-                    return 1
-                fi
-
-                log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
-                sleep "$delay"
-                attempt=$((attempt + 1))
-                delay=$((delay * 2))
-            else
-                # 非重试类错误, 立即失败
-                stop_spinner
-                log_error "${error_msg_prefix}: $output"
+        # 检查是否应重试: 要么无 pattern(总是重试), 要么匹配 pattern
+        if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
+            if [ "$attempt" -ge "$max_retries" ]; then
+                # 输出已实时打到屏幕, 这里再聚合打印一次, 便于大量重试输出后定位最终失败原因
+                log_error "达到最大重试次数($max_retries), 操作仍失败。最后一次输出: $output"
                 return 1
             fi
+
+            log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
+
+            # 重试等待期间复用同一个 spinner(start 幂等, 已运行则 noop), 避免闪烁
+            start_spinner
+            sleep "$delay"
+            stop_spinner
+
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+        else
+            # 非重试类错误, 立即失败
+            log_error "${error_msg_prefix}: $output"
+            return 1
         fi
     done
 }
@@ -123,7 +125,14 @@ timeout_retry_docker_push() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker push $image"
-        sudo docker push "$image"
+        # 通过 script 分配伪终端(PTY), 让 docker 检测到 TTY 后绘制进度条;
+        # -q 静默, -e 透传命令退出码, -f 实时 flush, -c 指定命令, /dev/null 丢弃 typescript 文件
+        # 极简环境可能未安装 script(util-linux), 缺失时回退为普通 docker push (无进度条但不影响功能)
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker push '$image'" /dev/null
+        else
+            sudo docker push "$image"
+        fi
     }
 
     retry_with_backoff \
@@ -158,7 +167,14 @@ timeout_retry_docker_pull() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker pull $image"
-        sudo docker pull "$image"
+        # 通过 script 分配伪终端(PTY), 让 docker 检测到 TTY 后绘制带箭头的分层进度条;
+        # -q 静默, -e 透传命令退出码, -f 实时 flush, -c 指定命令, /dev/null 丢弃 typescript 文件
+        # 极简环境可能未安装 script(util-linux), 缺失时回退为普通 docker pull (无箭头进度条但不影响功能)
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker pull '$image'" /dev/null
+        else
+            sudo docker pull "$image"
+        fi
     }
 
     retry_with_backoff \

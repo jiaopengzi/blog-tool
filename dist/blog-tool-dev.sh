@@ -289,7 +289,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 ### content from config/dev.sh
 # 当前文件不检测未使用的变量
 # shellcheck disable=SC2034
@@ -375,6 +375,7 @@ BASE_SOFTWARE_LIST=(
     cron
     jq
     python3
+    bsdextrautils # 提供 script 命令, 用于为 docker pull/push 分配 PTY 以渲染分层进度条
 )
 
 # 检测是否安装软件的标志目录
@@ -431,15 +432,15 @@ CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
 # docker 镜像版本
-IMG_VERSION_REDIS="8.6.1"    # redis 版本
+IMG_VERSION_REDIS="8.6.2"    # redis 版本
 IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 # https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip
 # https://release.infinilabs.com/analysis-ik/stable
 # 优先查看分词工具是否更新到最新版本, 以分词工具的版本为准, 其他版本保持一致
-IMG_VERSION_ES="9.3.2"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.2" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.3"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.3" # 与 es 保持版本一致
 
 # 需要创建的运行用户
 JPZ_UID=2025    # 服务端用户
@@ -1853,19 +1854,43 @@ delete_database_billing_center() {
     fi
 }
 
-# 重启数据库
+# 重启数据库, 重启前询问用户确认, 重启后同步重启 server 服务.
+# 返回: 用户取消时直接返回; 成功时完成数据库及 server 重启.
 restart_database() {
     log_debug "run restart_database"
+
+    local confirm
+    confirm=$(read_user_input "重启数据库将造成服务中断, 确认继续吗(默认n) [y|n]? " "n")
+    if [[ "$confirm" != "y" ]]; then
+        log_info "已取消重启数据库"
+        return 0
+    fi
+
     restart_db_pgsql
     restart_db_redis
     restart_db_es
+
+    log_info "数据库重启完成, 开始重启 server 服务"
+    docker_server_restart
 }
 
-# 重启数据库(billing center)
+# 重启数据库(billing center), 重启前询问用户确认, 重启后同步重启 billing center 服务.
+# 返回: 用户取消时直接返回; 成功时完成数据库及 billing center 重启.
 restart_database_billing_center() {
     log_debug "run restart_database_billing_center"
+
+    local confirm
+    confirm=$(read_user_input "重启数据库将造成服务中断, 确认继续吗(默认n) [y|n]? " "n")
+    if [[ "$confirm" != "y" ]]; then
+        log_info "已取消重启计费中心数据库"
+        return 0
+    fi
+
     restart_db_pgsql_billing_center
     restart_db_redis_billing_center
+
+    log_info "计费中心数据库重启完成, 开始重启 billing center 服务"
+    docker_billing_center_restart
 }
 
 ### content from utils/dir_file.sh
@@ -3965,54 +3990,56 @@ retry_with_backoff() {
     local output
     local status
 
-    # 动画开始
-    start_spinner
-
     while true; do
-        # 写人临时文件以捕获输出
+        # 写入临时文件以捕获输出, 用于失败时的 pattern 匹配
         local tmpfile
         tmpfile=$(mktemp) || {
-            stop_spinner
             log_error "创建临时文件失败"
             return 1
         }
 
-        # 执行函数, 同时显示输出并捕获
-        if "$run_func" >"$tmpfile" 2>&1; then
-            # 先停止动画
-            stop_spinner
+        # 启动等待动画(写到 stderr), 与命令实时输出(stdout, 含 docker 自身进度条) 并行展示
+        start_spinner
 
-            # 将记录的输出显示到终端
-            cat "$tmpfile"
+        # 通过 tee 将命令输出实时打到终端, 同时捕获到 tmpfile 以便失败时做 pattern 匹配
+        # 使用 PIPESTATUS[0] 获取 run_func 的真实退出码, 而非 tee 的退出码
+        "$run_func" 2>&1 | tee "$tmpfile"
+        status=${PIPESTATUS[0]}
+
+        # 命令执行完成, 停止动画
+        stop_spinner
+
+        if [ "$status" -eq 0 ]; then
             rm -f "$tmpfile"
-
-            # 打印日志
             log_info "$success_msg"
             return 0
-        else
-            status=$?
+        fi
 
-            # 记录失败时的输出
-            output=$(cat "$tmpfile")
+        # 记录失败时的输出
+        output=$(cat "$tmpfile")
+        rm -f "$tmpfile"
 
-            # 检查是否应重试: 要么无 pattern(总是重试), 要么匹配 pattern
-            if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
-                if [ "$attempt" -ge "$max_retries" ]; then
-                    stop_spinner
-                    log_error "达到最大重试次数($max_retries), 操作仍失败。输出: $output"
-                    return 1
-                fi
-
-                log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
-                sleep "$delay"
-                attempt=$((attempt + 1))
-                delay=$((delay * 2))
-            else
-                # 非重试类错误, 立即失败
-                stop_spinner
-                log_error "${error_msg_prefix}: $output"
+        # 检查是否应重试: 要么无 pattern(总是重试), 要么匹配 pattern
+        if [ -z "$retry_on_pattern" ] || echo "$output" | grep -Eiq "$retry_on_pattern"; then
+            if [ "$attempt" -ge "$max_retries" ]; then
+                # 输出已实时打到屏幕, 这里再聚合打印一次, 便于大量重试输出后定位最终失败原因
+                log_error "达到最大重试次数($max_retries), 操作仍失败。最后一次输出: $output"
                 return 1
             fi
+
+            log_warn "第 ${attempt}/${max_retries} 次重试, ${delay}s 后重试。退出码: $status"
+
+            # 重试等待期间复用同一个 spinner(start 幂等, 已运行则 noop), 避免闪烁
+            start_spinner
+            sleep "$delay"
+            stop_spinner
+
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+        else
+            # 非重试类错误, 立即失败
+            log_error "${error_msg_prefix}: $output"
+            return 1
         fi
     done
 }
@@ -4063,7 +4090,14 @@ timeout_retry_docker_push() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker push $image"
-        sudo docker push "$image"
+        # 通过 script 分配伪终端(PTY), 让 docker 检测到 TTY 后绘制进度条;
+        # -q 静默, -e 透传命令退出码, -f 实时 flush, -c 指定命令, /dev/null 丢弃 typescript 文件
+        # 极简环境可能未安装 script(util-linux), 缺失时回退为普通 docker push (无进度条但不影响功能)
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker push '$image'" /dev/null
+        else
+            sudo docker push "$image"
+        fi
     }
 
     retry_with_backoff \
@@ -4098,7 +4132,14 @@ timeout_retry_docker_pull() {
     # shellcheck disable=SC2329
     run() {
         log_debug "执行的命令: sudo docker pull $image"
-        sudo docker pull "$image"
+        # 通过 script 分配伪终端(PTY), 让 docker 检测到 TTY 后绘制带箭头的分层进度条;
+        # -q 静默, -e 透传命令退出码, -f 实时 flush, -c 指定命令, /dev/null 丢弃 typescript 文件
+        # 极简环境可能未安装 script(util-linux), 缺失时回退为普通 docker pull (无箭头进度条但不影响功能)
+        if command -v script >/dev/null 2>&1; then
+            script -qefc "sudo docker pull '$image'" /dev/null
+        else
+            sudo docker pull "$image"
+        fi
     }
 
     retry_with_backoff \
@@ -4505,6 +4546,31 @@ log_timer() {
 # 内部变量：存储等待动画的后台进程ID
 __spinner_pid=""
 
+# 内部变量: 记录是否设置过滚动区域(DECSTBM), 用于 stop 时正确还原
+__spinner_scroll_set=""
+
+# 内部变量: 信号兜底 trap 是否已经安装(避免重复安装)
+__spinner_trap_installed=""
+
+# 内部函数: 信号/退出兜底清理, 防止 Ctrl+C 后 spinner 进程残留与终端滚动区域错乱
+__spinner_cleanup_on_exit() {
+    # 不调用 log 函数, 避免在退出阶段产生递归输出
+    stop_spinner 2>/dev/null || true
+}
+
+# 内部函数: 安装信号兜底 trap, 仅首次调用时安装
+# EXIT 兜现正常/异常退出; INT/TERM/HUP 兜现中断, 清理后再以原信号结束自身, 保留正确退出码
+__spinner_install_trap() {
+    if [ -n "$__spinner_trap_installed" ]; then
+        return
+    fi
+    trap '__spinner_cleanup_on_exit' EXIT
+    trap '__spinner_cleanup_on_exit; trap - INT;  kill -INT  $$' INT
+    trap '__spinner_cleanup_on_exit; trap - TERM; kill -TERM $$' TERM
+    trap '__spinner_cleanup_on_exit; trap - HUP;  kill -HUP  $$' HUP
+    __spinner_trap_installed="1"
+}
+
 # 开始等待动画
 start_spinner() {
     # 如果动画已经在运行, 直接返回
@@ -4515,13 +4581,38 @@ start_spinner() {
     # 等待动画帧(固定宽度, 圆点在条内来回移动)
     local spinner_frames=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
 
+    # 仅在 stderr 是 TTY 时启用动画, 避免污染重定向到文件的输出
+    if [ ! -t 2 ]; then
+        return
+    fi
+
+    # 安装信号兜底 trap, 防止异常退出后 spinner 进程残留与终端滚动区域错乱
+    __spinner_install_trap
+
+    # 取终端尺寸
+    local rows cols
+    rows=$(tput lines 2>/dev/null || echo 24)
+    cols=$(tput cols 2>/dev/null || echo 80)
+
+    # 设置滚动区域为 1..rows-1 行, 把最后一行从滚动区域中排除出来,
+    # 这样上方任何输出/换行/滚动都不会影响最后一行(spinner 所在行).
+    # \033[1;Hr 设置 DECSTBM; 设置后光标会跳到 (1,1), 因此再保存光标位置.
+    printf "\033[1;%dr" "$((rows - 1))" >&2
+    # 把光标移到滚动区底部(rows-1 行行首), 避免后续输出从顶部 (1,1) 开始
+    printf "\033[%d;1H" "$((rows - 1))" >&2
+    __spinner_scroll_set="1"
+
     # 当前帧索引
     local spin_index=0
 
     # 显示等待动画
+    # 每帧: 保存光标 -> 跳到最后一行行首 -> 清行并写入 spinner -> 恢复光标
+    # spinner 行被排除在滚动区外, 不会被命令输出推走, 位置稳定
     show_spinner() {
+        # 立即渲染首帧, 避免短命令一帧都看不到
+        printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
         while true; do
-            printf "\r%s  " "${spinner_frames[$spin_index]}" >&2
+            printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
             spin_index=$(((spin_index + 1) % ${#spinner_frames[@]}))
             sleep 0.2
         done
@@ -4530,6 +4621,9 @@ start_spinner() {
     # 启动等待动画作为后台进程
     show_spinner &
     __spinner_pid=$!
+
+    # 防止 cols 未使用导致 shellcheck 警告
+    : "$cols"
 }
 
 # 停止等待动画
@@ -4541,9 +4635,16 @@ stop_spinner() {
             kill "$__spinner_pid" 2>/dev/null || true # kill 进程, 忽略错误防止脚本退出
             wait "$__spinner_pid" 2>/dev/null || true # 等待进程退出, 忽略错误防止脚本退出
         fi
+        __spinner_pid="" # 清空PID以避免再次停止
+    fi
 
-        printf "\r  \r" >&2 # 清除残留帧
-        __spinner_pid=""    # 清空PID以避免再次停止
+    # 还原滚动区域, 并清掉 spinner 残留
+    if [ -n "$__spinner_scroll_set" ]; then
+        local rows
+        rows=$(tput lines 2>/dev/null || echo 24)
+        # 保存光标 -> 清掉最后一行 spinner -> 还原滚动区域 -> 恢复光标
+        printf "\0337\033[%d;1H\033[2K\033[r\0338" "$rows" >&2
+        __spinner_scroll_set=""
     fi
 }
 
@@ -6931,6 +7032,177 @@ delete_es_kibana() {
   fi
 }
 
+### content from db/pgsql_billing_center.sh
+# 启动 pgsql 容器(billing center)
+start_db_pgsql_billing_center() {
+  log_debug "run start_db_pgsql_billing_center"
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" up -d
+}
+
+# 停止 pgsql 容器(billing center)
+stop_db_pgsql_billing_center() {
+  log_debug "run stop_db_pgsql_billing_center"
+
+  # 权限设置
+  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
+}
+
+# 按当前 docker compose 直接重启 pgsql 容器(billing center).
+# 返回: 完成 down/up 重启流程.
+restart_db_pgsql_billing_center_by_compose() {
+  log_debug "run restart_db_pgsql_billing_center_by_compose"
+
+  restart_db_by_handlers "stop_db_pgsql_billing_center" "start_db_pgsql_billing_center"
+}
+
+# 对比版本后重启 pgsql 容器(billing center).
+# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
+restart_db_pgsql_billing_center() {
+  log_debug "run restart_db_pgsql_billing_center"
+
+  restart_db_with_version_choice \
+    "pgsql_billing_center" \
+    "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" \
+    "postgres" \
+    "$IMG_VERSION_PGSQL" \
+    "restart_db_pgsql_billing_center_by_compose" \
+    "" \
+    "stop_db_pgsql_billing_center" \
+    "start_db_pgsql_billing_center"
+}
+
+# 安装 pgsql 数据库(billing center)
+install_db_pgsql_billing_center() {
+  log_debug "run install_db_pgsql_billing_center"
+  # shellcheck disable=SC2329
+  run() {
+    local all_remove_data # 是否删除历史数据 默认不删除
+
+    all_remove_data=$(read_user_input "是否删除 pgsql_billing_center 数据库信息(默认n) [y|n]? " "n")
+
+    if [ ! -d "$DATA_VOLUME_DIR" ]; then
+      # 如果不存在则创建
+      setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+    fi
+
+    setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/pgsql_billing_center"
+
+    # 创建一个名为 docker-compose.yaml 的新文件
+    local docker_compose_file="$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER"
+
+    # 如果存在 docker-compose.yaml 执行 docker compose down
+    if [ -f "$docker_compose_file" ]; then
+      sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true # 删除容器
+      touch "$docker_compose_file"
+    fi
+
+    cat >"$docker_compose_file" <<-EOM
+services:
+  # PostgreSQL 服务
+  postgres:
+    image: 'postgres:$IMG_VERSION_PGSQL'
+    container_name: $POSTGRES_DOCKER_NAME_BILLING_CENTER
+    restart: always
+    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
+    environment:
+      POSTGRES_USER: $POSTGRES_USER_BILLING_CENTER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD_BILLING_CENTER
+      POSTGRES_DB: $POSTGRES_DB_BILLING_CENTER
+      # 初始化使用和配置有所重复,需要保留 --auth-local=trust 本地连接不需要密码  --auth-host=scram-sha-256 远程连接需要密码 --data-checksums 数据校验
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust --data-checksums"
+
+    # 使用自定义配置文件
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
+
+    volumes:
+      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf:/etc/postgresql/postgresql.conf # 自定义配置文件
+      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf # 在 postgresql.conf 配置文件中指定路径
+      # 数据目录调整,参考:https://github.com/docker-library/postgres/pull/1259
+      - $DATA_VOLUME_DIR/pgsql_billing_center/data:/var/lib/postgresql/$IMG_VERSION_PGSQL_MAJOR/docker # 数据存储目录
+      - $DATA_VOLUME_DIR/pgsql_billing_center/log:/var/log/postgresql # 日志存储目录
+
+    ports:
+      - "$POSTGRES_PORT_BILLING_CENTER:$POSTGRES_PORT_BILLING_CENTER" # 映射端口
+
+    networks: # 网络配置
+      $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
+        ipv4_address: $POSTGRES_IP_BILLING_CENTER # IP地址
+
+networks: # 网络配置
+  $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
+    driver: bridge # 网络驱动
+    name: $BRIDGE_PGSQL_BILLING_CENTER # 网络名称
+    ipam: # IP地址管理
+      config: # IP地址配置
+        - subnet: "$SUBNET_PGSQL_BILLING_CENTER" # 子网
+          gateway: "$GATEWAY_PGSQL_BILLING_CENTER" # 网关
+EOM
+
+    # 删除历史数据 pgsql_billing_center
+    if [ "$all_remove_data" == "y" ]; then
+
+      sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
+      if [ ! -d "$DATA_VOLUME_DIR" ]; then
+        # 如果不存在则创建
+        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+      fi
+
+      # 创建新目录
+      setup_directory "$DB_UID" "$DB_GID" 755 \
+        "$DATA_VOLUME_DIR/pgsql_billing_center" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/data" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/conf" \
+        "$DATA_VOLUME_DIR/pgsql_billing_center/log"
+
+      # 获取配置文件内容
+      local content_postgresql_conf
+      local content_pg_hba_conf
+
+      content_postgresql_conf=$(get_content_postgresql_conf "$POSTGRES_PORT_BILLING_CENTER")
+      content_pg_hba_conf=$(get_content_pg_hba_conf "$SUBNET_PGSQL_BILLING_CENTER" "$SUBNET_BILLING_CENTER")
+
+      # 写入配置文件并设置权限
+      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_postgresql_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf"
+      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_pg_hba_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf"
+
+      log_info "已删除 pgsql_billing_center 历史数据"
+
+    else
+      log_info "未删除 pgsql_billing_center 历史数据"
+    fi
+
+    # 启动 pgsql 容器
+    start_db_pgsql_billing_center
+
+    # # 删除pgsql_billing_center不使用的默认配置文件
+    # sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center/data/postgresql.conf"
+    # sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center/data/pg_hba.conf"
+
+  }
+
+  log_timer "pgsql_billing_center 启动" run
+
+  log_info "pgsql_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
+}
+
+# 停止并删除 pgsql_billing_center 数据库
+delete_db_pgsql_billing_center() {
+  log_debug "run delete_db_pgsql_billing_center"
+
+  local is_delete
+  is_delete=$(read_user_input "确认停止 pgsql_billing_center 服务并删除数据吗(默认n) [y|n] " "n")
+
+  if [[ "$is_delete" == "y" ]]; then
+    # 停止容器
+    stop_db_pgsql_billing_center
+
+    # 删除数据库数据
+    sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
+  fi
+}
+
 ### content from db/pgsql.sh
 # postgresql.conf 文件
 get_content_postgresql_conf() {
@@ -7238,175 +7510,347 @@ delete_db_pgsql() {
   fi
 }
 
-### content from db/pgsql_billing_center.sh
-# 启动 pgsql 容器(billing center)
-start_db_pgsql_billing_center() {
-  log_debug "run start_db_pgsql_billing_center"
-  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" up -d
+### content from db/redis_billing_center.sh
+# 启动 redis 容器(billing center)
+start_db_redis_billing_center() {
+    log_debug "run start_db_redis_billing_center"
+
+    # 权限设置
+    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
+
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" up -d # 启动容器
 }
 
-# 停止 pgsql 容器(billing center)
-stop_db_pgsql_billing_center() {
-  log_debug "run stop_db_pgsql_billing_center"
-
-  # 权限设置
-  setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql_billing_center"
-
-  sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true
+# 停止 redis 容器(billing center)
+stop_db_redis_billing_center() {
+    log_debug "run stop_db_redis_billing_center"
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true
 }
 
-# 按当前 docker compose 直接重启 pgsql 容器(billing center).
+# 按当前 docker compose 直接重启 redis 容器(billing center).
 # 返回: 完成 down/up 重启流程.
-restart_db_pgsql_billing_center_by_compose() {
-  log_debug "run restart_db_pgsql_billing_center_by_compose"
+restart_db_redis_billing_center_by_compose() {
+    log_debug "run restart_db_redis_billing_center_by_compose"
 
-  restart_db_by_handlers "stop_db_pgsql_billing_center" "start_db_pgsql_billing_center"
+    restart_db_by_handlers "stop_db_redis_billing_center" "start_db_redis_billing_center"
 }
 
-# 对比版本后重启 pgsql 容器(billing center).
+# 对比版本后重启 redis 容器(billing center).
 # 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
-restart_db_pgsql_billing_center() {
-  log_debug "run restart_db_pgsql_billing_center"
+restart_db_redis_billing_center() {
+    log_debug "run restart_db_redis_billing_center"
 
-  restart_db_with_version_choice \
-    "pgsql_billing_center" \
-    "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" \
-    "postgres" \
-    "$IMG_VERSION_PGSQL" \
-    "restart_db_pgsql_billing_center_by_compose" \
-    "" \
-    "stop_db_pgsql_billing_center" \
-    "start_db_pgsql_billing_center"
+    restart_db_with_version_choice \
+        "redis_billing_center" \
+        "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" \
+        "redis" \
+        "$IMG_VERSION_REDIS" \
+        "restart_db_redis_billing_center_by_compose" \
+        "" \
+        "stop_db_redis_billing_center" \
+        "start_db_redis_billing_center"
 }
 
-# 安装 pgsql 数据库(billing center)
-install_db_pgsql_billing_center() {
-  log_debug "run install_db_pgsql_billing_center"
-  # shellcheck disable=SC2329
-  run() {
-    local all_remove_data # 是否删除历史数据 默认不删除
+# 创建 redis 数据库(billing center)
+install_db_redis_billing_center() {
+    log_debug "run install_db_redis_billing_center"
+    # shellcheck disable=SC2329
+    run() {
+        local is_redis_cluster # 是否创建 redis 集群 默认不创建
+        local all_remove_data  # 是否删除历史数据 默认不删除
 
-    all_remove_data=$(read_user_input "是否删除 pgsql_billing_center 数据库信息(默认n) [y|n]? " "n")
+        # 根据运行模式决定是否询问
+        is_redis_cluster=$(read_user_input "[1/2]是否创建 redis_billing_center 集群(默认n) [y|n]? " "n")
+        all_remove_data=$(read_user_input "[2/2]是否删除 redis_billing_center (默认n) [y|n]? " "n")
 
-    if [ ! -d "$DATA_VOLUME_DIR" ]; then
-      # 如果不存在则创建
-      setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-    fi
+        if [ ! -d "$DATA_VOLUME_DIR" ]; then
+            # 如果不存在则创建
+            setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+        fi
 
-    setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/pgsql_billing_center"
+        setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/redis_billing_center"
 
-    # 创建一个名为 docker-compose.yaml 的新文件
-    local docker_compose_file="$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER"
+        # ? ===============重要提示===============
 
-    # 如果存在 docker-compose.yaml 执行 docker compose down
-    if [ -f "$docker_compose_file" ]; then
-      sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" down || true # 删除容器
-      touch "$docker_compose_file"
-    fi
+        # 由于 docker 中创建 redis sentinel 无法使用自定义网络和 docker0 网络通信
+        # 集群和哨兵不能使用 docker 的 NAT 模式 使用 host 模式
+        # 需要使用 --net=host 的方式创建,外部访问需要打开对应端口
+        # 参考官网: https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/
 
-    cat >"$docker_compose_file" <<-EOM
+        # ? ===============重要提示===============
+
+        # 创建一个名为 docker-compose.yaml 的新文件
+        local docker_compose_file="$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER"
+
+        # 如果存在 docker-compose.yaml 执行docker compose down
+        if [ -f "$docker_compose_file" ]; then
+            sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true # 删除容器
+            touch "$docker_compose_file"
+        fi
+        cat >"$docker_compose_file" <<-EOM
 services:
-  # PostgreSQL 服务
-  postgres:
-    image: 'postgres:$IMG_VERSION_PGSQL'
-    container_name: $POSTGRES_DOCKER_NAME_BILLING_CENTER
-    restart: always
-    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
-    environment:
-      POSTGRES_USER: $POSTGRES_USER_BILLING_CENTER
-      POSTGRES_PASSWORD: $POSTGRES_PASSWORD_BILLING_CENTER
-      POSTGRES_DB: $POSTGRES_DB_BILLING_CENTER
-      # 初始化使用和配置有所重复,需要保留 --auth-local=trust 本地连接不需要密码  --auth-host=scram-sha-256 远程连接需要密码 --data-checksums 数据校验
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust --data-checksums"
-
-    # 使用自定义配置文件
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
-
-    volumes:
-      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf:/etc/postgresql/postgresql.conf # 自定义配置文件
-      - $DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf # 在 postgresql.conf 配置文件中指定路径
-      # 数据目录调整,参考:https://github.com/docker-library/postgres/pull/1259
-      - $DATA_VOLUME_DIR/pgsql_billing_center/data:/var/lib/postgresql/$IMG_VERSION_PGSQL_MAJOR/docker # 数据存储目录
-      - $DATA_VOLUME_DIR/pgsql_billing_center/log:/var/log/postgresql # 日志存储目录
-
-    ports:
-      - "$POSTGRES_PORT_BILLING_CENTER:$POSTGRES_PORT_BILLING_CENTER" # 映射端口
-
-    networks: # 网络配置
-      $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
-        ipv4_address: $POSTGRES_IP_BILLING_CENTER # IP地址
-
-networks: # 网络配置
-  $BRIDGE_PGSQL_BILLING_CENTER: # 网络名称
-    driver: bridge # 网络驱动
-    name: $BRIDGE_PGSQL_BILLING_CENTER # 网络名称
-    ipam: # IP地址管理
-      config: # IP地址配置
-        - subnet: "$SUBNET_PGSQL_BILLING_CENTER" # 子网
-          gateway: "$GATEWAY_PGSQL_BILLING_CENTER" # 网关
 EOM
 
-    # 删除历史数据 pgsql_billing_center
-    if [ "$all_remove_data" == "y" ]; then
+        # 单节点,将主从节点设置为 1，从节点设置为 0
+        if [ "$is_redis_cluster" == "n" ]; then
+            MASTER_COUNT=1
+            SLAVE_COUNT=0
+        fi
 
-      sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
-      if [ ! -d "$DATA_VOLUME_DIR" ]; then
-        # 如果不存在则创建
-        setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-      fi
+        cluster_urls="" # 集群节点地址
+        redis_ips=""    # ip地址拼接
+        # 追加写入 docker-compose 配置文件
+        for ((port = REDIS_BASE_PORT_BILLING_CENTER; port < REDIS_BASE_PORT_BILLING_CENTER + MASTER_COUNT + SLAVE_COUNT; port++)); do
+            port_cluster=$((port + 10000))                                                                   # port_cluster 自增 集群监控端口
+            ip_node="$IPV4_BASE_REDIS_BILLING_CENTER.$(((port - REDIS_BASE_PORT_BILLING_CENTER + 2) % 256))" # ip_node 自增 从 2 开始, 1 为网关
 
-      # 创建新目录
-      setup_directory "$DB_UID" "$DB_GID" 755 \
-        "$DATA_VOLUME_DIR/pgsql_billing_center" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/data" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/conf" \
-        "$DATA_VOLUME_DIR/pgsql_billing_center/log"
+            # DOCKER_NAMES+=("redis-$IMG_VERSION_REDIS-$port")      # 增加主节点
+            cluster_urls+="redis-$IMG_VERSION_REDIS-$port:$port " # 集群节点 名称
+            redis_ips+="$ip_node "                                # 集群节点地址
 
-      # 获取配置文件内容
-      local content_postgresql_conf
-      local content_pg_hba_conf
+            # 追加写入主节点 docker-compose 配置文件
+            cat >>"$docker_compose_file" <<-EOM
 
-      content_postgresql_conf=$(get_content_postgresql_conf "$POSTGRES_PORT_BILLING_CENTER")
-      content_pg_hba_conf=$(get_content_pg_hba_conf "$SUBNET_PGSQL_BILLING_CENTER" "$SUBNET_BILLING_CENTER")
+  redis-$IMG_VERSION_REDIS-$port:
+    image: 'redis:$IMG_VERSION_REDIS'
+    restart: always
+    container_name: redis-$IMG_VERSION_REDIS-$port
+    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
+    volumes:
+      - $DATA_VOLUME_DIR/redis_billing_center/data/$port:/data
+      - $DATA_VOLUME_DIR/redis_billing_center/conf/$port:/usr/local/etc/redis # 配置文件需要指定文件夹否则会无法写入
+      - $DATA_VOLUME_DIR/redis_billing_center/log/$port:/var/log/redis
 
-      # 写入配置文件并设置权限
-      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_postgresql_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/postgresql.conf"
-      over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content_pg_hba_conf" "$DATA_VOLUME_DIR/pgsql_billing_center/conf/pg_hba.conf"
+    command: [/usr/local/etc/redis/redis.conf] # 指定配置文件重新加载
 
-      log_info "已删除 pgsql_billing_center 历史数据"
+    ports: # 映射端口，对外提供服务
+      - "$port:$port" # redis 的服务端口
+      - "$port_cluster:$port_cluster" # redis 集群监控端口
+    # stdin_open: true # 标准输入打开
+    # tty: true # 终端打开
+    # privileged: true # 拥有容器内命令执行的权限
 
-    else
-      log_info "未删除 pgsql_billing_center 历史数据"
-    fi
+    networks: # docker 网络设置
+      $BRIDGE_REDIS_BILLING_CENTER: # 网络名称
+          ipv4_address: $ip_node
+EOM
+        done
 
-    # 启动 pgsql 容器
-    start_db_pgsql_billing_center
+        # 删除历史数据 redis_billing_center
+        if [ "$all_remove_data" == "y" ]; then
 
-    # # 删除pgsql_billing_center不使用的默认配置文件
-    # sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center/data/postgresql.conf"
-    # sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center/data/pg_hba.conf"
+            # 删除历史数据
+            sudo rm -rf "$DATA_VOLUME_DIR/redis_billing_center"
+            if [ ! -d "$DATA_VOLUME_DIR" ]; then
+                # 如果不存在则创建
+                setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
+            fi
 
-  }
+            # 创建新目录
+            setup_directory "$DB_UID" "$DB_GID" 755 \
+                "$DATA_VOLUME_DIR/redis_billing_center" \
+                "$DATA_VOLUME_DIR/redis_billing_center/data" \
+                "$DATA_VOLUME_DIR/redis_billing_center/conf" \
+                "$DATA_VOLUME_DIR/redis_billing_center/log"
 
-  log_timer "pgsql_billing_center 启动" run
+            # 删除原来配置 使用新建的配置文件
+            for ((port = REDIS_BASE_PORT_BILLING_CENTER; port < REDIS_BASE_PORT_BILLING_CENTER + MASTER_COUNT + SLAVE_COUNT; port++)); do
 
-  log_info "pgsql_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
+                ip_node="$IPV4_BASE_REDIS_BILLING_CENTER.$(((port - REDIS_BASE_PORT_BILLING_CENTER + 2) % 256))" # ip_node 自增 从 2 开始, 1 为网关
+                setup_directory "$DB_UID" "$DB_GID" 755 \
+                    "$DATA_VOLUME_DIR/redis_billing_center/data/$port" \
+                    "$DATA_VOLUME_DIR/redis_billing_center/conf/$port" \
+                    "$DATA_VOLUME_DIR/redis_billing_center/log/$port"
+
+                # 默认集群配置为空
+                config_cluster=""
+
+                # 添加集群配置
+                if [ "${is_redis_cluster,,}" = "y" ]; then
+                    # 使用 heredoc 将多行文本赋值给变量
+                    config_cluster=$(
+                        cat <<EOF
+### 复制（主从同步）
+# 是否为复制只读
+slave-read-only yes
+
+# 主节点 密码
+masterauth "$REDIS_PASSWORD_BILLING_CENTER"
+
+### 集群配置
+# 开启集群模式至少三个主节点
+cluster-enabled yes
+cluster-config-file nodes.conf
+cluster-node-timeout 15000
+
+# #######CLUSTER DOCKER/NAT support#######
+# 集群和哨兵不能使用 docker 的 NAT 模式 使用 host 模式
+# 参考:https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/
+# cluster-announce-ip redis-$IMG_VERSION_REDIS-$port
+# cluster-announce-ip $HOST_INTRANET_IP
+
+cluster-announce-ip $ip_node
+cluster-announce-port $port
+cluster-announce-bus-port 1$port
+EOF
+                    )
+
+                fi
+
+                # redis.conf 配置文件
+                content=$(
+                    cat <<EOL
+# Redis 配置文件
+######################
+
+### 一般设置
+# 绑定 IP (默认情况下,Redis 只允许本地连接)
+# bind 127.0.0.1 $ip_node
+# bind 127.0.0.1
+bind 0.0.0.0
+
+# Redis 监听端口 (默认为 6379)
+port $port
+
+# 启用保护模式:no, 关闭 docker 外部才能访问。
+protected-mode no
+
+# 设置密码
+requirepass "$REDIS_PASSWORD_BILLING_CENTER"
+
+### 客户端设置
+# 客户端空闲超时时间(单位:秒),设置成 0 则表示不限制客户端空闲时间
+timeout 0
+
+# 最大客户端连接数,默认为 10000
+maxclients 10000
+
+### 数据存储
+# 指定数据文件存放目录
+dir ./
+
+# 如果至少有 1 个 key 在 900 秒内被修改了,则生成 RDB 文件
+save 900 1
+
+# 如果至少有 10 个 key 在 300 秒内被修改了,则生成 RDB 文件
+save 300 10
+
+# 如果至少有 10000 个 key 在 60 秒内被修改了,则生成 RDB 文件
+save 60 10000
+
+# RDB 文件名称
+dbfilename dump.rdb
+
+# 是否启用 RDB 文件压缩
+rdbcompression yes
+
+# 是否使用 CRC64 校验 RDB 文件
+rdbchecksum yes
+
+### AOF 
+# 启用 AOF 持久化
+appendonly yes
+
+# AOF 历史策略
+appendfsync everysec
+
+# AOF 文件名称
+appendfilename "appendonly.aof"
+
+# 是否重写 AOF 文件
+auto-aof-rewrite-min-size 64mb
+auto-aof-rewrite-percentage 100
+
+### 日志记录
+# 日志等级
+loglevel notice
+
+# 日志输出类型
+logfile /var/log/redis/redis-server.log
+
+### 系统资源限制
+# TCP backlog,根据指定的数量来控制 TCP 连接数
+tcp-backlog 511
+
+### 内存管理
+# Redis 最大使用内存
+# maxmemory 0
+
+# Redis 内存回收策略
+maxmemory-policy volatile-lru
+
+# 指定内存样本大小
+maxmemory-samples 5
+
+$config_cluster
+
+# ####### CLUSTER DOCKER/NAT support #######
+
+### 其他配置
+# 数据库 index 默认为 0
+# databases 0
+
+EOL
+                )
+
+                # 覆盖写入
+                over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content" "$DATA_VOLUME_DIR/redis_billing_center/conf/$port/redis.conf"
+            done
+
+            log_info "已删除 redis_billing_center 历史数据"
+        else
+            log_info "未删除 redis_billing_center 历史数据"
+        fi
+
+        # 网络配置
+        cat >>"$docker_compose_file" <<-EOM
+networks: # 网络配置
+  $BRIDGE_REDIS_BILLING_CENTER: # 网络名称
+    driver: bridge # 网络驱动
+    name: $BRIDGE_REDIS_BILLING_CENTER # 网络名称
+    ipam: # IP地址管理
+      config: # IP地址配置
+        - subnet: "$SUBNET_REDIS_BILLING_CENTER" # 子网
+          gateway: "$GATEWAY_REDIS_BILLING_CENTER" # 网关
+EOM
+        # 启动 redis 容器
+        start_db_redis_billing_center
+
+        # 创建 redis 集群
+        if [ "$all_remove_data" == "y" ] && [ "$is_redis_cluster" = "y" ]; then
+            log_info "redis 集群开启"
+            redis_name="redis-$IMG_VERSION_REDIS-$REDIS_BASE_PORT_BILLING_CENTER"
+            # 创建 redis 集群 执行命令 输入 yes
+            REDIS_CLI_COMMAND="echo yes | redis-cli -h $redis_name -p $REDIS_BASE_PORT_BILLING_CENTER -a $REDIS_PASSWORD_BILLING_CENTER --cluster-replicas 1 --cluster create $cluster_urls"
+
+            # 打印交互命令
+            log_debug "执行命令: sudo docker exec -it $redis_name /bin/bash -c \"$REDIS_CLI_COMMAND\""
+
+            # 执行命令不使用交互
+            sudo docker exec -i "$redis_name" /bin/bash -c "$REDIS_CLI_COMMAND"
+            log_info "redis 集群创建完成"
+        fi
+    }
+
+    log_timer "redis 启动完毕" run
+
+    log_info "redis_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
 }
 
-# 停止并删除 pgsql_billing_center 数据库
-delete_db_pgsql_billing_center() {
-  log_debug "run delete_db_pgsql_billing_center"
+# 停止并删除 redis 数据库(billing center)
+delete_db_redis_billing_center() {
+    log_debug "run delete_db_redis_billing_center"
 
-  local is_delete
-  is_delete=$(read_user_input "确认停止 pgsql_billing_center 服务并删除数据吗(默认n) [y|n] " "n")
+    local is_delete
+    is_delete=$(read_user_input "确认停止 redis_billing_center 服务并删除数据吗(默认n) [y|n]? " "n")
 
-  if [[ "$is_delete" == "y" ]]; then
-    # 停止容器
-    stop_db_pgsql_billing_center
+    if [[ "$is_delete" == "y" ]]; then
+        # 停止容器
+        stop_db_redis_billing_center
 
-    # 删除数据库数据
-    sudo rm -rf "$DATA_VOLUME_DIR/pgsql_billing_center"
-  fi
+        # 删除数据库数据
+        sudo rm -rf "$DATA_VOLUME_DIR/redis_billing_center"
+    fi
 }
 
 ### content from db/redis.sh
@@ -7751,349 +8195,6 @@ delete_db_redis() {
 
         # 删除数据库数据
         sudo rm -rf "$DATA_VOLUME_DIR/redis"
-    fi
-}
-
-### content from db/redis_billing_center.sh
-# 启动 redis 容器(billing center)
-start_db_redis_billing_center() {
-    log_debug "run start_db_redis_billing_center"
-
-    # 权限设置
-    setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
-
-    sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" up -d # 启动容器
-}
-
-# 停止 redis 容器(billing center)
-stop_db_redis_billing_center() {
-    log_debug "run stop_db_redis_billing_center"
-    sudo docker compose -f "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true
-}
-
-# 按当前 docker compose 直接重启 redis 容器(billing center).
-# 返回: 完成 down/up 重启流程.
-restart_db_redis_billing_center_by_compose() {
-    log_debug "run restart_db_redis_billing_center_by_compose"
-
-    restart_db_by_handlers "stop_db_redis_billing_center" "start_db_redis_billing_center"
-}
-
-# 对比版本后重启 redis 容器(billing center).
-# 返回: 版本一致时直接重启; 版本不一致时按用户选择执行.
-restart_db_redis_billing_center() {
-    log_debug "run restart_db_redis_billing_center"
-
-    restart_db_with_version_choice \
-        "redis_billing_center" \
-        "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" \
-        "redis" \
-        "$IMG_VERSION_REDIS" \
-        "restart_db_redis_billing_center_by_compose" \
-        "" \
-        "stop_db_redis_billing_center" \
-        "start_db_redis_billing_center"
-}
-
-# 创建 redis 数据库(billing center)
-install_db_redis_billing_center() {
-    log_debug "run install_db_redis_billing_center"
-    # shellcheck disable=SC2329
-    run() {
-        local is_redis_cluster # 是否创建 redis 集群 默认不创建
-        local all_remove_data  # 是否删除历史数据 默认不删除
-
-        # 根据运行模式决定是否询问
-        is_redis_cluster=$(read_user_input "[1/2]是否创建 redis_billing_center 集群(默认n) [y|n]? " "n")
-        all_remove_data=$(read_user_input "[2/2]是否删除 redis_billing_center (默认n) [y|n]? " "n")
-
-        if [ ! -d "$DATA_VOLUME_DIR" ]; then
-            # 如果不存在则创建
-            setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-        fi
-
-        setup_directory "$DB_UID" "$DB_GID" 755 "$DATA_VOLUME_DIR/redis_billing_center"
-
-        # ? ===============重要提示===============
-
-        # 由于 docker 中创建 redis sentinel 无法使用自定义网络和 docker0 网络通信
-        # 集群和哨兵不能使用 docker 的 NAT 模式 使用 host 模式
-        # 需要使用 --net=host 的方式创建,外部访问需要打开对应端口
-        # 参考官网: https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/
-
-        # ? ===============重要提示===============
-
-        # 创建一个名为 docker-compose.yaml 的新文件
-        local docker_compose_file="$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER"
-
-        # 如果存在 docker-compose.yaml 执行docker compose down
-        if [ -f "$docker_compose_file" ]; then
-            sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_REDIS_BILLING_CENTER" down || true # 删除容器
-            touch "$docker_compose_file"
-        fi
-        cat >"$docker_compose_file" <<-EOM
-services:
-EOM
-
-        # 单节点,将主从节点设置为 1，从节点设置为 0
-        if [ "$is_redis_cluster" == "n" ]; then
-            MASTER_COUNT=1
-            SLAVE_COUNT=0
-        fi
-
-        cluster_urls="" # 集群节点地址
-        redis_ips=""    # ip地址拼接
-        # 追加写入 docker-compose 配置文件
-        for ((port = REDIS_BASE_PORT_BILLING_CENTER; port < REDIS_BASE_PORT_BILLING_CENTER + MASTER_COUNT + SLAVE_COUNT; port++)); do
-            port_cluster=$((port + 10000))                                                                   # port_cluster 自增 集群监控端口
-            ip_node="$IPV4_BASE_REDIS_BILLING_CENTER.$(((port - REDIS_BASE_PORT_BILLING_CENTER + 2) % 256))" # ip_node 自增 从 2 开始, 1 为网关
-
-            # DOCKER_NAMES+=("redis-$IMG_VERSION_REDIS-$port")      # 增加主节点
-            cluster_urls+="redis-$IMG_VERSION_REDIS-$port:$port " # 集群节点 名称
-            redis_ips+="$ip_node "                                # 集群节点地址
-
-            # 追加写入主节点 docker-compose 配置文件
-            cat >>"$docker_compose_file" <<-EOM
-
-  redis-$IMG_VERSION_REDIS-$port:
-    image: 'redis:$IMG_VERSION_REDIS'
-    restart: always
-    container_name: redis-$IMG_VERSION_REDIS-$port
-    user: '$DB_UID:$DB_GID' # DOCKERFILE 中设置的用户
-    volumes:
-      - $DATA_VOLUME_DIR/redis_billing_center/data/$port:/data
-      - $DATA_VOLUME_DIR/redis_billing_center/conf/$port:/usr/local/etc/redis # 配置文件需要指定文件夹否则会无法写入
-      - $DATA_VOLUME_DIR/redis_billing_center/log/$port:/var/log/redis
-
-    command: [/usr/local/etc/redis/redis.conf] # 指定配置文件重新加载
-
-    ports: # 映射端口，对外提供服务
-      - "$port:$port" # redis 的服务端口
-      - "$port_cluster:$port_cluster" # redis 集群监控端口
-    # stdin_open: true # 标准输入打开
-    # tty: true # 终端打开
-    # privileged: true # 拥有容器内命令执行的权限
-
-    networks: # docker 网络设置
-      $BRIDGE_REDIS_BILLING_CENTER: # 网络名称
-          ipv4_address: $ip_node
-EOM
-        done
-
-        # 删除历史数据 redis_billing_center
-        if [ "$all_remove_data" == "y" ]; then
-
-            # 删除历史数据
-            sudo rm -rf "$DATA_VOLUME_DIR/redis_billing_center"
-            if [ ! -d "$DATA_VOLUME_DIR" ]; then
-                # 如果不存在则创建
-                setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$DATA_VOLUME_DIR"
-            fi
-
-            # 创建新目录
-            setup_directory "$DB_UID" "$DB_GID" 755 \
-                "$DATA_VOLUME_DIR/redis_billing_center" \
-                "$DATA_VOLUME_DIR/redis_billing_center/data" \
-                "$DATA_VOLUME_DIR/redis_billing_center/conf" \
-                "$DATA_VOLUME_DIR/redis_billing_center/log"
-
-            # 删除原来配置 使用新建的配置文件
-            for ((port = REDIS_BASE_PORT_BILLING_CENTER; port < REDIS_BASE_PORT_BILLING_CENTER + MASTER_COUNT + SLAVE_COUNT; port++)); do
-
-                ip_node="$IPV4_BASE_REDIS_BILLING_CENTER.$(((port - REDIS_BASE_PORT_BILLING_CENTER + 2) % 256))" # ip_node 自增 从 2 开始, 1 为网关
-                setup_directory "$DB_UID" "$DB_GID" 755 \
-                    "$DATA_VOLUME_DIR/redis_billing_center/data/$port" \
-                    "$DATA_VOLUME_DIR/redis_billing_center/conf/$port" \
-                    "$DATA_VOLUME_DIR/redis_billing_center/log/$port"
-
-                # 默认集群配置为空
-                config_cluster=""
-
-                # 添加集群配置
-                if [ "${is_redis_cluster,,}" = "y" ]; then
-                    # 使用 heredoc 将多行文本赋值给变量
-                    config_cluster=$(
-                        cat <<EOF
-### 复制（主从同步）
-# 是否为复制只读
-slave-read-only yes
-
-# 主节点 密码
-masterauth "$REDIS_PASSWORD_BILLING_CENTER"
-
-### 集群配置
-# 开启集群模式至少三个主节点
-cluster-enabled yes
-cluster-config-file nodes.conf
-cluster-node-timeout 15000
-
-# #######CLUSTER DOCKER/NAT support#######
-# 集群和哨兵不能使用 docker 的 NAT 模式 使用 host 模式
-# 参考:https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/
-# cluster-announce-ip redis-$IMG_VERSION_REDIS-$port
-# cluster-announce-ip $HOST_INTRANET_IP
-
-cluster-announce-ip $ip_node
-cluster-announce-port $port
-cluster-announce-bus-port 1$port
-EOF
-                    )
-
-                fi
-
-                # redis.conf 配置文件
-                content=$(
-                    cat <<EOL
-# Redis 配置文件
-######################
-
-### 一般设置
-# 绑定 IP (默认情况下,Redis 只允许本地连接)
-# bind 127.0.0.1 $ip_node
-# bind 127.0.0.1
-bind 0.0.0.0
-
-# Redis 监听端口 (默认为 6379)
-port $port
-
-# 启用保护模式:no, 关闭 docker 外部才能访问。
-protected-mode no
-
-# 设置密码
-requirepass "$REDIS_PASSWORD_BILLING_CENTER"
-
-### 客户端设置
-# 客户端空闲超时时间(单位:秒),设置成 0 则表示不限制客户端空闲时间
-timeout 0
-
-# 最大客户端连接数,默认为 10000
-maxclients 10000
-
-### 数据存储
-# 指定数据文件存放目录
-dir ./
-
-# 如果至少有 1 个 key 在 900 秒内被修改了,则生成 RDB 文件
-save 900 1
-
-# 如果至少有 10 个 key 在 300 秒内被修改了,则生成 RDB 文件
-save 300 10
-
-# 如果至少有 10000 个 key 在 60 秒内被修改了,则生成 RDB 文件
-save 60 10000
-
-# RDB 文件名称
-dbfilename dump.rdb
-
-# 是否启用 RDB 文件压缩
-rdbcompression yes
-
-# 是否使用 CRC64 校验 RDB 文件
-rdbchecksum yes
-
-### AOF 
-# 启用 AOF 持久化
-appendonly yes
-
-# AOF 历史策略
-appendfsync everysec
-
-# AOF 文件名称
-appendfilename "appendonly.aof"
-
-# 是否重写 AOF 文件
-auto-aof-rewrite-min-size 64mb
-auto-aof-rewrite-percentage 100
-
-### 日志记录
-# 日志等级
-loglevel notice
-
-# 日志输出类型
-logfile /var/log/redis/redis-server.log
-
-### 系统资源限制
-# TCP backlog,根据指定的数量来控制 TCP 连接数
-tcp-backlog 511
-
-### 内存管理
-# Redis 最大使用内存
-# maxmemory 0
-
-# Redis 内存回收策略
-maxmemory-policy volatile-lru
-
-# 指定内存样本大小
-maxmemory-samples 5
-
-$config_cluster
-
-# ####### CLUSTER DOCKER/NAT support #######
-
-### 其他配置
-# 数据库 index 默认为 0
-# databases 0
-
-EOL
-                )
-
-                # 覆盖写入
-                over_write_set_owner "$DB_UID" "$DB_GID" 600 "$content" "$DATA_VOLUME_DIR/redis_billing_center/conf/$port/redis.conf"
-            done
-
-            log_info "已删除 redis_billing_center 历史数据"
-        else
-            log_info "未删除 redis_billing_center 历史数据"
-        fi
-
-        # 网络配置
-        cat >>"$docker_compose_file" <<-EOM
-networks: # 网络配置
-  $BRIDGE_REDIS_BILLING_CENTER: # 网络名称
-    driver: bridge # 网络驱动
-    name: $BRIDGE_REDIS_BILLING_CENTER # 网络名称
-    ipam: # IP地址管理
-      config: # IP地址配置
-        - subnet: "$SUBNET_REDIS_BILLING_CENTER" # 子网
-          gateway: "$GATEWAY_REDIS_BILLING_CENTER" # 网关
-EOM
-        # 启动 redis 容器
-        start_db_redis_billing_center
-
-        # 创建 redis 集群
-        if [ "$all_remove_data" == "y" ] && [ "$is_redis_cluster" = "y" ]; then
-            log_info "redis 集群开启"
-            redis_name="redis-$IMG_VERSION_REDIS-$REDIS_BASE_PORT_BILLING_CENTER"
-            # 创建 redis 集群 执行命令 输入 yes
-            REDIS_CLI_COMMAND="echo yes | redis-cli -h $redis_name -p $REDIS_BASE_PORT_BILLING_CENTER -a $REDIS_PASSWORD_BILLING_CENTER --cluster-replicas 1 --cluster create $cluster_urls"
-
-            # 打印交互命令
-            log_debug "执行命令: sudo docker exec -it $redis_name /bin/bash -c \"$REDIS_CLI_COMMAND\""
-
-            # 执行命令不使用交互
-            sudo docker exec -i "$redis_name" /bin/bash -c "$REDIS_CLI_COMMAND"
-            log_info "redis 集群创建完成"
-        fi
-    }
-
-    log_timer "redis 启动完毕" run
-
-    log_info "redis_billing_center 安装完成, 请使用 sudo docker ps -a 查看容器明细"
-}
-
-# 停止并删除 redis 数据库(billing center)
-delete_db_redis_billing_center() {
-    log_debug "run delete_db_redis_billing_center"
-
-    local is_delete
-    is_delete=$(read_user_input "确认停止 redis_billing_center 服务并删除数据吗(默认n) [y|n]? " "n")
-
-    if [[ "$is_delete" == "y" ]]; then
-        # 停止容器
-        stop_db_redis_billing_center
-
-        # 删除数据库数据
-        sudo rm -rf "$DATA_VOLUME_DIR/redis_billing_center"
     fi
 }
 
