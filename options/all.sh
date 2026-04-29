@@ -222,7 +222,6 @@ OPTIONS_USER_NOT_SHOW=(
     "更新 IK 自定义词典:update_my_dic"
     "更新 IK 自定义词典(文件):update_my_dic_by_file"
     "删除 es 和 kibana:delete_es_kibana"
-    "全新安装所有数据库:reset_install_database"
     "重启所有数据库:restart_database"
 
     # 拉取
