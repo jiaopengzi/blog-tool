@@ -41,8 +41,8 @@ sudo bash blog-tool.sh
 | 后端 | blog-server (Go) | Docker 容器化部署 |
 | 前端 | blog-client (Nginx) | Docker 容器化部署 |
 | 数据库 | PostgreSQL 18.3 | 支持自定义配置 |
-| 缓存 | Redis 8.6.1 | 支持单节点和集群模式 |
-| 搜索引擎 | Elasticsearch 9.3.2 | 支持多节点集群、IK 分词器、Kibana |
+| 缓存 | Redis 8.6.2 | 支持单节点和集群模式 |
+| 搜索引擎 | Elasticsearch 9.3.3 | 支持多节点集群、IK 分词器、Kibana |
 | 证书 | 自签名 CA + SSL/TLS | 自动生成 |
 
 ## 构建版本
