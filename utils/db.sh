@@ -475,17 +475,41 @@ delete_database_billing_center() {
     fi
 }
 
-# 重启数据库
+# 重启数据库, 重启前询问用户确认, 重启后同步重启 server 服务.
+# 返回: 用户取消时直接返回; 成功时完成数据库及 server 重启.
 restart_database() {
     log_debug "run restart_database"
+
+    local confirm
+    confirm=$(read_user_input "重启数据库将造成服务中断, 确认继续吗(默认n) [y|n]? " "n")
+    if [[ "$confirm" != "y" ]]; then
+        log_info "已取消重启数据库"
+        return 0
+    fi
+
     restart_db_pgsql
     restart_db_redis
     restart_db_es
+
+    log_info "数据库重启完成, 开始重启 server 服务"
+    docker_server_restart
 }
 
-# 重启数据库(billing center)
+# 重启数据库(billing center), 重启前询问用户确认, 重启后同步重启 billing center 服务.
+# 返回: 用户取消时直接返回; 成功时完成数据库及 billing center 重启.
 restart_database_billing_center() {
     log_debug "run restart_database_billing_center"
+
+    local confirm
+    confirm=$(read_user_input "重启数据库将造成服务中断, 确认继续吗(默认n) [y|n]? " "n")
+    if [[ "$confirm" != "y" ]]; then
+        log_info "已取消重启计费中心数据库"
+        return 0
+    fi
+
     restart_db_pgsql_billing_center
     restart_db_redis_billing_center
+
+    log_info "计费中心数据库重启完成, 开始重启 billing center 服务"
+    docker_billing_center_restart
 }
