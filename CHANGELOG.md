@@ -5,6 +5,16 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.0.8] - 2026-04-29
+
+### ⏪ Revert
+
+- 一键安装依赖数据库安装，不能移除
+
+### 🐞 Fix
+
+- 日志和动画配合导致光标在日志之前的问题
+
 ## [v1.0.7] - 2026-04-29
 
 ### 🐞 Fix
