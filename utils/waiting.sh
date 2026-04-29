@@ -8,13 +8,10 @@
 # 内部变量：存储等待动画的后台进程ID
 __spinner_pid=""
 
-# 内部变量: 记录是否设置过滚动区域(DECSTBM), 用于 stop 时正确还原
-__spinner_scroll_set=""
-
 # 内部变量: 信号兜底 trap 是否已经安装(避免重复安装)
 __spinner_trap_installed=""
 
-# 内部函数: 信号/退出兜底清理, 防止 Ctrl+C 后 spinner 进程残留与终端滚动区域错乱
+# 内部函数: 信号/退出兜底清理, 防止 Ctrl+C 后 spinner 进程残留
 __spinner_cleanup_on_exit() {
     # 不调用 log 函数, 避免在退出阶段产生递归输出
     stop_spinner 2>/dev/null || true
@@ -34,6 +31,10 @@ __spinner_install_trap() {
 }
 
 # 开始等待动画
+# 设计:
+#   - 采用 \r 跟随光标方案: spinner 始终写在 "当前光标所在行" 的行首
+#   - 不使用 DECSTBM 滚动区域, 避免在大量日志/不规则换行场景下产生残留与错位
+#   - 配合 utils/log.sh 中日志写入前的 \r\033[2K, 实现 spinner 与日志输出无缝交替
 start_spinner() {
     # 如果动画已经在运行, 直接返回
     if [ -n "$__spinner_pid" ]; then
@@ -48,33 +49,21 @@ start_spinner() {
         return
     fi
 
-    # 安装信号兜底 trap, 防止异常退出后 spinner 进程残留与终端滚动区域错乱
+    # 安装信号兜底 trap, 防止异常退出后 spinner 进程残留
     __spinner_install_trap
-
-    # 取终端尺寸
-    local rows cols
-    rows=$(tput lines 2>/dev/null || echo 24)
-    cols=$(tput cols 2>/dev/null || echo 80)
-
-    # 设置滚动区域为 1..rows-1 行, 把最后一行从滚动区域中排除出来,
-    # 这样上方任何输出/换行/滚动都不会影响最后一行(spinner 所在行).
-    # \033[1;Hr 设置 DECSTBM; 设置后光标会跳到 (1,1), 因此再保存光标位置.
-    printf "\033[1;%dr" "$((rows - 1))" >&2
-    # 把光标移到滚动区底部(rows-1 行行首), 避免后续输出从顶部 (1,1) 开始
-    printf "\033[%d;1H" "$((rows - 1))" >&2
-    __spinner_scroll_set="1"
 
     # 当前帧索引
     local spin_index=0
 
     # 显示等待动画
-    # 每帧: 保存光标 -> 跳到最后一行行首 -> 清行并写入 spinner -> 恢复光标
-    # spinner 行被排除在滚动区外, 不会被命令输出推走, 位置稳定
+    # 每帧: \r 回到行首 -> 写入 spinner + 两个空格 -> 再 \r 把光标拉回行首
+    # 关键: 把光标停在行首, 这样并发的 stdout 输出(如 docker pull 的 "8.6.2: Pulling...")
+    #      会从行首开始打印, 自然覆盖掉 spinner 的 3 列字符, 不会出现 "⣟  8.6.2: ..." 拼接残留
     show_spinner() {
-        # 立即渲染首帧, 避免短命令一帧都看不到
-        printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
+        # 立即渲染首帧, 避免瞬时命令一帧都看不到
+        printf "\r%s  \r" "${spinner_frames[$spin_index]}" >&2
         while true; do
-            printf "\0337\033[%d;1H\033[2K%s\0338" "$rows" "${spinner_frames[$spin_index]}" >&2
+            printf "\r%s  \r" "${spinner_frames[$spin_index]}" >&2
             spin_index=$(((spin_index + 1) % ${#spinner_frames[@]}))
             sleep 0.2
         done
@@ -83,9 +72,6 @@ start_spinner() {
     # 启动等待动画作为后台进程
     show_spinner &
     __spinner_pid=$!
-
-    # 防止 cols 未使用导致 shellcheck 警告
-    : "$cols"
 }
 
 # 停止等待动画
@@ -100,13 +86,11 @@ stop_spinner() {
         __spinner_pid="" # 清空PID以避免再次停止
     fi
 
-    # 还原滚动区域, 并清掉 spinner 残留
-    if [ -n "$__spinner_scroll_set" ]; then
-        local rows
-        rows=$(tput lines 2>/dev/null || echo 24)
-        # 保存光标 -> 清掉最后一行 spinner -> 还原滚动区域 -> 恢复光标
-        printf "\0337\033[%d;1H\033[2K\033[r\0338" "$rows" >&2
-        __spinner_scroll_set=""
+    # 仅在 TTY 下才发送 ANSI 清除序列, 避免污染非 TTY 输出
+    if [ -t 2 ]; then
+        # \r 回到行首 -> \033[2K 整行清除, 光标停在行首
+        # 即使 spinner 后跟了更长的命令输出也能彻底清除, 避免 prompt 出现在行中部
+        printf "\r\033[2K" >&2
     fi
 }
 
