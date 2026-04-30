@@ -225,7 +225,11 @@ load_env_or_file_config() {
     else
         # 环境变量未设置, 尝试从文件加载
         load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist"
-        log_debug "${var_name} 已从配置文件读取: $config_file"
+        if [ -n "${!var_name:-}" ]; then
+            log_debug "${var_name} 已从配置文件读取: $config_file"
+        else
+            log_debug "${var_name} 未设置(环境变量与文件 $config_file 均无有效值)"
+        fi
     fi
 }
 
@@ -272,6 +276,13 @@ check_dev_var() {
         "运行模式" \
         "false"
 
+    # 腾讯仓库地址内置默认值, 如需覆盖可写入 blog_tool_env/private_registry_remote_server_tencent
+    load_config_from_file_and_validate \
+        REGISTRY_REMOTE_SERVER_TENCENT \
+        "$BLOG_TOOL_ENV/private_registry_remote_server_tencent" \
+        "腾讯仓库地址" \
+        "false"
+
     # pro 模式下 token 为可选配置, 仅在已提供时加载, 不要求必须存在
     if run_mode_is_pro; then
         load_env_or_file_config \
@@ -293,6 +304,21 @@ check_dev_var() {
             GITEE_TOKEN \
             "$BLOG_TOOL_ENV/gitee_token" \
             "gitee token" \
+            "false"
+
+        # 腾讯云公共仓库凭据(可选, 仅推送时需要; 拉取无需登录)
+        load_env_or_file_config \
+            REGISTRY_USER_NAME_TENCENT \
+            REGISTRY_USER_NAME_TENCENT \
+            "$BLOG_TOOL_ENV/private_user_tencent" \
+            "腾讯仓库用户名" \
+            "false"
+
+        load_env_or_file_config \
+            REGISTRY_PASSWORD_TENCENT \
+            REGISTRY_PASSWORD_TENCENT \
+            "$BLOG_TOOL_ENV/private_password_tencent" \
+            "腾讯仓库密码" \
             "false"
 
         return 0
@@ -336,6 +362,21 @@ check_dev_var() {
         REGISTRY_PASSWORD \
         "$BLOG_TOOL_ENV/private_password" \
         "私有仓库密码"
+
+    # 腾讯云公共仓库凭据(可选, 仅推送时需要; 拉取无需登录)
+    load_env_or_file_config \
+        REGISTRY_USER_NAME_TENCENT \
+        REGISTRY_USER_NAME_TENCENT \
+        "$BLOG_TOOL_ENV/private_user_tencent" \
+        "腾讯仓库用户名" \
+        "false"
+
+    load_env_or_file_config \
+        REGISTRY_PASSWORD_TENCENT \
+        REGISTRY_PASSWORD_TENCENT \
+        "$BLOG_TOOL_ENV/private_password_tencent" \
+        "腾讯仓库密码" \
+        "false"
 
     # 开发环境基础配置(交互式加载, 首次运行时输入, 之后从文件读取)
     load_interactive_config \

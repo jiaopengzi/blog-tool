@@ -50,6 +50,7 @@ OPTIONS_ALL=(
 
     # 私有仓库
     "运行私有分发镜像仓库:docker_run_registry"
+    "推送 db 镜像到腾讯仓库:push_db_images_public_registry_tencent"
 
     # 安装数据库
     "安装数据库:install_database"

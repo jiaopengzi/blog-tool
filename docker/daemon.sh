@@ -43,30 +43,21 @@ set_daemon_config() {
 EOF
 
     # 根据网络环境添加镜像加速
-    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
-        log_debug "检测到国内网络环境, 使用国内镜像加速"
+    # 区域分类: tencent_cn(国内腾讯云) / cn_non_tencent(国内非腾讯云) / overseas(国外)
+    # 仅在 tencent_cn 时配置加速地址 https://mirror.ccs.tencentyun.com/, 其他区域不配置加速
+    local region
+    region=$(detect_docker_region)
 
-        # 检测腾讯云内网镜像是否可达, 可达则置于第一位
-        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
-            log_debug "腾讯云内网镜像可达, 优先使用"
-            cat >>"$tmp_file" <<'EOF'
+    if [ "$region" = "tencent_cn" ]; then
+        log_debug "检测到国内腾讯云环境, 启用腾讯内网镜像加速"
+        cat >>"$tmp_file" <<'EOF'
   ,
   "registry-mirrors": [
-    "https://mirror.ccs.tencentyun.com/",
-    "https://docker.1ms.run",
-    "https://docker.xuanyuan.me"
+    "https://mirror.ccs.tencentyun.com/"
   ]
 EOF
-        else
-            log_debug "腾讯云内网镜像不可达, 使用常规镜像加速"
-            cat >>"$tmp_file" <<'EOF'
-  ,
-  "registry-mirrors": [
-    "https://docker.1ms.run",
-    "https://docker.xuanyuan.me"
-  ]
-EOF
-        fi
+    else
+        log_debug "区域 $region, 不配置 docker registry 加速"
     fi
 
     # 关闭 JSON

@@ -274,6 +274,13 @@ docker_push_client() {
             # 推送到 Docker Hub
             docker_tag_push_docker_hub "blog-client" "$version"
 
+            # 推送到腾讯云公共仓库 (本地 build tag 来自 docker_build_client, 复用同一镜像)
+            local build_img_source="$REGISTRY_REMOTE_SERVER/blog-client"
+            if [ "${GITHUB_ACTIONS}" = "true" ]; then
+                build_img_source="blog-client"
+            fi
+            docker_tag_push_public_registry_tencent "$build_img_source" "build" "$version"
+
             # 产物发布到 GitHub 和 Gitee Releases
 
             # 打包产物
@@ -311,8 +318,8 @@ docker_pull_client() {
         }
         docker_private_registry_login_logout run
     else
-        timeout_retry_docker_pull "$DOCKER_HUB_OWNER/blog-client" "$version"
-        # sudo docker pull "$DOCKER_HUB_OWNER/blog-client:$version"
+        # 区域感知拉取: 国内非腾讯云走腾讯公共仓库, 拉取后 tag 回 $DOCKER_HUB_OWNER/blog-client
+        docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-client" "$version"
     fi
 }
 

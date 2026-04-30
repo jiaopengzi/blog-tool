@@ -499,3 +499,136 @@ docker_private_registry_login_logout() {
 
     return "$run_status"
 }
+
+# 镜像打标签并推送到腾讯云公共仓库
+# 参数: $1 本地镜像名称(标准 docker hub 风格, 如 redis / postgres / elasticsearch / $DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 本地镜像版本(本地 tag, 例如 8.0.5、build、1.0.8)
+# 参数: $3 推送到腾讯仓库时使用的版本(例如 8.0.5、1.0.8); 不传则等于参数 2
+docker_tag_push_public_registry_tencent() {
+    log_debug "run docker_tag_push_public_registry_tencent"
+
+    local local_image="$1"
+    local local_version="$2"
+    local tencent_version="${3:-$2}"
+
+    if [ -z "$local_image" ] || [ -z "$local_version" ]; then
+        log_error "推送到腾讯仓库失败, 镜像名称和版本不能为空"
+        return 1
+    fi
+
+    if [ -z "$REGISTRY_REMOTE_SERVER_TENCENT" ]; then
+        log_error "腾讯仓库地址 REGISTRY_REMOTE_SERVER_TENCENT 未配置"
+        return 1
+    fi
+
+    if [ -z "$REGISTRY_USER_NAME_TENCENT" ] || [ -z "$REGISTRY_PASSWORD_TENCENT" ]; then
+        log_error "腾讯仓库用户名/密码未配置, 跳过推送 $local_image:$local_version"
+        log_error "请通过环境变量 REGISTRY_USER_NAME_TENCENT/REGISTRY_PASSWORD_TENCENT,"
+        log_error "或写入文件 $BLOG_TOOL_ENV/private_user_tencent 与 $BLOG_TOOL_ENV/private_password_tencent 后重试"
+        return 1
+    fi
+
+    # 取本地镜像的 basename, 与腾讯仓库 owner 拼接
+    local image_basename="${local_image##*/}"
+    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+
+    # 转换版本号为 Docker tag 兼容格式
+    local docker_tag_version
+    docker_tag_version=$(semver_to_docker_tag "$tencent_version")
+
+    # tag 镜像
+    sudo docker tag "$local_image:$local_version" "$tencent_image:$docker_tag_version"
+    sudo docker tag "$local_image:$local_version" "$tencent_image:latest"
+
+    # 显示密码前后3位
+    log_debug "腾讯密码 首尾3位: ${REGISTRY_PASSWORD_TENCENT:0:3}...${REGISTRY_PASSWORD_TENCENT: -3}"
+
+    # 腾讯仓库登录端点(去掉 owner 路径段)
+    local tencent_login_host="${REGISTRY_REMOTE_SERVER_TENCENT%%/*}"
+
+    # 登录腾讯仓库
+    docker_login_retry "$tencent_login_host" "$REGISTRY_USER_NAME_TENCENT" "$REGISTRY_PASSWORD_TENCENT"
+
+    # 推送
+    timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "$docker_tag_version"
+    waiting 5
+    timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "latest"
+
+    # 推送成功后清理本地腾讯前缀 tag, 避免污染本地镜像列表
+    sudo docker image rm "$tencent_image:$docker_tag_version" "$tencent_image:latest" >/dev/null 2>&1 || true
+
+    # 及时退出登录
+    sudo docker logout "$tencent_login_host" || true
+
+    log_info "推送到腾讯仓库成功: $tencent_image:$docker_tag_version"
+}
+
+# 区域感知镜像拉取: 国内非腾讯云从腾讯仓库拉取并 tag 回标准名, 其他区域走默认拉取.
+# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 版本
+docker_pull_image_with_region() {
+    log_debug "run docker_pull_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "区域感知拉取失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    local region
+    region=$(detect_docker_region)
+
+    if [ "$region" != "cn_non_tencent" ]; then
+        timeout_retry_docker_pull "$standard_image" "$version"
+        return $?
+    fi
+
+    # 国内非腾讯云: 从腾讯公共仓库拉取(无需登录), 拉取后 tag 为标准名以保持 compose 引用统一
+    local image_basename="${standard_image##*/}"
+    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+
+    log_info "检测到国内非腾讯云环境, 从腾讯公共仓库拉取: $tencent_image:$version"
+
+    timeout_retry_docker_pull "$tencent_image" "$version" || return 1
+
+    sudo docker tag "$tencent_image:$version" "$standard_image:$version"
+    sudo docker image rm "$tencent_image:$version" >/dev/null 2>&1 || true
+
+    log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
+}
+
+# 检测 docker 镜像源区域: 输出 tencent_cn | cn_non_tencent | overseas, 结果在进程内缓存
+DOCKER_REGION_CACHE=""
+detect_docker_region() {
+    if [ -n "$DOCKER_REGION_CACHE" ]; then
+        echo "$DOCKER_REGION_CACHE"
+        return 0
+    fi
+
+    local region="overseas"
+    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
+        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+            region="tencent_cn"
+        else
+            region="cn_non_tencent"
+        fi
+    fi
+
+    DOCKER_REGION_CACHE="$region"
+    log_debug "检测到 docker 镜像源区域: $region"
+    echo "$region"
+}
+
+# 推送 db 镜像(redis / postgres / elasticsearch)到腾讯公共仓库.
+# 需要本地已存在 redis:$IMG_VERSION_REDIS 等标准 tag 的镜像.
+push_db_images_public_registry_tencent() {
+    log_debug "run push_db_images_public_registry_tencent"
+
+    docker_tag_push_public_registry_tencent "redis" "$IMG_VERSION_REDIS" "$IMG_VERSION_REDIS"
+    docker_tag_push_public_registry_tencent "postgres" "$IMG_VERSION_PGSQL" "$IMG_VERSION_PGSQL"
+    docker_tag_push_public_registry_tencent "elasticsearch" "$IMG_VERSION_ES" "$IMG_VERSION_ES"
+
+    log_info "数据库基础镜像推送到腾讯公共仓库完成"
+}

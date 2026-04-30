@@ -30,6 +30,10 @@ REGISTRY_REMOTE_SERVER="" # 远端服务器地址
 REGISTRY_USER_NAME=""     # docker registry 用户名
 REGISTRY_PASSWORD=""      # 私有仓库密码
 
+# 腾讯云公共仓库配置, 推送时需要凭据, 拉取时无需登录; 地址默认值由 config/internal.sh 提供
+REGISTRY_USER_NAME_TENCENT="${REGISTRY_USER_NAME_TENCENT:-}" # 腾讯 docker registry 用户名
+REGISTRY_PASSWORD_TENCENT="${REGISTRY_PASSWORD_TENCENT:-}"   # 腾讯 docker registry 密码
+
 # 密码和 token 变量
 DOCKER_HUB_REMOTE_SERVER="docker.io"                 # 远端服务器地址
 DOCKER_HUB_TOKEN="${DOCKER_HUB_TOKEN:-}"             # docker hub token
@@ -41,9 +45,9 @@ COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"               # Cosign 标准密码环境
 
 # docker 镜像版本
 IMG_VERSION_ALPINE="latest"
-IMG_VERSION_GOLANG="1.26.1-alpine"
-IMG_VERSION_NODE="24.14.0"
-IMG_VERSION_NGINX="1.29.6-alpine"
+IMG_VERSION_GOLANG="1.26.2-alpine"
+IMG_VERSION_NODE="24.15.0"
+IMG_VERSION_NGINX="1.23.0-alpine"
 IMG_VERSION_REGISTRY="3"
 IMG_VERSION_HTTPD="2"
 

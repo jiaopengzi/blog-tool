@@ -71,6 +71,9 @@ DOCKER_CE_SOURCES=(
 DOCKER_HUB_REGISTRY="docker.io" # docker hub 仓库地址
 DOCKER_HUB_OWNER="jiaopengzi"   # docker hub 用户名
 
+# 腾讯云公共仓库地址, 用于国内非腾讯云环境免登录拉取公共镜像
+REGISTRY_REMOTE_SERVER_TENCENT="ccr.ccs.tencentyun.com/jiaopengzi"
+
 START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整

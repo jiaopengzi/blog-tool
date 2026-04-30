@@ -31,9 +31,9 @@ pull_docker_image_pro_db() {
 
     # 拉取必要的docker镜像
 
-    timeout_retry_docker_pull "redis" "$IMG_VERSION_REDIS"
-    timeout_retry_docker_pull "postgres" "$IMG_VERSION_PGSQL"
-    timeout_retry_docker_pull "elasticsearch" "$IMG_VERSION_ES"
+    docker_pull_image_with_region "redis" "$IMG_VERSION_REDIS"
+    docker_pull_image_with_region "postgres" "$IMG_VERSION_PGSQL"
+    docker_pull_image_with_region "elasticsearch" "$IMG_VERSION_ES"
 
     log_info "docker 生产环境数据库镜像拉取完成"
 }
@@ -44,8 +44,8 @@ pull_docker_image_pro_db_billing_center() {
 
     # 拉取必要的docker镜像
 
-    timeout_retry_docker_pull "redis" "$IMG_VERSION_REDIS"
-    timeout_retry_docker_pull "postgres" "$IMG_VERSION_PGSQL"
+    docker_pull_image_with_region "redis" "$IMG_VERSION_REDIS"
+    docker_pull_image_with_region "postgres" "$IMG_VERSION_PGSQL"
 
     log_info "docker 生产环境数据库镜像拉取完成"
 }
