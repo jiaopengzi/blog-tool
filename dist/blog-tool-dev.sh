@@ -606,8 +606,8 @@ DOCKER_COMPOSE_PROJECT_NAME_CLIENT="$APP_NAME-client"
 # 临时文件存放解码后的 python 脚本内容
 PY_SCRIPT_FILE="/tmp/embedded_python_main.py"
 
-WEB_INSTALL_SERVER_TIPS="当前需要全新安装 server 服务，会使用初始化覆盖原有配置，是否进行全新安装 \n默认选择n [y|n]? "
-WEB_SET_DB_TIPS="\n================================\n是否使用前端网页填写数据库信息?\n\n说明\n  如果自行单独设置数据就选择 y.\n  如果使用当前脚本工具安装了数据就选择 n.\n默认选择n [y|n]? "
+WEB_INSTALL_SERVER_TIPS="\n================================\n即将按初始化配置全新安装 blog-server 和 blog-client, 如有原配置将被覆盖.\n是否继续?\n默认选择n [y|n]? "
+WEB_SET_DB_TIPS="\n================================\n数据库连接信息是否由网页初始化向导填写?\n\n说明\n  选择 y: 服务启动后保持未初始化状态, 后续在前端网页填写数据库连接信息，通常为用户另有数据库.\n  选择 n: 使用当前脚本生成的数据库配置和密码.\n  如果数据库由本工具安装, 通常选择 n.\n默认选择n [y|n]? "
 
 ### content from options/all.sh
 # 当前文件不检测未使用的变量
