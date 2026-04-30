@@ -1,6 +1,8 @@
 # blog-tool
 
-博客系统一键部署工具，通过 Docker 在 Debian Ubuntu 服务器上自动化部署完整的博客系统。
+博客系统部署工具，通过 Docker 在 Debian Ubuntu 服务器上自动化部署完整的博客系统。
+
+**实际应用案例：[https://jiaopengzi.com](https://jiaopengzi.com)**
 
 ## 系统要求
 
@@ -36,7 +38,7 @@ sudo bash blog-tool.sh
 
 ### 3. 零交互一键安装
 
-如果需要在全新服务器上跳过命令面板和确认提示, 可以使用 `--auto` 模式：
+如果需要在全新服务器上跳过命令面板和确认提示, 可以使用 `--auto` 模式，推荐在自己没有域名内网使用：
 
 ```bash
 sudo bash blog-tool.sh --auto
@@ -47,26 +49,24 @@ sudo bash blog-tool.sh --auto
 #### Gitee (国内用户)
 
 ```bash
-curl -fsSL https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh | tee blog-tool.sh | sudo bash -s -- --auto
+curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh && sudo bash blog-tool.sh --auto
 ```
 
 #### GitHub
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jiaopengzi/blog-tool/main/dist/blog-tool.sh | tee blog-tool.sh | sudo bash -s -- --auto
+curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/main/dist/blog-tool.sh && sudo bash blog-tool.sh --auto
 ```
 
 如果需要传入可选参数, 将参数追加到 `--auto` 后即可：
 
 ```bash
-curl -fsSL https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh | tee blog-tool.sh | sudo bash -s -- --auto --domain=example.com --project_name=blog-server
+curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh && sudo bash blog-tool.sh --auto --domain=example.com --project_name=blog-server
 ```
 
-`--auto` 会自动接受免责声明, 安装基础依赖和 Docker, 拉取生产镜像, 初始化数据库, 并安装
-`blog-server` 与 `blog-client`。如果当前机器已经安装 Docker, 脚本会直接退出, 避免覆盖已有
-Docker 环境。
+`--auto` 会自动接受免责声明, 安装基础依赖和 Docker, 拉取生产镜像, 初始化数据库, 并安装 `blog-server` 与 `blog-client`。如果当前机器已经安装 Docker, 脚本会直接退出, 避免覆盖已有 Docker 环境。
 
-零交互完整示例：
+**零交互完整示例** 推荐自备域名和证书首次安装使用，先下载工具再执行如下零交互脚本（注意将参数内容换成自己的实际的内容）：
 
 ```bash
 sudo bash blog-tool.sh --auto \
@@ -75,7 +75,7 @@ sudo bash blog-tool.sh --auto \
  --public_ip=1.2.3.4 \
  --cert=/your/path/cert.pem \
  --cert_key=/your/path/cert.key \
- --admin_username=admin01 \
+ --admin_username=admin \
  --admin_email=admin@example.com \
  --admin_password='Password123'
 ```
@@ -95,13 +95,10 @@ sudo bash blog-tool.sh --auto \
 
 说明：
 
-- `--domain`、`--project_name`、`--public_ip` 不传时, 脚本会优先读取 `blog_tool_env` 中已有配置;
- 没有配置文件时使用默认值继续安装, 不会进入交互输入。
+- `--domain`、`--project_name`、`--public_ip` 不传时, 脚本会优先读取 `blog_tool_env` 中已有配置; 没有配置文件时使用默认值继续安装, 不会进入交互输入。
 - `--cert` 和 `--cert_key` 都不传时, 脚本跳过 nginx 证书复制; 只传其中一个会报错退出。
-- `--admin_username`、`--admin_email`、`--admin_password` 都不传时, 脚本跳过管理员自动注册;
- 只传其中任意一个会报错退出。
-- 管理员用户名必须是 6-20 位小写字母或数字; 管理员密码必须是 6-64 位, 且包含大写字母,
- 小写字母和数字。
+- `--admin_username`、`--admin_email`、`--admin_password` 都不传时, 脚本跳过管理员自动注册; 只传其中任意一个会报错退出。
+- 管理员用户名必须是 6-20 位小写字母或数字; 管理员密码必须是 6-64 位, 且包含大写字母, 小写字母和数字。
 - `--auto` 拉取生产镜像时默认包含 PostgreSQL、Redis、Elasticsearch 数据库镜像。
 
 ## 技术栈
