@@ -31,8 +31,10 @@ install_common_software() {
         echo 'export HISTFILESIZE=5000' | tee -a "$HOME/.bashrc"
     fi
 
-    # 安装 cosign（Ubuntu 默认 apt 源无此包，需单独安装二进制）
-    install_cosign
+    # cosign 仅用于开发/构建推送签名, 生产用户安装依赖时跳过
+    if run_mode_is_dev; then
+        install_cosign
+    fi
 
     # log_info "常用软件安装完成, 重启中..."
     # /usr/sbin/reboot
