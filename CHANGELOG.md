@@ -5,6 +5,28 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.2.0] - 2026-04-30
+
+### ♻️ Refactor
+
+- 优化描述
+
+### ⚡️ Perf
+
+- 优化 docker 安装脚本下载
+
+### ✨ Feat
+
+- 增加零交互安装功能
+
+### 🐞 Fix
+
+- 精确 blog-client 中的 域名替换
+- 签名工具只有在 dev 工具中安装
+- 证书生成顺序
+- 零交互自行生成自定义证书
+- 增加重试错误种类
+
 ## [v1.1.3] - 2026-04-30
 
 ### 🐞 Fix
