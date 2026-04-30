@@ -25,6 +25,17 @@ run_mode_is_dev() {
     fi
 }
 
+# 判断当前工具发行版是否为开发版
+blog_tool_build_type_is_dev() {
+    if [ "${BLOG_TOOL_BUILD_TYPE:-dev}" == "dev" ]; then
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为开发版"
+        return 0
+    else
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为 ${BLOG_TOOL_BUILD_TYPE:-dev}"
+        return 1
+    fi
+}
+
 # 获取镜像前缀
 get_img_prefix() {
     # 默认镜像前缀

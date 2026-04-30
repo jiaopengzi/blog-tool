@@ -711,6 +711,10 @@ build() {
     # 设置头部
     set_header "$target_file"
 
+    # 注入当前工具发行版类型, 与业务 RUN_MODE(dev/pro) 解耦
+    echo "BLOG_TOOL_BUILD_TYPE=\"$build_type\"" >>"$target_file"
+    echo "" >>"$target_file"
+
     # 根据构建类型选择用户配置文件
     if [ "$build_type" == "billing_center" ]; then
         handle_user "$target_file" "$USER_BILLING_CENTER_SH"

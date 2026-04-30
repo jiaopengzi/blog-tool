@@ -33,6 +33,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 # # 当前脚本所在目录相对路径
 # ROOT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
+BLOG_TOOL_BUILD_TYPE="user"
+
 ### content from config/user.sh
 # 当前文件不检测未使用的变量
 # shellcheck disable=SC2034
@@ -276,6 +278,8 @@ PY_BASE64_MAIN='H4sICO43iWkAA21haW4ucHkAzVfrb9NWFP+ev+LIFZINidMUmKZIUdUBm5BgIMYm
 # shellcheck disable=SC2034
 
 RUN_MODE="pro"
+
+BLOG_TOOL_BUILD_TYPE="${BLOG_TOOL_BUILD_TYPE:-dev}"
 
 DATA_VOLUME_DIR="$ROOT_DIR/volume"
 
@@ -2875,6 +2879,16 @@ run_mode_is_dev() {
     fi
 }
 
+blog_tool_build_type_is_dev() {
+    if [ "${BLOG_TOOL_BUILD_TYPE:-dev}" == "dev" ]; then
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为开发版"
+        return 0
+    else
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为 ${BLOG_TOOL_BUILD_TYPE:-dev}"
+        return 1
+    fi
+}
+
 get_img_prefix() {
     local img_prefix="$DOCKER_HUB_OWNER"
 
@@ -4253,7 +4267,7 @@ install_common_software() {
         echo 'export HISTFILESIZE=5000' | tee -a "$HOME/.bashrc"
     fi
 
-    if run_mode_is_dev; then
+    if blog_tool_build_type_is_dev; then
         install_cosign
     fi
 

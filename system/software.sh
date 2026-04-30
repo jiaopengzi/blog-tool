@@ -31,8 +31,8 @@ install_common_software() {
         echo 'export HISTFILESIZE=5000' | tee -a "$HOME/.bashrc"
     fi
 
-    # cosign 仅用于开发/构建推送签名, 生产用户安装依赖时跳过
-    if run_mode_is_dev; then
+    # cosign 仅用于开发版工具的构建推送签名, 生产用户发行版安装依赖时跳过
+    if blog_tool_build_type_is_dev; then
         install_cosign
     fi
 

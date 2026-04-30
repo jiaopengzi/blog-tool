@@ -33,6 +33,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 # # 当前脚本所在目录相对路径
 # ROOT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
+BLOG_TOOL_BUILD_TYPE="dev"
+
 ### content from config/user.sh
 # 当前文件不检测未使用的变量
 # shellcheck disable=SC2034
@@ -357,6 +359,9 @@ GATEWAY_IPV4="" # 默认网关, 通过 check_dev_var 交互式加载
 
 # 运行模式 dev | pro (开发环境 | 生产环境)
 RUN_MODE="pro"
+
+# 工具发行版类型 dev | user | billing_center, 由 build.sh 构建时注入
+BLOG_TOOL_BUILD_TYPE="${BLOG_TOOL_BUILD_TYPE:-dev}"
 
 # 数据根目录
 DATA_VOLUME_DIR="$ROOT_DIR/volume"
@@ -3690,6 +3695,17 @@ run_mode_is_dev() {
     fi
 }
 
+# 判断当前工具发行版是否为开发版
+blog_tool_build_type_is_dev() {
+    if [ "${BLOG_TOOL_BUILD_TYPE:-dev}" == "dev" ]; then
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为开发版"
+        return 0
+    else
+        log_debug "blog_tool_build_type_is_dev: 当前工具发行版为 ${BLOG_TOOL_BUILD_TYPE:-dev}"
+        return 1
+    fi
+}
+
 # 获取镜像前缀
 get_img_prefix() {
     # 默认镜像前缀
@@ -5614,8 +5630,8 @@ install_common_software() {
         echo 'export HISTFILESIZE=5000' | tee -a "$HOME/.bashrc"
     fi
 
-    # cosign 仅用于开发/构建推送签名, 生产用户安装依赖时跳过
-    if run_mode_is_dev; then
+    # cosign 仅用于开发版工具的构建推送签名, 生产用户发行版安装依赖时跳过
+    if blog_tool_build_type_is_dev; then
         install_cosign
     fi
 

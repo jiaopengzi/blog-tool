@@ -11,6 +11,9 @@
 # 运行模式 dev | pro (开发环境 | 生产环境)
 RUN_MODE="pro"
 
+# 工具发行版类型 dev | user | billing_center, 由 build.sh 构建时注入
+BLOG_TOOL_BUILD_TYPE="${BLOG_TOOL_BUILD_TYPE:-dev}"
+
 # 数据根目录
 DATA_VOLUME_DIR="$ROOT_DIR/volume"
 
