@@ -6732,6 +6732,10 @@ copy_client_config() {
         "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
         "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
 
+    sudo sed -r -i \
+        "s/server_name[[:space:]]+[^;]+;/server_name $DOMAIN_NAME;/g" \
+        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
+
     log_info "client 复制配置文件到 volume success"
 }
 
