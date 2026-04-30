@@ -284,6 +284,15 @@ append_main() {
 
     cat >>"$target_file" <<-EOM
 main() {
+    if [ "\${1:-}" = "--auto" ]; then
+        if [ "$build_type" = "billing_center" ]; then
+            echo "billing-center 发行版不支持 --auto 一键安装 blog-server/blog-client" >&2
+            exit 1
+        fi
+        auto_one_click_install "\$@"
+        return
+    fi
+
     # 免责声明
     disclaimer_msg
     # 检查

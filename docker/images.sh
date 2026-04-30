@@ -55,7 +55,12 @@ pull_docker_image_pro_all() {
     log_debug "run pull_docker_image_pro_all"
 
     local has_db
-    has_db=$(read_user_input "是否包含数据库镜像 pgsql redis es (默认y) [y|n]? " "y")
+    if [ "${AUTO_MODE:-false}" = "true" ]; then
+        has_db="y"
+        log_info "--auto 模式默认包含数据库镜像 pgsql redis es"
+    else
+        has_db=$(read_user_input "是否包含数据库镜像 pgsql redis es (默认y) [y|n]? " "y")
+    fi
 
     if [[ "$has_db" == "y" ]]; then
         pull_docker_image_pro_db

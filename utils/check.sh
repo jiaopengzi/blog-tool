@@ -41,6 +41,10 @@ check_env_path() {
 
     local paths_to_check=("/usr/bin" "/bin" "/usr/sbin" "/sbin")
     local missing_paths=()
+    local export_cmd
+    local is_add
+    local path_suffix
+
     for path in "${paths_to_check[@]}"; do
         if ! echo "$PATH" | grep -qE "(^|:)$path(:|$)"; then
             missing_paths+=("$path")
@@ -48,13 +52,24 @@ check_env_path() {
     done
 
     if [ ${#missing_paths[@]} -ne 0 ]; then
+        if [ "${AUTO_MODE:-false}" = "true" ]; then
+            path_suffix=$(printf ':%s' "${missing_paths[@]}")
+            export_cmd="export PATH=\$PATH$path_suffix"
+            PATH="$PATH$path_suffix"
+            printf '%s\n' "$export_cmd" >>"$HOME/.bashrc"
+            printf '%s\n' "$export_cmd" >>"/root/.bashrc"
+            log_info "--auto 模式已自动补齐 PATH: ${missing_paths[*]}"
+            return 0
+        fi
+
         # 提示用户是否添加缺少的路径到环境变量 PATH 中
         printf '\n环境变量 PATH 中缺少以下路径: %s\n\n' "${missing_paths[*]}"
         is_add=$(read_user_input "是否将它们添加到 PATH 中以确保脚本正常运行.(默认n) [y|n]? " "n")
         if [ "$is_add" == "y" ]; then
             # 拿到合并和的字符串 echo >> 添加到 当前用户的 ~/.bashrc 文件中 和 root 用户的 ~/.bashrc 文件中
             # 合并路径为一个 export 语句, 一次性追加到文件
-            export_cmd="export PATH=\$PATH$(printf ':%s' "${missing_paths[@]}")"
+            path_suffix=$(printf ':%s' "${missing_paths[@]}")
+            export_cmd="export PATH=\$PATH$path_suffix"
             printf '%s\n' "$export_cmd" >>"$HOME/.bashrc"
             printf '%s\n' "$export_cmd" >>"/root/.bashrc"
 
@@ -94,6 +109,12 @@ check_install_base() {
 
     # 如果有缺少的命令则安装基础软件
     if [ ${#missing_commands[@]} -ne 0 ]; then
+        if [ "${AUTO_MODE:-false}" = "true" ]; then
+            log_info "--auto 模式检测到缺少基础软件, 将自动安装: ${missing_commands[*]}"
+            install_common_software
+            return 0
+        fi
+
         log_warn "检测到未安装基础软件"
         is_install=$(read_user_input "是否开始安装基础依赖软件(默认n) [y|n]? " "n")
         if [ "$is_install" == "y" ]; then
@@ -132,6 +153,13 @@ load_interactive_config() {
         if [ -n "$file_value" ]; then
             # 文件存在且非空, 直接使用文件中的值
             printf -v "$var_name" '%s' "$file_value"
+        elif [ "${AUTO_MODE:-false}" = "true" ]; then
+            if [ -z "$default_value" ]; then
+                log_error "--auto 模式缺少配置: $var_name"
+                exit 1
+            fi
+            printf -v "$var_name" '%s' "$default_value"
+            log_info "--auto 模式使用默认配置 $var_name=${!var_name}"
         else
             # 文件不存在或内容为空, 提示用户重新输入
             if [ -f "$config_file" ] && [ -z "$file_value" ]; then
