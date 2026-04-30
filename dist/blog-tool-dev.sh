@@ -1166,6 +1166,8 @@ gen_my_ca_cert() {
 
 # 生成前端 nginx 证书
 gen_client_nginx_cert() {
+    gen_my_ca_cert
+
     # 初始化目录
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$CERTS_NGINX"
 

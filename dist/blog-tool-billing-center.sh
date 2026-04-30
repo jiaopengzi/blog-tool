@@ -835,6 +835,8 @@ gen_my_ca_cert() {
 }
 
 gen_client_nginx_cert() {
+    gen_my_ca_cert
+
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$CERTS_NGINX"
 
     if [ ! -f "$CERTS_NGINX/cert.pem" ]; then
