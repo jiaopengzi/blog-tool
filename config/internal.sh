@@ -46,10 +46,10 @@ IS_INSTALL_SOFTWARE=""
 # Docker CE 镜像源列表
 DOCKER_CE_SOURCES=(
     "https://mirrors.aliyun.com/docker-ce|阿里云公网"
-    "http://mirrors.cloud.aliyuncs.com|阿里云内网"
-    "http://mirrors.aliyuncs.com|阿里云内网经典"
+    # "http://mirrors.cloud.aliyuncs.com/docker-ce|阿里云内网"
+    # "http://mirrors.aliyuncs.com/docker-ce|阿里云内网经典"
     "https://mirrors.tencent.com/docker-ce|腾讯云公网"
-    "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
+    # "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
     "https://mirrors.163.com/docker-ce|网易云"
     "https://mirrors.cernet.edu.cn/docker-ce|中国教育网"
     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce|清华大学"

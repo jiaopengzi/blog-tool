@@ -15,10 +15,24 @@ __install_docker() {
     # 先执行备份，同时避免镜像源不一致导致的问题
     docker_install_backup
 
-    # 脚本下载地址
-    local script_url="https://get.docker.com"
-
     local script_file="./install-docker.sh"
+    local script_url=""
+    local script_download_success="false"
+
+    local region
+    region=$(detect_docker_region)
+
+    local script_urls=()
+    if [[ "$region" == "tencent_cn" || "$region" == "cn_non_tencent" ]]; then
+        script_urls=(
+            "https://gitee.com/jiaopengzi/docker-install/raw/master/install.sh"
+            "https://get.docker.com"
+        )
+    else
+        script_urls=(
+            "https://get.docker.com"
+        )
+    fi
 
     # 下载脚本
     # shellcheck disable=SC2329
@@ -29,7 +43,18 @@ __install_docker() {
     }
 
     # 手动重试下载脚本，最多重试 5 次, 初始延迟 2 秒
-    if ! retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+    for item in "${script_urls[@]}"; do
+        script_url="$item"
+        log_info "准备下载 docker 安装脚本: $script_url"
+        if retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+            script_download_success="true"
+            break
+        fi
+
+        log_warn "当前 docker 安装脚本地址不可用, 尝试下一个地址"
+    done
+
+    if [[ "$script_download_success" != "true" ]]; then
         log_error "下载 docker 安装脚本失败, 请检查网络连接"
         exit 1
     fi

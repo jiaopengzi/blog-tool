@@ -43,7 +43,7 @@ find_fastest_docker_mirror() {
             # --connect-timeout: 连接阶段的超时时间
             # --max-time: 整个操作的超时时间
             local time_total
-            time_total=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
+            time_total=$(curl -fsSL -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
 
             # 检查 curl 命令本身是否成功执行 (即没有因为超时等原因被中断)
             # 如果 curl 失败, 它的退出码非0, 并且 time_total 可能为空

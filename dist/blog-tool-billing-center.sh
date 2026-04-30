@@ -294,10 +294,7 @@ IS_INSTALL_SOFTWARE=""
 
 DOCKER_CE_SOURCES=(
     "https://mirrors.aliyun.com/docker-ce|阿里云公网"
-    "http://mirrors.cloud.aliyuncs.com|阿里云内网"
-    "http://mirrors.aliyuncs.com|阿里云内网经典"
     "https://mirrors.tencent.com/docker-ce|腾讯云公网"
-    "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
     "https://mirrors.163.com/docker-ce|网易云"
     "https://mirrors.cernet.edu.cn/docker-ce|中国教育网"
     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce|清华大学"
@@ -4294,9 +4291,24 @@ __install_docker() {
 
     docker_install_backup
 
-    local script_url="https://get.docker.com"
-
     local script_file="./install-docker.sh"
+    local script_url=""
+    local script_download_success="false"
+
+    local region
+    region=$(detect_docker_region)
+
+    local script_urls=()
+    if [[ "$region" == "tencent_cn" || "$region" == "cn_non_tencent" ]]; then
+        script_urls=(
+            "https://gitee.com/jiaopengzi/docker-install/raw/master/install.sh"
+            "https://get.docker.com"
+        )
+    else
+        script_urls=(
+            "https://get.docker.com"
+        )
+    fi
 
     # shellcheck disable=SC2329
     run() {
@@ -4304,7 +4316,18 @@ __install_docker() {
         sudo curl -fsSL --connect-timeout 5 --max-time 10 "$script_url" -o "$script_file"
     }
 
-    if ! retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+    for item in "${script_urls[@]}"; do
+        script_url="$item"
+        log_info "准备下载 docker 安装脚本: $script_url"
+        if retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+            script_download_success="true"
+            break
+        fi
+
+        log_warn "当前 docker 安装脚本地址不可用, 尝试下一个地址"
+    done
+
+    if [[ "$script_download_success" != "true" ]]; then
         log_error "下载 docker 安装脚本失败, 请检查网络连接"
         exit 1
     fi
@@ -4445,7 +4468,7 @@ find_fastest_docker_mirror() {
 
             local test_url="${source}/${DOCKER_CE_TEST_DOWNLOAD_FILE}"
             local time_total
-            time_total=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
+            time_total=$(curl -fsSL -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
 
             if [[ "$time_total" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (($(echo "$time_total < 10" | bc -l 2>/dev/null || echo 0))); then
                 echo "$time_total $source" >"$output_file"

@@ -393,10 +393,10 @@ IS_INSTALL_SOFTWARE=""
 # Docker CE 镜像源列表
 DOCKER_CE_SOURCES=(
     "https://mirrors.aliyun.com/docker-ce|阿里云公网"
-    "http://mirrors.cloud.aliyuncs.com|阿里云内网"
-    "http://mirrors.aliyuncs.com|阿里云内网经典"
+    # "http://mirrors.cloud.aliyuncs.com/docker-ce|阿里云内网"
+    # "http://mirrors.aliyuncs.com/docker-ce|阿里云内网经典"
     "https://mirrors.tencent.com/docker-ce|腾讯云公网"
-    "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
+    # "http://mirrors.tencentyun.com/docker-ce|腾讯云内网"
     "https://mirrors.163.com/docker-ce|网易云"
     "https://mirrors.cernet.edu.cn/docker-ce|中国教育网"
     "https://mirrors.tuna.tsinghua.edu.cn/docker-ce|清华大学"
@@ -6172,10 +6172,24 @@ __install_docker() {
     # 先执行备份，同时避免镜像源不一致导致的问题
     docker_install_backup
 
-    # 脚本下载地址
-    local script_url="https://get.docker.com"
-
     local script_file="./install-docker.sh"
+    local script_url=""
+    local script_download_success="false"
+
+    local region
+    region=$(detect_docker_region)
+
+    local script_urls=()
+    if [[ "$region" == "tencent_cn" || "$region" == "cn_non_tencent" ]]; then
+        script_urls=(
+            "https://gitee.com/jiaopengzi/docker-install/raw/master/install.sh"
+            "https://get.docker.com"
+        )
+    else
+        script_urls=(
+            "https://get.docker.com"
+        )
+    fi
 
     # 下载脚本
     # shellcheck disable=SC2329
@@ -6186,7 +6200,18 @@ __install_docker() {
     }
 
     # 手动重试下载脚本，最多重试 5 次, 初始延迟 2 秒
-    if ! retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+    for item in "${script_urls[@]}"; do
+        script_url="$item"
+        log_info "准备下载 docker 安装脚本: $script_url"
+        if retry_with_backoff "run" 5 2 "docker 安装脚本下载成功" "docker 安装脚本下载失败" ""; then
+            script_download_success="true"
+            break
+        fi
+
+        log_warn "当前 docker 安装脚本地址不可用, 尝试下一个地址"
+    done
+
+    if [[ "$script_download_success" != "true" ]]; then
         log_error "下载 docker 安装脚本失败, 请检查网络连接"
         exit 1
     fi
@@ -6366,7 +6391,7 @@ find_fastest_docker_mirror() {
             # --connect-timeout: 连接阶段的超时时间
             # --max-time: 整个操作的超时时间
             local time_total
-            time_total=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
+            time_total=$(curl -fsSL -o /dev/null -w "%{time_total}" --connect-timeout 3 -m 10 "$test_url" 2>/dev/null) || time_total=""
 
             # 检查 curl 命令本身是否成功执行 (即没有因为超时等原因被中断)
             # 如果 curl 失败, 它的退出码非0, 并且 time_total 可能为空
