@@ -10168,9 +10168,10 @@ copy_client_config() {
         "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
         "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
 
-    # 修改 nginx.conf 配置文件中的访问域名
+    # 修改 nginx.conf 配置文件中的访问域名, 仅匹配合法域名或 IPv4 的 server_name 指令
+    local server_name_pattern='^([[:space:]]*)server_name[[:space:]]+(([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}|([0-9]{1,3}\.){3}[0-9]{1,3});'
     sudo sed -r -i \
-        "s/server_name[[:space:]]+[^;]+;/server_name $DOMAIN_NAME;/g" \
+        "s/$server_name_pattern/\\1server_name $DOMAIN_NAME;/g" \
         "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
 
     log_info "client 复制配置文件到 volume success"
