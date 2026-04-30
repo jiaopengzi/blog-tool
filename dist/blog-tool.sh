@@ -1935,6 +1935,7 @@ docker_tag_push_public_registry_tencent() {
     local local_image="$1"
     local local_version="$2"
     local tencent_version="${3:-$2}"
+    local should_sign="${4:-true}"
 
     if [ -z "$local_image" ] || [ -z "$local_version" ]; then
         log_error "推送到腾讯仓库失败, 镜像名称和版本不能为空"
@@ -1972,10 +1973,14 @@ docker_tag_push_public_registry_tencent() {
     waiting 5
     timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "latest"
 
-    docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
-        sudo docker logout "$tencent_login_host" || true
-        return 1
-    }
+    if [ "$should_sign" = true ]; then
+        docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+            sudo docker logout "$tencent_login_host" || true
+            return 1
+        }
+    else
+        log_debug "跳过腾讯仓库镜像签名: $tencent_image:$docker_tag_version"
+    fi
 
     sudo docker image rm "$tencent_image:$docker_tag_version" "$tencent_image:latest" >/dev/null 2>&1 || true
 

@@ -2544,12 +2544,14 @@ docker_private_registry_login_logout() {
 # 参数: $1 本地镜像名称(标准 docker hub 风格, 如 redis / postgres / elasticsearch / $DOCKER_HUB_OWNER/blog-server)
 # 参数: $2 本地镜像版本(本地 tag, 例如 8.0.5、build、1.0.8)
 # 参数: $3 推送到腾讯仓库时使用的版本(例如 8.0.5、1.0.8); 不传则等于参数 2
+# 参数: $4 是否签名, 可选值 true / false; 默认 true
 docker_tag_push_public_registry_tencent() {
     log_debug "run docker_tag_push_public_registry_tencent"
 
     local local_image="$1"
     local local_version="$2"
     local tencent_version="${3:-$2}"
+    local should_sign="${4:-true}"
 
     if [ -z "$local_image" ] || [ -z "$local_version" ]; then
         log_error "推送到腾讯仓库失败, 镜像名称和版本不能为空"
@@ -2594,13 +2596,17 @@ docker_tag_push_public_registry_tencent() {
     waiting 5
     timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "latest"
 
-    # 推送完成后对版本镜像签名.
-    docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
-        sudo docker logout "$tencent_login_host" || true
-        return 1
-    }
+    if [ "$should_sign" = true ]; then
+        # 推送完成后对版本镜像签名.
+        docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+            sudo docker logout "$tencent_login_host" || true
+            return 1
+        }
+    else
+        log_debug "跳过腾讯仓库镜像签名: $tencent_image:$docker_tag_version"
+    fi
 
-    # 推送和签名成功后清理本地腾讯前缀 tag, 避免污染本地镜像列表
+    # 推送完成后清理本地腾讯前缀 tag, 避免污染本地镜像列表
     sudo docker image rm "$tencent_image:$docker_tag_version" "$tencent_image:latest" >/dev/null 2>&1 || true
 
     # 及时退出登录
@@ -2672,9 +2678,9 @@ detect_docker_region() {
 push_db_images_public_registry_tencent() {
     log_debug "run push_db_images_public_registry_tencent"
 
-    docker_tag_push_public_registry_tencent "redis" "$IMG_VERSION_REDIS" "$IMG_VERSION_REDIS"
-    docker_tag_push_public_registry_tencent "postgres" "$IMG_VERSION_PGSQL" "$IMG_VERSION_PGSQL"
-    docker_tag_push_public_registry_tencent "elasticsearch" "$IMG_VERSION_ES" "$IMG_VERSION_ES"
+    docker_tag_push_public_registry_tencent "redis" "$IMG_VERSION_REDIS" "$IMG_VERSION_REDIS" false
+    docker_tag_push_public_registry_tencent "postgres" "$IMG_VERSION_PGSQL" "$IMG_VERSION_PGSQL" false
+    docker_tag_push_public_registry_tencent "elasticsearch" "$IMG_VERSION_ES" "$IMG_VERSION_ES" false
 
     log_info "数据库基础镜像推送到腾讯公共仓库完成"
 }
