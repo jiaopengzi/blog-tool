@@ -5,6 +5,17 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.1.0] - 2026-04-30
+
+### ✨ Feat
+
+- 腾讯云仓库的镜签名
+- 国内使用腾讯云仓库拉取镜像
+
+### 📝 Docs
+
+- 更新数据库依赖版本
+
 ## [v1.0.8] - 2026-04-29
 
 ### ⏪ Revert
