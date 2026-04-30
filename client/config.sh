@@ -50,6 +50,10 @@ copy_client_config_ssl() {
 
     sudo rm -rf "$dir_ssl"
 
+    if [ "${AUTO_MODE:-false}" = "true" ]; then
+        gen_client_nginx_cert
+    fi
+
     # 如果当前目录下 certs_nginx 文件夹不存在则输出提示
     if [ ! -d "$CERTS_NGINX" ]; then
         echo "========================================"

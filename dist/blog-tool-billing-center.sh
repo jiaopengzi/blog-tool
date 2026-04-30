@@ -677,7 +677,11 @@ auto_accept_disclaimer() {
 
 auto_prepare_nginx_cert() {
     [ "$AUTO_MODE" = "true" ] || return 0
-    [ -n "$AUTO_CERT" ] && [ -n "$AUTO_CERT_KEY" ] || return 0
+
+    if [ -z "$AUTO_CERT" ] && [ -z "$AUTO_CERT_KEY" ]; then
+        gen_client_nginx_cert
+        return 0
+    fi
 
     setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$CERTS_NGINX"
     sudo cp -f "$AUTO_CERT" "$CERTS_NGINX/cert.pem"
