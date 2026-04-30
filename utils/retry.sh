@@ -159,8 +159,8 @@ timeout_retry_docker_pull() {
 
     # registry 或分发层偶发返回的元数据异常通常可通过重试恢复.
     # 增加对以下常见可恢复错误的匹配：网络/TLS 相关、证书、连接重置/拒绝，
-    # 以及分发层/镜像仓库在元数据层面偶发返回的错误（例如 failed to copy / httpReadSeeker / could not fetch content descriptor / manifest unknown / 404）。
-    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero|failed to copy|httpReadSeeker|could not fetch content descriptor|manifest unknown|no such manifest|404 Not Found|not found|received unexpected HTTP status"
+    # 以及分发层/镜像仓库在元数据层面偶发返回的错误(例如 failed to copy / httpReadSeeker / could not fetch content descriptor / manifest unknown / 404 / unknown error).
+    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero|failed to copy|httpReadSeeker|could not fetch content descriptor|manifest unknown|no such manifest|404 Not Found|not found|received unexpected HTTP status|error from registry: unknown error|unknown error"
 
     log_info "开始拉取镜像: $image"
 
