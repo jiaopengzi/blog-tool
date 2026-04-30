@@ -554,7 +554,13 @@ docker_tag_push_public_registry_tencent() {
     waiting 5
     timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "latest"
 
-    # 推送成功后清理本地腾讯前缀 tag, 避免污染本地镜像列表
+    # 推送完成后对版本镜像签名.
+    docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+        sudo docker logout "$tencent_login_host" || true
+        return 1
+    }
+
+    # 推送和签名成功后清理本地腾讯前缀 tag, 避免污染本地镜像列表
     sudo docker image rm "$tencent_image:$docker_tag_version" "$tencent_image:latest" >/dev/null 2>&1 || true
 
     # 及时退出登录

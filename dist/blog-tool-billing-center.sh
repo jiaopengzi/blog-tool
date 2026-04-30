@@ -1902,6 +1902,11 @@ docker_tag_push_public_registry_tencent() {
     waiting 5
     timeout_retry_docker_push "$REGISTRY_REMOTE_SERVER_TENCENT" "$image_basename" "latest"
 
+    docker_sign_pushed_image "$tencent_image" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+        sudo docker logout "$tencent_login_host" || true
+        return 1
+    }
+
     sudo docker image rm "$tencent_image:$docker_tag_version" "$tencent_image:latest" >/dev/null 2>&1 || true
 
     sudo docker logout "$tencent_login_host" || true
