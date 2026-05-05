@@ -324,14 +324,112 @@ START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整
 
-if command -v ifconfig >/dev/null 2>&1; then
-    HOST_INTRANET_IP=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $2}')
+ipv4_prefix_to_netmask() {
+    local prefix_length=$1
+    local full_octets=0
+    local remainder_bits=0
+    local octet_index
+    local current_octet=0
+    local netmask=""
 
-    HOST_INTRANET_MARK=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $4}')
-else
-    HOST_INTRANET_IP="127.0.0.1"
-    HOST_INTRANET_MARK="255.0.0.0"
-fi
+    if ! [[ "$prefix_length" =~ ^[0-9]+$ ]] || [ "$prefix_length" -lt 0 ] || [ "$prefix_length" -gt 32 ]; then
+        echo "255.0.0.0"
+        return 0
+    fi
+
+    full_octets=$((prefix_length / 8))
+    remainder_bits=$((prefix_length % 8))
+
+    for octet_index in 0 1 2 3; do
+        if [ "$octet_index" -lt "$full_octets" ]; then
+            current_octet=255
+        elif [ "$octet_index" -eq "$full_octets" ] && [ "$remainder_bits" -gt 0 ]; then
+            current_octet=$((256 - 2 ** (8 - remainder_bits)))
+        else
+            current_octet=0
+        fi
+
+        if [ -z "$netmask" ]; then
+            netmask="$current_octet"
+        else
+            netmask="$netmask.$current_octet"
+        fi
+    done
+
+    echo "$netmask"
+}
+
+detect_host_intranet_ip() {
+    local candidate_ip=""
+
+    if command -v ip >/dev/null 2>&1; then
+        candidate_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+
+        candidate_ip=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v hostname >/dev/null 2>&1; then
+        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i !~ /^127\./) {print $i; exit}}')
+        if [ -n "$candidate_ip" ]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_ip=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $2; exit}
+        ')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    echo "127.0.0.1"
+}
+
+detect_host_intranet_mask() {
+    local prefix_length=""
+    local candidate_mask=""
+
+    if command -v ip >/dev/null 2>&1; then
+        prefix_length=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[2]; exit}')
+        if [ -n "$prefix_length" ]; then
+            ipv4_prefix_to_netmask "$prefix_length"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_mask=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $4; exit}
+        ')
+        if [ -n "$candidate_mask" ]; then
+            echo "$candidate_mask"
+            return 0
+        fi
+    fi
+
+    echo "255.0.0.0"
+}
+
+refresh_host_intranet_network() {
+    HOST_INTRANET_IP=$(detect_host_intranet_ip)
+    HOST_INTRANET_MARK=$(detect_host_intranet_mask)
+}
+
+refresh_host_intranet_network
 
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
@@ -965,6 +1063,12 @@ check_install_base() {
     fi
 }
 
+check_prepare_apt_source() {
+    log_debug "run check_prepare_apt_source"
+
+    switch_cn_non_tencent_apt_source || true
+}
+
 load_interactive_config() {
     local var_name=$1
     local config_file=$2
@@ -1270,6 +1374,7 @@ check() {
     check_is_root
     check_character
     check_env_path
+    check_prepare_apt_source
     check_install_base
     check_domain_ip
     check_dev_var
@@ -2226,6 +2331,11 @@ docker_get_base_image_with_region() {
 }
 
 DOCKER_REGION_CACHE=""
+
+reset_docker_region_cache() {
+    DOCKER_REGION_CACHE=""
+}
+
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then
         echo "$DOCKER_REGION_CACHE"
@@ -2233,8 +2343,27 @@ detect_docker_region() {
     fi
 
     local region="overseas"
-    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
-        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+    local country=""
+    local has_probe_tool="false"
+
+    if command -v curl >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(curl -s --max-time 5 ipinfo.io/country)
+    elif command -v wget >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(wget -qO- -T 5 ipinfo.io/country 2>/dev/null)
+    fi
+
+    if [ "$has_probe_tool" != "true" ]; then
+        log_debug "当前未安装 curl 或 wget, 暂时无法探测 docker 镜像源区域, 稍后重试"
+        echo "$region"
+        return 0
+    fi
+
+    if [[ "$country" == "CN" ]]; then
+        if command -v curl >/dev/null 2>&1 && curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+            region="tencent_cn"
+        elif command -v wget >/dev/null 2>&1 && wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
             region="tencent_cn"
         else
             region="cn_non_tencent"
@@ -4144,20 +4273,175 @@ update_yaml_block() {
     fi
 }
 
+APT_SOURCE_SWITCHED="false"
+
+run_with_sudo_if_available() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
+apt_get_noninteractive() {
+    local sub_command=$1
+    shift
+
+    local -a apt_cmd=(
+        env
+        DEBIAN_FRONTEND=noninteractive
+        DEBIAN_PRIORITY=critical
+        NEEDRESTART_MODE=a
+        APT_LISTCHANGES_FRONTEND=none
+        UCF_FORCE_CONFDEF=1
+        UCF_FORCE_CONFFOLD=1
+        apt-get
+        -o Dpkg::Options::=--force-confdef
+        -o Dpkg::Options::=--force-confold
+        "$sub_command"
+    )
+
+    run_with_sudo_if_available "${apt_cmd[@]}" "$@"
+}
+
+backup_apt_source_file_once() {
+    local file_path=$1
+    local backup_path="${file_path}.blog-tool.bak"
+
+    if [ -f "$file_path" ] && [ ! -f "$backup_path" ]; then
+        run_with_sudo_if_available cp "$file_path" "$backup_path"
+    fi
+}
+
+switch_debian_apt_source_to_tencent() {
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Debian 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    local legacy_source_file="/etc/apt/sources.list"
+    local deb822_source_file="/etc/apt/sources.list.d/debian.sources"
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: http://mirrors.tencent.com/debian/
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: $SYSTEM_CODENAME-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+# 默认注释了源码镜像以提高 apt update 速度, 如有需要可自行取消注释
+# 安全更新默认使用官方源, 更新最及时
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+
+deb https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+# deb-src https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+EOF
+}
+
+switch_ubuntu_apt_source_to_tencent() {
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Ubuntu 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    local deb822_source_file="/etc/apt/sources.list.d/ubuntu.sources"
+    local legacy_source_file="/etc/apt/sources.list"
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: http://mirrors.tencentyun.com/ubuntu/
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: $SYSTEM_CODENAME-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME main restricted universe multiverse
+deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME-updates main restricted universe multiverse
+deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu/ $SYSTEM_CODENAME-security main restricted universe multiverse
+EOF
+}
+
+switch_cn_non_tencent_apt_source() {
+    log_debug "run switch_cn_non_tencent_apt_source"
+
+    if [ "$APT_SOURCE_SWITCHED" = "true" ]; then
+        return 0
+    fi
+
+    local region
+    region=$(detect_docker_region)
+    if [ "$region" != "cn_non_tencent" ]; then
+        return 0
+    fi
+
+    detect_system || {
+        log_warn "未识别到 Debian 或 Ubuntu 系统, 跳过 apt 换源"
+        return 0
+    }
+
+    case "$SYSTEM_FAMILY" in
+    debian)
+        switch_debian_apt_source_to_tencent || return 1
+        ;;
+    ubuntu)
+        switch_ubuntu_apt_source_to_tencent || return 1
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+
+    APT_SOURCE_SWITCHED="true"
+    log_info "检测到中国大陆非腾讯云环境, 已切换 apt 软件源到腾讯云镜像"
+    apt_update
+}
+
 apt_update() {
     log_debug "run apt_update"
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt update
-    else
-        apt update
-    fi
+    apt_get_noninteractive update
 }
 
 apt_install_y() {
     log_debug "run apt_install_y"
 
-    sudo apt install -y "$@"
+    apt_get_noninteractive install -y "$@"
 }
 
 detect_system() {
@@ -4293,12 +4577,18 @@ init_system_detection() {
 install_common_software() {
     log_debug "run install_common_software"
 
+    switch_cn_non_tencent_apt_source
+
     apt_update
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt install -y "${BASE_SOFTWARE_LIST[@]}"
-    else
-        apt install -y "${BASE_SOFTWARE_LIST[@]}"
+    apt_install_y "${BASE_SOFTWARE_LIST[@]}"
+
+    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
+        reset_docker_region_cache
+    fi
+
+    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
+        refresh_host_intranet_network
     fi
 
     if ! grep -q "export HISTSIZE=*" "$HOME/.bashrc"; then

@@ -129,6 +129,14 @@ check_install_base() {
     fi
 }
 
+# 在 check 阶段尽早准备 apt 软件源, 确保后续安装基础软件时优先使用合适镜像.
+# 返回: 始终返回 0, 不阻断非 Debian/Ubuntu 环境.
+check_prepare_apt_source() {
+    log_debug "run check_prepare_apt_source"
+
+    switch_cn_non_tencent_apt_source || true
+}
+
 # 交互式获取或加载配置, 支持默认值, 并写入配置文件
 # 参数：
 #   $1 - 变量名(如 DOMAIN_NAME)
@@ -500,6 +508,7 @@ check() {
     check_is_root
     check_character
     check_env_path
+    check_prepare_apt_source
     check_install_base
     check_domain_ip
     check_dev_var
