@@ -9,22 +9,14 @@
 install_common_software() {
     log_debug "run install_common_software"
 
-    switch_cn_non_tencent_apt_source
-
     # 安装常用软件
     apt_update
 
-    # 统一走非交互安装, 避免 openssh-server 等软件弹出确认对话框.
-    apt_install_y "${BASE_SOFTWARE_LIST[@]}"
-
-    # 安装完网络探测工具后清空区域缓存, 确保后续流程重新判定当前环境.
-    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
-        reset_docker_region_cache
-    fi
-
-    # 首次安装基础软件后刷新内网 IP, 避免 --auto 初始值误回退到 127.0.0.1.
-    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
-        refresh_host_intranet_network
+    # 无代理直接更新
+    if command -v sudo >/dev/null 2>&1; then
+        sudo apt install -y "${BASE_SOFTWARE_LIST[@]}"
+    else
+        apt install -y "${BASE_SOFTWARE_LIST[@]}"
     fi
 
     # 设置历史记录大小

@@ -430,121 +430,18 @@ START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整
 
-# 将 IPv4 前缀长度转换为点分十进制子网掩码.
-# 参数: $1: 前缀长度, 如 24.
-# 返回: 打印对应子网掩码, 失败时返回默认值 255.0.0.0.
-ipv4_prefix_to_netmask() {
-    local prefix_length=$1
-    local full_octets=0
-    local remainder_bits=0
-    local octet_index
-    local current_octet=0
-    local netmask=""
+# 检查 ifconfig 是否存在
+if command -v ifconfig >/dev/null 2>&1; then
+    # 默认内网 IP
+    HOST_INTRANET_IP=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $2}')
 
-    if ! [[ "$prefix_length" =~ ^[0-9]+$ ]] || [ "$prefix_length" -lt 0 ] || [ "$prefix_length" -gt 32 ]; then
-        echo "255.0.0.0"
-        return 0
-    fi
-
-    full_octets=$((prefix_length / 8))
-    remainder_bits=$((prefix_length % 8))
-
-    for octet_index in 0 1 2 3; do
-        if [ "$octet_index" -lt "$full_octets" ]; then
-            current_octet=255
-        elif [ "$octet_index" -eq "$full_octets" ] && [ "$remainder_bits" -gt 0 ]; then
-            current_octet=$((256 - 2 ** (8 - remainder_bits)))
-        else
-            current_octet=0
-        fi
-
-        if [ -z "$netmask" ]; then
-            netmask="$current_octet"
-        else
-            netmask="$netmask.$current_octet"
-        fi
-    done
-
-    echo "$netmask"
-}
-
-# 优先使用系统自带命令探测首个非回环 IPv4 地址.
-# 返回: 打印检测到的 IPv4 地址, 未命中时返回 127.0.0.1.
-detect_host_intranet_ip() {
-    local candidate_ip=""
-
-    if command -v ip >/dev/null 2>&1; then
-        candidate_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')
-        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
-            echo "$candidate_ip"
-            return 0
-        fi
-
-        candidate_ip=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')
-        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
-            echo "$candidate_ip"
-            return 0
-        fi
-    fi
-
-    if command -v hostname >/dev/null 2>&1; then
-        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i !~ /^127\./) {print $i; exit}}')
-        if [ -n "$candidate_ip" ]; then
-            echo "$candidate_ip"
-            return 0
-        fi
-    fi
-
-    if command -v ifconfig >/dev/null 2>&1; then
-        candidate_ip=$(ifconfig 2>/dev/null | awk '
-            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
-            /inet / && iface != "lo" {print $2; exit}
-        ')
-        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
-            echo "$candidate_ip"
-            return 0
-        fi
-    fi
-
-    echo "127.0.0.1"
-}
-
-# 探测首个全局 IPv4 对应的子网掩码.
-# 返回: 打印点分十进制子网掩码, 未命中时返回 255.0.0.0.
-detect_host_intranet_mask() {
-    local prefix_length=""
-    local candidate_mask=""
-
-    if command -v ip >/dev/null 2>&1; then
-        prefix_length=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[2]; exit}')
-        if [ -n "$prefix_length" ]; then
-            ipv4_prefix_to_netmask "$prefix_length"
-            return 0
-        fi
-    fi
-
-    if command -v ifconfig >/dev/null 2>&1; then
-        candidate_mask=$(ifconfig 2>/dev/null | awk '
-            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
-            /inet / && iface != "lo" {print $4; exit}
-        ')
-        if [ -n "$candidate_mask" ]; then
-            echo "$candidate_mask"
-            return 0
-        fi
-    fi
-
-    echo "255.0.0.0"
-}
-
-# 刷新当前主机的内网 IPv4 地址和子网掩码全局变量.
-# 返回: 始终返回 0.
-refresh_host_intranet_network() {
-    HOST_INTRANET_IP=$(detect_host_intranet_ip)
-    HOST_INTRANET_MARK=$(detect_host_intranet_mask)
-}
-
-refresh_host_intranet_network
+    # 默认子网掩码
+    HOST_INTRANET_MARK=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $4}')
+else
+    # 如果 ifconfig 不存在, 使用回环地址
+    HOST_INTRANET_IP="127.0.0.1"
+    HOST_INTRANET_MARK="255.0.0.0"
+fi
 
 # 私有 ca 证书存放目录
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
@@ -1436,14 +1333,6 @@ check_install_base() {
     fi
 }
 
-# 在 check 阶段尽早准备 apt 软件源, 确保后续安装基础软件时优先使用合适镜像.
-# 返回: 始终返回 0, 不阻断非 Debian/Ubuntu 环境.
-check_prepare_apt_source() {
-    log_debug "run check_prepare_apt_source"
-
-    switch_cn_non_tencent_apt_source || true
-}
-
 # 交互式获取或加载配置, 支持默认值, 并写入配置文件
 # 参数：
 #   $1 - 变量名(如 DOMAIN_NAME)
@@ -1815,7 +1704,6 @@ check() {
     check_is_root
     check_character
     check_env_path
-    check_prepare_apt_source
     check_install_base
     check_domain_ip
     check_dev_var
@@ -3072,13 +2960,6 @@ docker_get_base_image_with_region() {
 
 # 检测 docker 镜像源区域: 输出 tencent_cn | cn_non_tencent | overseas, 结果在进程内缓存
 DOCKER_REGION_CACHE=""
-
-# 清空 docker 镜像源区域缓存, 供依赖安装后触发重新探测.
-# 返回: 始终返回 0.
-reset_docker_region_cache() {
-    DOCKER_REGION_CACHE=""
-}
-
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then
         echo "$DOCKER_REGION_CACHE"
@@ -3086,27 +2967,8 @@ detect_docker_region() {
     fi
 
     local region="overseas"
-    local country=""
-    local has_probe_tool="false"
-
-    if command -v curl >/dev/null 2>&1; then
-        has_probe_tool="true"
-        country=$(curl -s --max-time 5 ipinfo.io/country)
-    elif command -v wget >/dev/null 2>&1; then
-        has_probe_tool="true"
-        country=$(wget -qO- -T 5 ipinfo.io/country 2>/dev/null)
-    fi
-
-    if [ "$has_probe_tool" != "true" ]; then
-        log_debug "当前未安装 curl 或 wget, 暂时无法探测 docker 镜像源区域, 稍后重试"
-        echo "$region"
-        return 0
-    fi
-
-    if [[ "$country" == "CN" ]]; then
-        if command -v curl >/dev/null 2>&1 && curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
-            region="tencent_cn"
-        elif command -v wget >/dev/null 2>&1 && wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
+        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
             region="tencent_cn"
         else
             region="cn_non_tencent"
@@ -5789,193 +5651,22 @@ update_yaml_block() {
 # update_yaml_block "/home/jiaopengzi/test/es.yaml" "ca_cert: |" "/home/jiaopengzi/cert_ca_es/ca.crt"
 
 ### content from system/apt.sh
-# 标记是否已经切换过 apt 软件源, 避免重复执行.
-APT_SOURCE_SWITCHED="false"
-
-# 在存在 sudo 时使用 sudo 执行命令, 否则直接执行.
-# 参数: $@: 要执行的命令与参数.
-# 返回: 透传原命令退出码.
-run_with_sudo_if_available() {
-    if command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-    else
-        "$@"
-    fi
-}
-
-# 使用非交互模式执行 apt-get, 避免 conffile 与 needrestart 阻塞安装流程.
-# 参数: $1: apt-get 子命令; $@: 其余参数.
-# 返回: 透传 apt-get 的退出码.
-apt_get_noninteractive() {
-    local sub_command=$1
-    shift
-
-    local -a apt_cmd=(
-        env
-        DEBIAN_FRONTEND=noninteractive
-        DEBIAN_PRIORITY=critical
-        NEEDRESTART_MODE=a
-        APT_LISTCHANGES_FRONTEND=none
-        UCF_FORCE_CONFDEF=1
-        UCF_FORCE_CONFFOLD=1
-        apt-get
-        -o Dpkg::Options::=--force-confdef
-        -o Dpkg::Options::=--force-confold
-        "$sub_command"
-    )
-
-    run_with_sudo_if_available "${apt_cmd[@]}" "$@"
-}
-
-# 仅在首次切换时备份 apt 源文件.
-# 参数: $1: 要备份的文件路径.
-# 返回: 始终返回 0.
-backup_apt_source_file_once() {
-    local file_path=$1
-    local backup_path="${file_path}.blog-tool.bak"
-
-    if [ -f "$file_path" ] && [ ! -f "$backup_path" ]; then
-        run_with_sudo_if_available cp "$file_path" "$backup_path"
-    fi
-}
-
-# 将 Debian 软件源切换为腾讯云镜像, 并保留官方安全更新.
-# 返回: 0 表示写入成功, 1 表示系统代号未知.
-switch_debian_apt_source_to_tencent() {
-    detect_system
-    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
-        log_warn "当前 Debian 系统代号未知, 跳过 apt 换源"
-        return 1
-    fi
-
-    local legacy_source_file="/etc/apt/sources.list"
-    local deb822_source_file="/etc/apt/sources.list.d/debian.sources"
-
-    if [ -f "$deb822_source_file" ]; then
-        backup_apt_source_file_once "$deb822_source_file"
-        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
-Types: deb
-URIs: http://mirrors.tencent.com/debian/
-Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
-Components: main contrib non-free non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: https://security.debian.org/debian-security
-Suites: $SYSTEM_CODENAME-security
-Components: main contrib non-free non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-        return 0
-    fi
-
-    backup_apt_source_file_once "$legacy_source_file"
-    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
-# 默认注释了源码镜像以提高 apt update 速度, 如有需要可自行取消注释
-# 安全更新默认使用官方源, 更新最及时
-
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
-
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
-
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
-
-deb https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
-# deb-src https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
-EOF
-}
-
-# 将 Ubuntu 软件源切换为腾讯云镜像, 并保留官方安全更新.
-# 返回: 0 表示写入成功, 1 表示系统代号未知.
-switch_ubuntu_apt_source_to_tencent() {
-    detect_system
-    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
-        log_warn "当前 Ubuntu 系统代号未知, 跳过 apt 换源"
-        return 1
-    fi
-
-    local deb822_source_file="/etc/apt/sources.list.d/ubuntu.sources"
-    local legacy_source_file="/etc/apt/sources.list"
-
-    if [ -f "$deb822_source_file" ]; then
-        backup_apt_source_file_once "$deb822_source_file"
-        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
-Types: deb
-URIs: http://mirrors.tencentyun.com/ubuntu/
-Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-
-Types: deb
-URIs: http://security.ubuntu.com/ubuntu/
-Suites: $SYSTEM_CODENAME-security
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
-        return 0
-    fi
-
-    backup_apt_source_file_once "$legacy_source_file"
-    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
-deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME main restricted universe multiverse
-deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME-updates main restricted universe multiverse
-deb http://mirrors.tencentyun.com/ubuntu/ $SYSTEM_CODENAME-backports main restricted universe multiverse
-deb http://security.ubuntu.com/ubuntu/ $SYSTEM_CODENAME-security main restricted universe multiverse
-EOF
-}
-
-# 在中国大陆非腾讯云环境下切换 apt 软件源到腾讯云镜像.
-# 返回: 0 表示无需切换或切换成功, 非 0 表示切换失败.
-switch_cn_non_tencent_apt_source() {
-    log_debug "run switch_cn_non_tencent_apt_source"
-
-    if [ "$APT_SOURCE_SWITCHED" = "true" ]; then
-        return 0
-    fi
-
-    local region
-    region=$(detect_docker_region)
-    if [ "$region" != "cn_non_tencent" ]; then
-        return 0
-    fi
-
-    detect_system || {
-        log_warn "未识别到 Debian 或 Ubuntu 系统, 跳过 apt 换源"
-        return 0
-    }
-
-    case "$SYSTEM_FAMILY" in
-    debian)
-        switch_debian_apt_source_to_tencent || return 1
-        ;;
-    ubuntu)
-        switch_ubuntu_apt_source_to_tencent || return 1
-        ;;
-    *)
-        return 0
-        ;;
-    esac
-
-    APT_SOURCE_SWITCHED="true"
-    log_info "检测到中国大陆非腾讯云环境, 已切换 apt 软件源到腾讯云镜像"
-    apt_update
-}
-
 # 执行 apt update
 apt_update() {
     log_debug "run apt_update"
 
-    apt_get_noninteractive update
+    if command -v sudo >/dev/null 2>&1; then
+        sudo apt update
+    else
+        apt update
+    fi
 }
 
 # 执行安装并设置同意
 apt_install_y() {
     log_debug "run apt_install_y"
 
-    apt_get_noninteractive install -y "$@"
+    sudo apt install -y "$@"
 }
 
 # 添加 backports 源
@@ -6211,22 +5902,14 @@ init_system_detection() {
 install_common_software() {
     log_debug "run install_common_software"
 
-    switch_cn_non_tencent_apt_source
-
     # 安装常用软件
     apt_update
 
-    # 统一走非交互安装, 避免 openssh-server 等软件弹出确认对话框.
-    apt_install_y "${BASE_SOFTWARE_LIST[@]}"
-
-    # 安装完网络探测工具后清空区域缓存, 确保后续流程重新判定当前环境.
-    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
-        reset_docker_region_cache
-    fi
-
-    # 首次安装基础软件后刷新内网 IP, 避免 --auto 初始值误回退到 127.0.0.1.
-    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
-        refresh_host_intranet_network
+    # 无代理直接更新
+    if command -v sudo >/dev/null 2>&1; then
+        sudo apt install -y "${BASE_SOFTWARE_LIST[@]}"
+    else
+        apt install -y "${BASE_SOFTWARE_LIST[@]}"
     fi
 
     # 设置历史记录大小
