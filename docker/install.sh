@@ -114,12 +114,47 @@ __install_docker() {
     sudo rm -f ./install.log
 }
 
-# 卸载 docker
+# 卸载 docker 的历史数据.
+# 参数: $1: 是否移除历史数据, y 表示移除, 其他值表示保留.
+docker_remove_history_data() {
+    log_debug "run docker_remove_history_data"
+
+    local remove_history_data="$1"
+
+    if [[ "$remove_history_data" == "y" ]]; then
+        sudo rm -rf /var/lib/docker
+        sudo rm -rf /var/lib/containerd
+
+        sudo rm -f /etc/apt/sources.list.d/docker.list
+        sudo rm -f /etc/apt/keyrings/docker.asc
+
+        log_info "已移除 docker 历史数据"
+    else
+        log_info "未移除 docker 历史数据"
+    fi
+}
+
+# 停止 docker 卸载前相关 systemd 服务.
+# 返回: 尽最大努力停止 docker.socket、docker.service 和 containerd.service.
+docker_stop_services_before_uninstall() {
+    log_debug "run docker_stop_services_before_uninstall"
+
+    sudo systemctl stop docker.socket >/dev/null 2>&1 || true
+    sudo systemctl stop docker.service >/dev/null 2>&1 || true
+    sudo systemctl stop containerd.service >/dev/null 2>&1 || true
+
+    log_info "已停止 docker 相关服务"
+}
+
+# 卸载 docker.
+# 参数: $1: 是否移除历史数据, 可选值为 y、n 或 prompt.
 __uninstall_docker() {
     log_debug "run __uninstall_docker"
 
+    local remove_history_data="${1:-prompt}"
+
     # 停止服务
-    sudo systemctl stop docker || true
+    docker_stop_services_before_uninstall
 
     # 卸载 docker
     sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || true
@@ -129,21 +164,11 @@ __uninstall_docker() {
 
     log_info "docker 卸载完成"
 
-    is_remove=$(read_user_input "是否需要移除 docker 的历史数据 docker (默认n) [y|n]? " "n")
-
-    if [[ "$is_remove" == "y" ]]; then
-        # 删除相关数据
-        sudo rm -rf /var/lib/docker
-        sudo rm -rf /var/lib/containerd
-
-        # 删除 apt 源和 keyring
-        sudo rm /etc/apt/sources.list.d/docker.list
-        sudo rm /etc/apt/keyrings/docker.asc
-
-        log_info "已移除 docker 历史数据"
-    else
-        log_info "未移除 docker 历史数据"
+    if [[ "$remove_history_data" == "prompt" ]]; then
+        remove_history_data=$(read_user_input "是否需要移除 docker 的历史数据 docker (默认n) [y|n]? " "n")
     fi
+
+    docker_remove_history_data "$remove_history_data"
 }
 
 # 卸载 docker

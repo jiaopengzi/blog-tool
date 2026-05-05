@@ -211,6 +211,7 @@ OPTIONS_USER=(
 )
 
 OPTIONS_USER_NOT_SHOW=(
+    "卸载当前 blog-tool 安装:uninstall_blog_tool"
     "手动安装 docker:manual_install_docker"
     "拉取生产数据库镜像:pull_docker_image_pro_db"
 

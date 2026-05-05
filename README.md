@@ -101,6 +101,29 @@ sudo bash blog-tool.sh --auto \
 - 管理员用户名必须是 6-20 位小写字母或数字; 管理员密码必须是 6-64 位, 且包含大写字母, 小写字母和数字。
 - `--auto` 拉取生产镜像时默认包含 PostgreSQL、Redis、Elasticsearch 数据库镜像。
 
+### 4. 卸载当前安装
+
+用户版支持通过 `--uninstall` 卸载当前 `blog-tool.sh` 安装的项目：
+
+```bash
+sudo bash blog-tool.sh --uninstall
+```
+
+执行后脚本会先逐项询问您是否需要执行以下清理动作, 再按您的选择依次执行：
+
+- 停止并删除当前项目容器
+- 删除当前项目涉及的 Docker 镜像
+- 删除当前项目 volume 数据目录
+- 卸载 Docker 软件
+- 删除 `blog-tool` 日志文件
+
+说明：
+
+- `--uninstall` 仅支持用户版 `blog-tool.sh`, 不支持 `blog-tool-dev.sh` 和 `blog-tool-billing-center.sh`。
+- 删除 volume 时会移除当前工具的数据根目录, 因此会一并删除数据库数据、服务配置、证书、docker compose 文件和 `blog_tool_env` 状态文件。
+- 为避免镜像删除失败, 卸载流程会额外清理本工具可能残留的临时容器和项目网络。
+- 卸载完成后, 脚本会提示当前脚本文件路径; 脚本文件本身不会自删, 需要您手动删除。
+
 ## 技术栈
 
 | 组件 | 技术 | 说明 |

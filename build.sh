@@ -293,6 +293,15 @@ main() {
         return
     fi
 
+    if [ "\${1:-}" = "--uninstall" ]; then
+        if [ "$build_type" != "user" ]; then
+            echo "当前发行版不支持 --uninstall, 请使用用户版 blog-tool.sh" >&2
+            exit 1
+        fi
+        uninstall_blog_tool
+        return
+    fi
+
     # 免责声明
     disclaimer_msg
     # 检查
