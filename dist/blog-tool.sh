@@ -4964,7 +4964,7 @@ LABEL blog-tool.es.version="$es_version"
 EOM
 
   log_info "开始构建带 IK 分词器的 ES 镜像: $es_image"
-  sudo DOCKER_BUILDKIT=1 docker build --pull --no-cache -t "$es_image" "$build_context_dir"
+  sudo DOCKER_BUILDKIT=1 docker build --no-cache -t "$es_image" "$build_context_dir"
 }
 
 cleanup_es_legacy_plugin_runtime_files() {
