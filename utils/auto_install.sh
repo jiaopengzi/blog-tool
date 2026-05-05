@@ -253,5 +253,5 @@ __auto_one_click_install() {
 # 参数: $@: --auto 模式参数列表.
 # 返回: 安装完成或遇到错误退出.
 auto_one_click_install() {
-    run_with_temporary_cn_non_tencent_apt_source "--auto 零交互安装" __auto_one_click_install "$@"
+    __auto_one_click_install "$@"
 }
