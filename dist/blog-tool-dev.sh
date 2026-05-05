@@ -7044,12 +7044,78 @@ pull_docker_image_pro_all() {
 }
 
 ### content from docker/install.sh
+# 检测当前环境是否为 WSL.
+# 返回: 0 表示当前运行在 WSL; 1 表示不是 WSL.
+docker_install_is_wsl() {
+    log_debug "run docker_install_is_wsl"
+
+    if [[ -r /proc/sys/kernel/osrelease ]] && grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease; then
+        return 0
+    fi
+
+    if [[ -r /proc/version ]] && grep -qiE 'microsoft|wsl' /proc/version; then
+        return 0
+    fi
+
+    return 1
+}
+
+# 修补上游 Docker 安装脚本, 避免静默安装掩盖进度或阻塞原因.
+# 参数: $1: 下载后的安装脚本路径.
+# 参数: $2: 选中的 Docker CE 镜像源, 为空则保留上游默认值.
+docker_patch_install_script() {
+    log_debug "run docker_patch_install_script"
+
+    local script_file="$1"
+    local docker_mirror="$2"
+
+    if [[ -z "$script_file" || ! -f "$script_file" ]]; then
+        log_error "Docker 安装脚本不存在, 无法继续修补"
+        return 1
+    fi
+
+    if [[ -n "$docker_mirror" ]]; then
+        sudo sed -i "s|DOWNLOAD_URL=\"https://mirrors.aliyun.com/docker-ce\"|DOWNLOAD_URL=\"$docker_mirror\"|g" "$script_file"
+        sudo sed -i 's|Aliyun|MyFastMirror|g' "$script_file"
+    fi
+
+    sudo sed -i "s|apt-get -qq update >/dev/null|apt-get update|g" "$script_file"
+    sudo sed -i "s|DEBIAN_FRONTEND=noninteractive apt-get -y -qq install|DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none apt-get -y install|g" "$script_file"
+    sudo sed -i "s|apt-get -y -qq install|apt-get -y install|g" "$script_file"
+    sudo sed -i "s| install \$pre_reqs >/dev/null| install \$pre_reqs|g" "$script_file"
+    sudo sed -i "s| install \$pkgs >/dev/null| install \$pkgs|g" "$script_file"
+}
+
+# 在 WSL 中临时阻止安装阶段自动启动服务, 避免 postinst 阶段卡住.
+# 返回: 若成功创建拦截文件, 则输出文件路径; 否则输出空字符串.
+docker_prepare_wsl_policy_rc() {
+    log_debug "run docker_prepare_wsl_policy_rc"
+
+    local policy_rc_path="/usr/sbin/policy-rc.d"
+
+    if [[ -e "$policy_rc_path" ]]; then
+        log_warn "检测到已存在 ${policy_rc_path}, 将复用现有策略"
+        echo ""
+        return 0
+    fi
+
+    sudo tee "$policy_rc_path" >/dev/null <<'EOF'
+#!/bin/sh
+exit 101
+EOF
+
+    sudo chmod +x "$policy_rc_path"
+    echo "$policy_rc_path"
+}
+
 # 执行 docker 安装和配置
 __install_docker() {
     log_debug "run __install_docker"
 
     # 是否为手动安装, 默认否
     local is_manual_install="${1-n}"
+    local created_policy_rc_path=""
+    local -a install_script_args=()
 
     # 先执行备份，同时避免镜像源不一致导致的问题
     docker_install_backup
@@ -7110,14 +7176,20 @@ __install_docker() {
     # 将 DEFAULT_DOWNLOAD_URL="https://download.docker.com" 替换为最快的镜像源
     if [[ -n "$fastest_docker_mirror" ]]; then
         log_info "使用最快的 Docker CE 镜像源: $fastest_docker_mirror"
-
-        # 替换下载地址
-        sudo sed -i "s|DOWNLOAD_URL=\"https://mirrors.aliyun.com/docker-ce\"|DOWNLOAD_URL=\"$fastest_docker_mirror\"|g" "$script_file"
-
-        # 将所有字符串 Aliyun 替换为 MyFastMirror
-        sudo sed -i "s|Aliyun|MyFastMirror|g" "$script_file"
     else
-        log_warn "未找到可用的 Docker CE 镜像源, 将使用默认官方源进行安装，可能会因为网络问题导致安装失败"
+        log_warn "未找到可用的 Docker CE 镜像源, 将使用上游默认源进行安装"
+    fi
+
+    if docker_install_is_wsl; then
+        created_policy_rc_path=$(docker_prepare_wsl_policy_rc) || return 1
+        install_script_args+=(--no-autostart)
+        log_warn "检测到当前环境为 WSL, 安装阶段将跳过自动启动 Docker 服务"
+    fi
+
+    docker_patch_install_script "$script_file" "$fastest_docker_mirror" || return 1
+
+    if [[ -n "$fastest_docker_mirror" ]]; then
+        install_script_args+=(--mirror MyFastMirror)
     fi
 
     # 给脚本执行权限
@@ -7126,7 +7198,7 @@ __install_docker() {
     log_info "正在安装 docker, 请耐心等待..."
 
     # 执行安装脚本并记录日志
-    if sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log; then
+    if (set -o pipefail; sudo bash "$script_file" "${install_script_args[@]}" 2>&1 | tee -a ./install.log); then
         log_info "docker 安装脚本执行完成"
 
         # 进一步验证 docker 是否真的安装成功
@@ -7134,11 +7206,21 @@ __install_docker() {
             log_info "docker 安装验证成功，docker 命令可用"
         else
             log_error "docker 命令不可用，安装失败，请检查安装日志"
+            if [[ -n "$created_policy_rc_path" ]]; then
+                sudo rm -f "$created_policy_rc_path"
+            fi
             return 1
         fi
     else
         log_error "docker 安装失败"
+        if [[ -n "$created_policy_rc_path" ]]; then
+            sudo rm -f "$created_policy_rc_path"
+        fi
         return 1
+    fi
+
+    if [[ -n "$created_policy_rc_path" ]]; then
+        sudo rm -f "$created_policy_rc_path"
     fi
 
     log_info "docker 安装完成, 开始设置 docker daemon 配置"
@@ -7196,7 +7278,7 @@ __uninstall_docker() {
     docker_stop_services_before_uninstall
 
     # 卸载 docker
-    sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || true
+    sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras docker-model-plugin || true
 
     # 自动删除无用依赖
     sudo apt autoremove -y
