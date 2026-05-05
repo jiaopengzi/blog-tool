@@ -32,6 +32,18 @@ OUTPUT_DIR=/tmp/out bash build.sh
 
 构建脚本同时会将产物复制到上级目录(`../`)。
 
+### 构建实现细节
+
+`build.sh` 的主要处理流程：
+
+- **Python 嵌入**: 通过 `python_embed.sh` 将 Python 脚本 gzip+base64 嵌入到 Shell 脚本中
+- **Heredoc 处理**: `getAllHeredocLine` / `replaceHeredoc` 扫描并替换 heredoc 块注释
+- **注释转换**: `COMMENT_SRC_TEXT` / `COMMENT_TAR_TEXT` — 非 dev 构建时转换注释标记
+- **函数修剪**: `remove_not_needed_funcs` / `build_remove_unused_funcs` — 移除不需要的函数
+- **数组修剪**: `build_remove_unused_arrays` — 移除未使用的菜单数组 (billing_center 构建时移除 dev 专属菜单)
+- **目录选择**: `get_build_dirs` 定义各构建类型的包含目录集合和 `should_skip_file` 跳过规则
+- **产物复制**: `copy_to_parent_dir` 将 dist 产物复制到上级目录
+
 ---
 
 ## 测试命令
@@ -67,6 +79,11 @@ find . -name "*.sh" -not -path "./dist/*" -not -path "./.git/*" | xargs shellche
 - 触发条件：向 `main` 分支推送且 `CHANGELOG.md` 有变更, 或手动触发 `workflow_dispatch`
 - 工作流文件：`.github/workflows/build.yaml`
 - 流程：版本号校验 → `bash build.sh` → 提交 dist → 打 git tag
+
+### 附加工作流
+
+- `sync_gitee.yaml` — 构建完成后同步到 Gitee 镜像仓库
+- `.gitalias/savetag.sh` — CI 使用的 tag 创建脚本
 
 ---
 
@@ -229,6 +246,11 @@ source "$UTILS_SCRIPT_DIR/log.sh"
 - commit message 格式：`<Type>(<Scope>): <Subject>`(支持 Unicode/emoji Type)
 - CHANGELOG 格式遵循 [Keep a Changelog](https://keepachangelog.com/) 规范
 
+### Changelog 工具
+
+- `.chglog/config.yml` — git-chglog 配置文件
+- `.chglog/CHANGELOG.tpl.md` — CHANGELOG 生成模板
+
 ---
 
 ## 目录结构说明
@@ -239,19 +261,69 @@ dist/                   # 构建产物(勿手动修改)
 config/
   internal.sh           # 内部配置(不可修改, 除非你清楚后果)
   user.sh               # 用户可编辑配置
+  user_billing_center.sh # 计费中心用户配置
   dev.sh                # 开发环境配置
 options/                # 菜单选项定义(OPTIONS_ALL / OPTIONS_USER 等数组)
-utils/                  # 工具函数(log、print、check、docker、db 等)
+utils/                  # 工具函数
   _.sh                  # 统一导出入口
+  log.sh                # 日志函数 (log_error/warn/info/debug, 自动携带位置)
+  log_app.sh            # 应用日志
+  print.sh              # 格式化打印
+  check.sh              # 系统检查
+  docker.sh             # Docker 工具
+  db.sh                 # 数据库工具
+  db/                   # 数据库部署 (PostgreSQL、Redis、ES)
+    pgsql.sh
+    pgsql_billing_center.sh  # 计费中心专用
+    redis.sh
+    redis_billing_center.sh  # 计费中心专用
+    es.sh
+  git.sh                # Git 操作
+  ffmpeg.sh             # FFmpeg 安装
+  network.sh            # 网络工具
+  cert.sh               # SSL 证书
+  retry.sh              # 重试机制
+  waiting.sh            # 等待工具
+  yaml.sh               # YAML 处理
+  password.sh           # 密码生成
+  registry.sh           # Docker Registry
+  time.sh               # 时间工具
+  sys.sh                # 系统信息
+  dir_file.sh           # 文件/目录操作
+  server_client.sh      # 服务端-客户端交互
+  mode_env.sh           # 环境模式
+  list.sh               # 列表工具
+  auto_install.sh       # 自动安装
+  one_click_install.sh  # 一键安装
+  python_embed.sh       # Python 脚本嵌入 (gzip+base64)
 system/                 # 系统工具(apt、ssh、用户管理)
 docker/                 # Docker 安装与管理
+  install.sh            # Docker 安装
+  daemon.sh             # Docker daemon 配置
+  mirror.sh             # 镜像加速
+  images.sh             # 镜像管理
+  clear.sh              # Docker 清理
 db/                     # 数据库(PostgreSQL、Redis、ES)
 server/                 # 后端服务部署
+  compose.sh            # Docker Compose
+  cli.sh                # 容器 CLI 进入
+  config.sh             # 服务配置
+  deploy.sh             # 部署
+  log.sh                # 日志
 client/                 # 前端服务部署
+  compose.sh
+  config.sh
+  deploy.sh
 billing-center/         # 计费中心部署
+  compose.sh
+  cli.sh
+  config.sh
+  deploy.sh
+  log.sh
 python/                 # Python 辅助工具(嵌入到发行版中)
   main.py               # 工具函数实现
   test_main.py          # 单元测试(构建时跳过)
+  changelog_demo.md     # Changelog 解析示例
 ```
 
 ---
