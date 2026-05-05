@@ -223,10 +223,10 @@ auto_register_admin() {
     fi
 }
 
-# 执行零交互一键安装的实际流程.
+# 执行零交互一键安装.
 # 参数: $@: --auto 模式参数列表.
 # 返回: 安装完成或遇到错误退出.
-__auto_one_click_install() {
+auto_one_click_install() {
     parse_auto_args "$@"
     validate_auto_args
     auto_accept_disclaimer
@@ -247,11 +247,4 @@ __auto_one_click_install() {
     } | docker_server_client_install
     auto_register_admin
     log_info "--auto 零交互一键安装完成"
-}
-
-# 执行零交互一键安装.
-# 参数: $@: --auto 模式参数列表.
-# 返回: 安装完成或遇到错误退出.
-auto_one_click_install() {
-    __auto_one_click_install "$@"
 }
