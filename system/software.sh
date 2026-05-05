@@ -5,11 +5,10 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : 系统软件安装
 
-# 安装常用软件
-install_common_software() {
+# 实际执行常用软件安装逻辑.
+# 返回: 安装成功返回 0, 否则返回对应错误码.
+__install_common_software() {
     log_debug "run install_common_software"
-
-    switch_cn_non_tencent_apt_source
 
     # 安装常用软件
     apt_update
@@ -46,6 +45,12 @@ install_common_software() {
 
     # log_info "常用软件安装完成, 重启中..."
     # /usr/sbin/reboot
+}
+
+# 安装常用软件.
+# 返回: 安装成功返回 0, 否则返回对应错误码.
+install_common_software() {
+    run_with_temporary_cn_non_tencent_apt_source "基础软件安装" __install_common_software
 }
 
 # 安装 cosign（官方二进制，适配 Debian/Ubuntu）
