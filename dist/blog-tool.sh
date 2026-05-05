@@ -4923,6 +4923,7 @@ ensure_es_image_with_ik() {
 
   local es_version="$1"
   local es_image=""
+  local es_base_image=""
   local build_context_dir="$BLOG_TOOL_ENV/es-image"
   local ik_zip_shared=""
   local image_has_ik_label=""
@@ -4934,6 +4935,7 @@ ensure_es_image_with_ik() {
   fi
 
   es_image=$(get_es_image_with_ik "$es_version") || return 1
+  es_base_image="$es_image"
 
   if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
     image_has_ik_label=$(sudo docker image inspect --format='{{ index .Config.Labels "blog-tool.es.ik-plugin" }}' "$es_image" 2>/dev/null || true)
@@ -4947,12 +4949,14 @@ ensure_es_image_with_ik() {
 
   ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
 
+  docker_pull_image_with_region "elasticsearch" "$es_version" || return 1
+
   setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$BLOG_TOOL_ENV" "$build_context_dir"
   sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
   sudo chown "$JPZ_UID:$JPZ_GID" "$build_context_dir/analysis-ik.zip"
 
   sudo tee "$build_context_dir/Dockerfile" >/dev/null <<-EOM
-FROM elasticsearch:$es_version
+FROM $es_base_image
 USER root
 COPY analysis-ik.zip /tmp/analysis-ik.zip
 RUN /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \

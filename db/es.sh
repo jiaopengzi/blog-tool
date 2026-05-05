@@ -70,6 +70,7 @@ ensure_es_image_with_ik() {
 
   local es_version="$1"
   local es_image=""
+  local es_base_image=""
   local build_context_dir="$BLOG_TOOL_ENV/es-image"
   local ik_zip_shared=""
   local image_has_ik_label=""
@@ -82,6 +83,7 @@ ensure_es_image_with_ik() {
 
   # 先确定目标镜像标签. 这里仍复用 Elasticsearch 官方镜像名称, 但通过本地重建让同名 tag 变为带 IK 的镜像.
   es_image=$(get_es_image_with_ik "$es_version") || return 1
+  es_base_image="$es_image"
 
   # 优先复用已经构建好的本地镜像. 通过自定义 label 判断该镜像是否确实由 blog-tool 构建, 且插件版本与 ES 版本匹配.
   if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
@@ -97,6 +99,10 @@ ensure_es_image_with_ik() {
   # 构建前先准备插件压缩包. 官方推荐思路是将插件作为镜像构建输入, 而不是等容器启动后再动态安装.
   ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
 
+  # 构建前先按区域策略拉取基础镜像.
+  # 这样在国内非腾讯云环境会优先从腾讯公共仓库取回镜像并重打标准 tag, 避免 docker build 直接访问 docker.io.
+  docker_pull_image_with_region "elasticsearch" "$es_version" || return 1
+
   # 准备临时构建上下文. 这里动态生成 Dockerfile, 让插件安装发生在 docker build 阶段.
   setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$BLOG_TOOL_ENV" "$build_context_dir"
   sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
@@ -107,7 +113,7 @@ ensure_es_image_with_ik() {
   # 插件安装完成后再切回 1000:0, 保持容器运行身份与官方镜像一致.
   # 这样容器启动时直接使用已预装插件的镜像, 不再依赖启动期动态安装插件.
   sudo tee "$build_context_dir/Dockerfile" >/dev/null <<-EOM
-FROM elasticsearch:$es_version
+FROM $es_base_image
 USER root
 COPY analysis-ik.zip /tmp/analysis-ik.zip
 RUN /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \
@@ -118,7 +124,8 @@ LABEL blog-tool.es.ik-plugin="true"
 LABEL blog-tool.es.version="$es_version"
 EOM
 
-  # 通过 docker build 生成最终运行镜像. 这一步成功后, 后续 docker compose up 只负责启动容器, 不再承担插件安装职责.
+  # 通过 docker build 生成最终运行镜像. 这里不再使用 --pull, 避免 BuildKit 在国内非腾讯云环境绕过区域感知拉取而直接访问 docker.io.
+  # 这一步成功后, 后续 docker compose up 只负责启动容器, 不再承担插件安装职责.
   log_info "开始构建带 IK 分词器的 ES 镜像: $es_image"
   sudo DOCKER_BUILDKIT=1 docker build --no-cache -t "$es_image" "$build_context_dir"
 }
