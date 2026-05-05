@@ -107,8 +107,8 @@ IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 # https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip
 # https://release.infinilabs.com/analysis-ik/stable
 # 优先查看分词工具是否更新到最新版本, 以分词工具的版本为准, 其他版本保持一致
-IMG_VERSION_ES="9.3.3"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.3" # 与 es 保持版本一致
+IMG_VERSION_ES="9.3.4"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.3.4" # 与 es 保持版本一致
 
 # 需要创建的运行用户
 JPZ_UID=2025    # 服务端用户
