@@ -6708,7 +6708,7 @@ ensure_es_image_with_ik() {
   # 插件安装完成后再切回 1000:0, 保持容器运行身份与官方镜像一致.
   # 这样容器启动时直接使用已预装插件的镜像, 不再依赖启动期动态安装插件.
   sudo tee "$build_context_dir/Dockerfile" >/dev/null <<-EOM
-FROM docker.io/library/elasticsearch:$es_version
+FROM elasticsearch:$es_version
 USER root
 COPY analysis-ik.zip /tmp/analysis-ik.zip
 RUN /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \

@@ -4952,7 +4952,7 @@ ensure_es_image_with_ik() {
   sudo chown "$JPZ_UID:$JPZ_GID" "$build_context_dir/analysis-ik.zip"
 
   sudo tee "$build_context_dir/Dockerfile" >/dev/null <<-EOM
-FROM docker.io/library/elasticsearch:$es_version
+FROM elasticsearch:$es_version
 USER root
 COPY analysis-ik.zip /tmp/analysis-ik.zip
 RUN /usr/share/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \
