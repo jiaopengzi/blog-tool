@@ -2226,6 +2226,39 @@ docker_get_base_image_with_region() {
 }
 
 DOCKER_REGION_CACHE=""
+
+reset_docker_region_cache() {
+    DOCKER_REGION_CACHE=""
+}
+
+detect_docker_country_code() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -s --max-time 5 ipinfo.io/country
+        return 0
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -qO- -T 5 ipinfo.io/country 2>/dev/null
+        return 0
+    fi
+
+    return 0
+}
+
+docker_tencent_internal_mirror_is_reachable() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1
+        return $?
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1
+        return $?
+    fi
+
+    return 1
+}
+
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then
         echo "$DOCKER_REGION_CACHE"
@@ -2233,8 +2266,17 @@ detect_docker_region() {
     fi
 
     local region="overseas"
-    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
-        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+    local country=""
+
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        log_debug "当前未安装 curl 或 wget, 暂时无法探测 docker 镜像源区域, 稍后重试"
+        echo "$region"
+        return 0
+    fi
+
+    country=$(detect_docker_country_code)
+    if [[ "$country" == "CN" ]]; then
+        if docker_tencent_internal_mirror_is_reachable; then
             region="tencent_cn"
         else
             region="cn_non_tencent"
@@ -4144,20 +4186,402 @@ update_yaml_block() {
     fi
 }
 
+APT_SOURCE_SWITCHED="false"
+APT_SOURCE_TEMP_ACTIVE="false"
+APT_SOURCE_SCOPE_DEPTH=0
+APT_SOURCE_PREVIOUS_EXIT_TRAP=""
+APT_SOURCE_TRACKED_FILES=""
+
+run_with_sudo_if_available() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
+apt_get_noninteractive() {
+    local sub_command=$1
+    shift
+
+    local -a apt_cmd=(
+        env
+        DEBIAN_FRONTEND=noninteractive
+        DEBIAN_PRIORITY=critical
+        NEEDRESTART_MODE=a
+        APT_LISTCHANGES_FRONTEND=none
+        UCF_FORCE_CONFDEF=1
+        UCF_FORCE_CONFFOLD=1
+        apt-get
+        -o Dpkg::Options::=--force-confdef
+        -o Dpkg::Options::=--force-confold
+        "$sub_command"
+    )
+
+    run_with_sudo_if_available "${apt_cmd[@]}" "$@"
+}
+
+backup_apt_source_file_once() {
+    local file_path=$1
+    local backup_path="${file_path}.blog-tool.bak"
+    local absent_marker="${file_path}.blog-tool.absent"
+
+    case ",${APT_SOURCE_TRACKED_FILES}," in
+    *",${file_path},"*)
+        ;;
+    *)
+        if [ -z "$APT_SOURCE_TRACKED_FILES" ]; then
+            APT_SOURCE_TRACKED_FILES="$file_path"
+        else
+            APT_SOURCE_TRACKED_FILES="${APT_SOURCE_TRACKED_FILES},${file_path}"
+        fi
+        ;;
+    esac
+
+    if [ -e "$file_path" ] && [ ! -f "$backup_path" ]; then
+        run_with_sudo_if_available cp "$file_path" "$backup_path"
+        run_with_sudo_if_available rm -f "$absent_marker"
+        return 0
+    fi
+
+    if [ ! -e "$file_path" ] && [ ! -f "$backup_path" ] && [ ! -f "$absent_marker" ]; then
+        run_with_sudo_if_available touch "$absent_marker"
+    fi
+}
+
+restore_apt_source_backups() {
+    local tracked_file=""
+    local backup_path=""
+    local absent_marker=""
+    local -a tracked_files=()
+
+    if [ -z "$APT_SOURCE_TRACKED_FILES" ]; then
+        return 0
+    fi
+
+    IFS=',' read -r -a tracked_files <<<"$APT_SOURCE_TRACKED_FILES"
+    for tracked_file in "${tracked_files[@]}"; do
+        [ -n "$tracked_file" ] || continue
+        backup_path="${tracked_file}.blog-tool.bak"
+        absent_marker="${tracked_file}.blog-tool.absent"
+
+        if [ -f "$backup_path" ]; then
+            run_with_sudo_if_available cp "$backup_path" "$tracked_file"
+            run_with_sudo_if_available rm -f "$backup_path" "$absent_marker"
+            continue
+        fi
+
+        if [ -f "$absent_marker" ]; then
+            run_with_sudo_if_available rm -f "$tracked_file" "$absent_marker"
+        fi
+    done
+
+    APT_SOURCE_TRACKED_FILES=""
+}
+
+apt_source_exit_trap_handler() {
+    restore_temporary_cn_non_tencent_apt_source true || true
+
+    if [ -n "$APT_SOURCE_PREVIOUS_EXIT_TRAP" ]; then
+        eval "$APT_SOURCE_PREVIOUS_EXIT_TRAP"
+    fi
+}
+
+register_apt_source_exit_trap() {
+    local current_exit_trap=""
+
+    current_exit_trap=$(trap -p EXIT | sed -n "s/^trap -- '\(.*\)' EXIT$/\1/p")
+    if [ "$current_exit_trap" = "apt_source_exit_trap_handler" ]; then
+        return 0
+    fi
+
+    APT_SOURCE_PREVIOUS_EXIT_TRAP="$current_exit_trap"
+    trap 'apt_source_exit_trap_handler' EXIT
+}
+
+unregister_apt_source_exit_trap() {
+    if [ -n "$APT_SOURCE_PREVIOUS_EXIT_TRAP" ]; then
+        eval "trap -- $(printf '%q' "$APT_SOURCE_PREVIOUS_EXIT_TRAP") EXIT"
+    else
+        trap - EXIT
+    fi
+
+    APT_SOURCE_PREVIOUS_EXIT_TRAP=""
+}
+
+apt_host_is_resolvable() {
+    local host_name=$1
+
+    if command -v getent >/dev/null 2>&1; then
+        getent hosts "$host_name" >/dev/null 2>&1
+        return $?
+    fi
+
+    if command -v host >/dev/null 2>&1; then
+        host "$host_name" >/dev/null 2>&1
+        return $?
+    fi
+
+    if command -v nslookup >/dev/null 2>&1; then
+        nslookup "$host_name" >/dev/null 2>&1
+        return $?
+    fi
+
+    return 0
+}
+
+get_ubuntu_repo_path_for_arch() {
+    local current_arch=""
+
+    if command -v dpkg >/dev/null 2>&1; then
+        current_arch=$(dpkg --print-architecture 2>/dev/null)
+    fi
+
+    if [ -z "$current_arch" ]; then
+        case "$(uname -m)" in
+        x86_64 | amd64 | i386 | i686)
+            current_arch="amd64"
+            ;;
+        aarch64 | arm64)
+            current_arch="arm64"
+            ;;
+        armv7l | armhf)
+            current_arch="armhf"
+            ;;
+        ppc64el)
+            current_arch="ppc64el"
+            ;;
+        riscv64)
+            current_arch="riscv64"
+            ;;
+        s390x)
+            current_arch="s390x"
+            ;;
+        *)
+            current_arch="amd64"
+            ;;
+        esac
+    fi
+
+    case "$current_arch" in
+    amd64 | i386)
+        echo "ubuntu"
+        ;;
+    *)
+        echo "ubuntu-ports"
+        ;;
+    esac
+}
+
+get_tencent_ubuntu_mirror_base() {
+    local repo_path
+    repo_path=$(get_ubuntu_repo_path_for_arch)
+
+    local -a base_urls=(
+        "http://mirrors.tencent.com/${repo_path}/"
+        "http://mirrors.cloud.tencent.com/${repo_path}/"
+    )
+    local base_url=""
+    local host_name=""
+
+    for base_url in "${base_urls[@]}"; do
+        host_name=$(printf '%s' "$base_url" | awk -F/ '{print $3}')
+        if apt_host_is_resolvable "$host_name"; then
+            echo "$base_url"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+switch_debian_apt_source_to_tencent() {
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Debian 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    local legacy_source_file="/etc/apt/sources.list"
+    local deb822_source_file="/etc/apt/sources.list.d/debian.sources"
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: http://mirrors.tencent.com/debian/
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: $SYSTEM_CODENAME-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+# 默认注释了源码镜像以提高 apt update 速度, 如有需要可自行取消注释
+# 安全更新默认使用官方源, 更新最及时
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+
+deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+
+deb https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+# deb-src https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+EOF
+}
+
+switch_ubuntu_apt_source_to_tencent() {
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Ubuntu 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    local deb822_source_file="/etc/apt/sources.list.d/ubuntu.sources"
+    local legacy_source_file="/etc/apt/sources.list"
+    local ubuntu_mirror_base=""
+
+    ubuntu_mirror_base=$(get_tencent_ubuntu_mirror_base) || {
+        log_warn "未找到当前机器可解析的腾讯 Ubuntu 镜像域名, 跳过 apt 换源"
+        return 0
+    }
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: $ubuntu_mirror_base
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-security $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+deb $ubuntu_mirror_base $SYSTEM_CODENAME main restricted universe multiverse
+deb $ubuntu_mirror_base $SYSTEM_CODENAME-security main restricted universe multiverse
+deb $ubuntu_mirror_base $SYSTEM_CODENAME-updates main restricted universe multiverse
+deb $ubuntu_mirror_base $SYSTEM_CODENAME-backports main restricted universe multiverse
+EOF
+}
+
+switch_cn_non_tencent_apt_source() {
+    log_debug "run switch_cn_non_tencent_apt_source"
+
+    if [ "$APT_SOURCE_SWITCHED" = "true" ]; then
+        return 0
+    fi
+
+    local region
+    region=$(detect_docker_region)
+    if [ "$region" != "cn_non_tencent" ]; then
+        return 0
+    fi
+
+    detect_system || {
+        log_warn "未识别到 Debian 或 Ubuntu 系统, 跳过 apt 换源"
+        return 0
+    }
+
+    case "$SYSTEM_FAMILY" in
+    debian)
+        switch_debian_apt_source_to_tencent || return 1
+        ;;
+    ubuntu)
+        switch_ubuntu_apt_source_to_tencent || return 1
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+
+    APT_SOURCE_SWITCHED="true"
+    log_info "检测到中国大陆非腾讯云环境, 已切换 apt 软件源到腾讯云镜像"
+    apt_get_noninteractive clean all
+    apt_update
+}
+
+begin_temporary_cn_non_tencent_apt_source() {
+    local flow_name=${1:-"当前流程"}
+
+    if [ "$APT_SOURCE_TEMP_ACTIVE" = "true" ]; then
+        APT_SOURCE_SCOPE_DEPTH=$((APT_SOURCE_SCOPE_DEPTH + 1))
+        return 0
+    fi
+
+    switch_cn_non_tencent_apt_source || return 1
+
+    if [ "$APT_SOURCE_SWITCHED" != "true" ]; then
+        return 0
+    fi
+
+    register_apt_source_exit_trap
+    APT_SOURCE_TEMP_ACTIVE="true"
+    APT_SOURCE_SCOPE_DEPTH=1
+    log_info "${flow_name} 已启用临时 apt 换源, 流程结束后将自动恢复"
+}
+
+restore_temporary_cn_non_tencent_apt_source() {
+    local force_restore=${1:-false}
+
+    if [ "$APT_SOURCE_TEMP_ACTIVE" != "true" ]; then
+        return 0
+    fi
+
+    if [ "$force_restore" != "true" ] && [ "$APT_SOURCE_SCOPE_DEPTH" -gt 1 ]; then
+        APT_SOURCE_SCOPE_DEPTH=$((APT_SOURCE_SCOPE_DEPTH - 1))
+        return 0
+    fi
+
+    restore_apt_source_backups
+    APT_SOURCE_SWITCHED="false"
+    APT_SOURCE_TEMP_ACTIVE="false"
+    APT_SOURCE_SCOPE_DEPTH=0
+    unregister_apt_source_exit_trap
+
+    apt_get_noninteractive clean all || true
+    apt_update || true
+
+    log_info "已恢复临时切换前的 apt 软件源"
+}
+
+run_with_temporary_cn_non_tencent_apt_source() {
+    local flow_name=$1
+    local target_func=$2
+    local status=0
+
+    shift 2
+
+    begin_temporary_cn_non_tencent_apt_source "$flow_name" || return 1
+    "$target_func" "$@" || status=$?
+    restore_temporary_cn_non_tencent_apt_source false || true
+    return $status
+}
+
 apt_update() {
     log_debug "run apt_update"
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt update
-    else
-        apt update
-    fi
+    apt_get_noninteractive update
 }
 
 apt_install_y() {
     log_debug "run apt_install_y"
 
-    sudo apt install -y "$@"
+    apt_get_noninteractive install -y "$@"
 }
 
 detect_system() {
@@ -4290,15 +4714,19 @@ init_system_detection() {
 	fi
 }
 
-install_common_software() {
+__install_common_software() {
     log_debug "run install_common_software"
 
     apt_update
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt install -y "${BASE_SOFTWARE_LIST[@]}"
-    else
-        apt install -y "${BASE_SOFTWARE_LIST[@]}"
+    apt_install_y "${BASE_SOFTWARE_LIST[@]}"
+
+    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
+        reset_docker_region_cache
+    fi
+
+    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
+        refresh_host_intranet_network
     fi
 
     if ! grep -q "export HISTSIZE=*" "$HOME/.bashrc"; then
@@ -4313,6 +4741,10 @@ install_common_software() {
         install_cosign
     fi
 
+}
+
+install_common_software() {
+    run_with_temporary_cn_non_tencent_apt_source "基础软件安装" __install_common_software
 }
 
 install_cosign() {
@@ -4473,6 +4905,24 @@ docker_clear_cache() {
     sudo docker image ls --filter "dangling=true" --quiet | xargs -r sudo docker rmi -f || true
 }
 
+is_wsl_environment() {
+    grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
+}
+
+restart_docker_service_with_timeout() {
+    local restart_timeout=30
+
+    if command -v timeout >/dev/null 2>&1; then
+        sudo timeout "$restart_timeout" systemctl restart docker 2>/dev/null && return 0
+        sudo timeout "$restart_timeout" service docker restart 2>/dev/null && return 0
+    else
+        sudo systemctl restart docker 2>/dev/null && return 0
+        sudo service docker restart 2>/dev/null && return 0
+    fi
+
+    return 1
+}
+
 set_daemon_config() {
     log_debug "run set_daemon_config"
 
@@ -4534,7 +4984,15 @@ EOF
     sudo mv "$tmp_file" "$target_file"
 
     log_info "docker 正在重启..."
-    sudo systemctl restart docker 2>/dev/null || sudo service docker restart 2>/dev/null
+    if restart_docker_service_with_timeout; then
+        log_info "docker 重启完成"
+    else
+        if is_wsl_environment; then
+            log_warn "WSL 环境下 docker 服务重启失败或超时, 请确认 WSL 已启用 systemd 或使用 Docker Desktop 集成"
+        else
+            log_warn "docker 服务重启失败或超时, 请手动执行 systemctl status docker 查看原因"
+        fi
+    fi
 
     log_info "如果您需要修改配置, 请编辑 $target_file 文件并重启 docker 服务"
 }
@@ -4567,6 +5025,25 @@ pull_docker_image_pro_all() {
     docker_pull_client
 }
 
+docker_patch_install_script() {
+    log_debug "run docker_patch_install_script"
+
+    local script_file="$1"
+    local docker_mirror="$2"
+
+    if [[ -z "$script_file" || ! -f "$script_file" ]]; then
+        log_error "Docker 安装脚本不存在, 无法继续修补"
+        return 1
+    fi
+
+    if [[ -n "$docker_mirror" ]]; then
+        sudo sed -i "s|DOWNLOAD_URL=\"https://mirrors.aliyun.com/docker-ce\"|DOWNLOAD_URL=\"$docker_mirror\"|g" "$script_file"
+        sudo sed -i 's|Aliyun|MyFastMirror|g' "$script_file"
+    fi
+
+    sudo sed -i 's/[[:space:]]docker-model-plugin//g' "$script_file"
+}
+
 __install_docker() {
     log_debug "run __install_docker"
 
@@ -4593,7 +5070,7 @@ __install_docker() {
         )
     fi
 
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317,SC2329
     run() {
         log_debug "下载命令: sudo curl -fsSL --connect-timeout 5 --max-time 10 $script_url -o $script_file"
         sudo curl -fsSL --connect-timeout 5 --max-time 10 "$script_url" -o "$script_file"
@@ -4624,19 +5101,17 @@ __install_docker() {
 
     if [[ -n "$fastest_docker_mirror" ]]; then
         log_info "使用最快的 Docker CE 镜像源: $fastest_docker_mirror"
-
-        sudo sed -i "s|DOWNLOAD_URL=\"https://mirrors.aliyun.com/docker-ce\"|DOWNLOAD_URL=\"$fastest_docker_mirror\"|g" "$script_file"
-
-        sudo sed -i "s|Aliyun|MyFastMirror|g" "$script_file"
     else
-        log_warn "未找到可用的 Docker CE 镜像源, 将使用默认官方源进行安装，可能会因为网络问题导致安装失败"
+        log_warn "未找到可用的 Docker CE 镜像源, 将使用上游默认源进行安装"
     fi
+
+    docker_patch_install_script "$script_file" "$fastest_docker_mirror" || return 1
 
     sudo chmod +x "$script_file"
 
     log_info "正在安装 docker, 请耐心等待..."
 
-    if sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log; then
+    if (set -o pipefail; sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log); then
         log_info "docker 安装脚本执行完成"
 
         if command -v docker &>/dev/null && docker --version &>/dev/null; then
@@ -4694,7 +5169,7 @@ __uninstall_docker() {
 
     docker_stop_services_before_uninstall
 
-    sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || true
+    sudo apt purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras docker-model-plugin || true
 
     sudo apt autoremove -y
 
@@ -4712,7 +5187,7 @@ uninstall_docker() {
 
     is_uninstall=$(read_user_input "是否卸载 docker (默认n) [y|n]? " "n")
     if [[ "$is_uninstall" == "y" ]]; then
-        __uninstall_docker
+        __uninstall_docker "prompt"
     else
         log_info "未卸载 docker"
     fi
@@ -4731,7 +5206,7 @@ install_docker() {
         if [[ "$is_install" == "y" ]]; then
             log_debug "开始卸载 docker"
 
-            __uninstall_docker
+            __uninstall_docker "prompt"
 
             __install_docker "$is_manual_install"
         else

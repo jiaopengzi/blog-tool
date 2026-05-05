@@ -5,6 +5,28 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : Docker 守护进程配置相关脚本
 
+# 判断当前环境是否为 WSL.
+# 返回: WSL 环境返回 0, 其他环境返回 1.
+is_wsl_environment() {
+    grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
+}
+
+# 执行带超时的 Docker 服务重启.
+# 返回: 重启成功返回 0, 失败或超时返回 1.
+restart_docker_service_with_timeout() {
+    local restart_timeout=30
+
+    if command -v timeout >/dev/null 2>&1; then
+        sudo timeout "$restart_timeout" systemctl restart docker 2>/dev/null && return 0
+        sudo timeout "$restart_timeout" service docker restart 2>/dev/null && return 0
+    else
+        sudo systemctl restart docker 2>/dev/null && return 0
+        sudo service docker restart 2>/dev/null && return 0
+    fi
+
+    return 1
+}
+
 # 设置 docker daemon 配置
 set_daemon_config() {
     log_debug "run set_daemon_config"
@@ -80,7 +102,15 @@ EOF
     sudo mv "$tmp_file" "$target_file"
 
     log_info "docker 正在重启..."
-    sudo systemctl restart docker 2>/dev/null || sudo service docker restart 2>/dev/null
+    if restart_docker_service_with_timeout; then
+        log_info "docker 重启完成"
+    else
+        if is_wsl_environment; then
+            log_warn "WSL 环境下 docker 服务重启失败或超时, 请确认 WSL 已启用 systemd 或使用 Docker Desktop 集成"
+        else
+            log_warn "docker 服务重启失败或超时, 请手动执行 systemctl status docker 查看原因"
+        fi
+    fi
 
     # log_info "当前 docker daemon 配置内容如下:"
     # if command -v jq >/dev/null 2>&1 && sudo jq '.' "$target_file" 2>/dev/null; then
