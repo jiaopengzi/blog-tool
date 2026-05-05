@@ -5,9 +5,9 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : 安装 docker
 
-# 修补上游 Docker 安装脚本, 避免静默安装掩盖进度或阻塞原因.
+# 修补上游 Docker 安装脚本, 注入镜像源并降低非交互安装阻塞风险.
 # 参数: $1: 下载后的安装脚本路径.
-# 参数: $2: 选中的 Docker CE 镜像源, 为空则保留上游默认值.
+# 参数: $2: 选中的 Docker CE 镜像源, 为空则保留上游默认源.
 # 返回: 修补成功返回 0, 脚本文件不存在返回 1.
 docker_patch_install_script() {
     log_debug "run docker_patch_install_script"
@@ -27,6 +27,34 @@ docker_patch_install_script() {
 
     # blog-tool 不依赖 docker-model-plugin, WSL Ubuntu 上该可选包可能放大 postinst 阻塞面.
     sudo sed -i 's/[[:space:]]docker-model-plugin//g' "$script_file"
+
+    # 上游脚本默认把 apt 输出重定向到 /dev/null, 卡住时没有任何可诊断信息.
+    sudo sed -i 's|apt-get -qq update >/dev/null|apt-get update|g' "$script_file"
+    sudo sed -i 's|DEBIAN_FRONTEND=noninteractive apt-get -y -qq install|DEBIAN_FRONTEND=noninteractive DEBIAN_PRIORITY=critical NEEDRESTART_MODE=a APT_LISTCHANGES_FRONTEND=none UCF_FORCE_CONFDEF=1 UCF_FORCE_CONFFOLD=1 apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install|g' "$script_file"
+    sudo sed -i 's|install \$pre_reqs >/dev/null|install \$pre_reqs|g' "$script_file"
+    sudo sed -i 's|install \$pkgs >/dev/null|install \$pkgs|g' "$script_file"
+}
+
+# 执行上游 Docker 安装脚本, 跳过上游自启动并交给本工具统一配置 daemon.
+# 参数: $1: 下载后的安装脚本路径.
+# 参数: $2: 选中的 Docker CE 镜像源, 非空时使用已注入的 MyFastMirror.
+# 返回: 安装脚本成功返回 0, 失败或超时返回非 0.
+docker_run_install_script() {
+    local script_file="$1"
+    local docker_mirror="$2"
+    local install_timeout=900
+    local -a install_args=(bash "$script_file")
+
+    if [[ -n "$docker_mirror" ]]; then
+        install_args+=(--mirror MyFastMirror)
+    fi
+
+    if command -v timeout >/dev/null 2>&1; then
+        sudo env NO_AUTOSTART=1 timeout "$install_timeout" "${install_args[@]}"
+        return $?
+    fi
+
+    sudo env NO_AUTOSTART=1 "${install_args[@]}"
 }
 
 # 执行 docker 安装和配置
@@ -61,7 +89,6 @@ __install_docker() {
     # 下载脚本
     # shellcheck disable=SC2317,SC2329
     run() {
-        # sudo curl -fsSL --retry 5 --retry-delay 3 --connect-timeout 5 --max-time 10 "$script_url" -o "$script_file"
         log_debug "下载命令: sudo curl -fsSL --connect-timeout 5 --max-time 10 $script_url -o $script_file"
         sudo curl -fsSL --connect-timeout 5 --max-time 10 "$script_url" -o "$script_file"
     }
@@ -83,16 +110,14 @@ __install_docker() {
         exit 1
     fi
 
-    # 获取最快的 Docker CE 镜像源
     local fastest_docker_mirror
-    # 如果是手动安装，则不使用镜像源加速
+    # 手动安装时由用户选择 Docker CE 源, 自动安装时使用测速结果.
     if [[ "$is_manual_install" == "y" ]]; then
         fastest_docker_mirror=$(manual_select_docker_source)
     else
         fastest_docker_mirror=$(find_fastest_docker_mirror)
     fi
 
-    # 将 DEFAULT_DOWNLOAD_URL="https://download.docker.com" 替换为最快的镜像源
     if [[ -n "$fastest_docker_mirror" ]]; then
         log_info "使用最快的 Docker CE 镜像源: $fastest_docker_mirror"
     else
@@ -107,7 +132,7 @@ __install_docker() {
     log_info "正在安装 docker, 请耐心等待..."
 
     # 执行安装脚本并记录日志
-    if (set -o pipefail; sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log); then
+    if (set -o pipefail; docker_run_install_script "$script_file" "$fastest_docker_mirror" 2>&1 | tee -a ./install.log); then
         log_info "docker 安装脚本执行完成"
 
         # 进一步验证 docker 是否真的安装成功
