@@ -611,6 +611,33 @@ docker_pull_image_with_region() {
     log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
 }
 
+# 获取构建阶段应使用的基础镜像引用.
+# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 版本.
+# 返回: 输出当前区域下最合适的镜像引用, 供 Dockerfile FROM 使用.
+docker_get_base_image_with_region() {
+    log_debug "run docker_get_base_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "获取区域基础镜像失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    local region
+    region=$(detect_docker_region)
+
+    if [ "$region" != "cn_non_tencent" ]; then
+        echo "$standard_image:$version"
+        return 0
+    fi
+
+    local image_basename="${standard_image##*/}"
+    echo "$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename:$version"
+}
+
 # 检测 docker 镜像源区域: 输出 tencent_cn | cn_non_tencent | overseas, 结果在进程内缓存
 DOCKER_REGION_CACHE=""
 detect_docker_region() {

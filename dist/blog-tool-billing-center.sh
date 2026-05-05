@@ -2202,6 +2202,29 @@ docker_pull_image_with_region() {
     log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
 }
 
+docker_get_base_image_with_region() {
+    log_debug "run docker_get_base_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "获取区域基础镜像失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    local region
+    region=$(detect_docker_region)
+
+    if [ "$region" != "cn_non_tencent" ]; then
+        echo "$standard_image:$version"
+        return 0
+    fi
+
+    local image_basename="${standard_image##*/}"
+    echo "$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename:$version"
+}
+
 DOCKER_REGION_CACHE=""
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then

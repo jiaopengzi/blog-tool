@@ -2931,6 +2931,33 @@ docker_pull_image_with_region() {
     log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
 }
 
+# 获取构建阶段应使用的基础镜像引用.
+# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 版本.
+# 返回: 输出当前区域下最合适的镜像引用, 供 Dockerfile FROM 使用.
+docker_get_base_image_with_region() {
+    log_debug "run docker_get_base_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "获取区域基础镜像失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    local region
+    region=$(detect_docker_region)
+
+    if [ "$region" != "cn_non_tencent" ]; then
+        echo "$standard_image:$version"
+        return 0
+    fi
+
+    local image_basename="${standard_image##*/}"
+    echo "$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename:$version"
+}
+
 # 检测 docker 镜像源区域: 输出 tencent_cn | cn_non_tencent | overseas, 结果在进程内缓存
 DOCKER_REGION_CACHE=""
 detect_docker_region() {
@@ -6684,7 +6711,7 @@ ensure_es_image_with_ik() {
 
   # 先确定目标镜像标签. 这里仍复用 Elasticsearch 官方镜像名称, 但通过本地重建让同名 tag 变为带 IK 的镜像.
   es_image=$(get_es_image_with_ik "$es_version") || return 1
-  es_base_image="$es_image"
+  es_base_image=$(docker_get_base_image_with_region "elasticsearch" "$es_version") || return 1
 
   # 优先复用已经构建好的本地镜像. 通过自定义 label 判断该镜像是否确实由 blog-tool 构建, 且插件版本与 ES 版本匹配.
   if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
@@ -6701,7 +6728,7 @@ ensure_es_image_with_ik() {
   ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
 
   # 构建前先按区域策略拉取基础镜像.
-  # 这样在国内非腾讯云环境会优先从腾讯公共仓库取回镜像并重打标准 tag, 避免 docker build 直接访问 docker.io.
+  # 这样在国内非腾讯云环境会优先从腾讯公共仓库取回镜像, 同时 Dockerfile 也会直接引用腾讯仓库地址, 避免 BuildKit 回源 docker.io.
   docker_pull_image_with_region "elasticsearch" "$es_version" || return 1
 
   # 准备临时构建上下文. 这里动态生成 Dockerfile, 让插件安装发生在 docker build 阶段.
@@ -6709,7 +6736,7 @@ ensure_es_image_with_ik() {
   sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
   sudo chown "$JPZ_UID:$JPZ_GID" "$build_context_dir/analysis-ik.zip"
 
-  # 使用官方 Elasticsearch 镜像作为基础镜像.
+  # 使用按区域选择后的 Elasticsearch 基础镜像.
   # 构建阶段临时切到 root, 是为了安装插件和清理临时文件.
   # 插件安装完成后再切回 1000:0, 保持容器运行身份与官方镜像一致.
   # 这样容器启动时直接使用已预装插件的镜像, 不再依赖启动期动态安装插件.
