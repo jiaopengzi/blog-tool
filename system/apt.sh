@@ -342,7 +342,7 @@ validate_temporary_apt_source_or_fallback() {
 
     log_warn "临时切换的 apt 软件源不可用, 立即回退到原始软件源"
 
-    if ! restore_temporary_apt_source; then
+    if ! restore_temporary_apt_source "true"; then
         log_error "临时 apt 软件源不可用且恢复原始软件源失败"
         return 1
     fi
@@ -402,10 +402,12 @@ prepare_temporary_apt_source_for_install() {
     validate_temporary_apt_source_or_fallback
 }
 
-# 恢复本轮临时切换前的 apt 软件源, 并刷新 apt 索引.
+# 恢复本轮临时切换前的 apt 软件源.
+# 参数: $1: 是否在恢复后立即执行 apt update, 可选值 true / false, 默认 false.
 # 返回: 0 表示无需恢复或恢复成功, 1 表示恢复失败.
 restore_temporary_apt_source() {
     log_debug "run restore_temporary_apt_source"
+    local should_update_after_restore="${1:-false}"
 
     if [ "$APT_SOURCE_SWITCHED" != "true" ]; then
         return 0
@@ -453,9 +455,11 @@ restore_temporary_apt_source() {
 
     if [ "$restored_any" = "true" ]; then
         log_info "已恢复临时切换前的 apt 软件源"
-        if ! apt_update; then
-            log_error "恢复 apt 软件源后执行 apt-get update 失败"
-            return 1
+        if [ "$should_update_after_restore" = "true" ]; then
+            if ! apt_update; then
+                log_error "恢复 apt 软件源后执行 apt-get update 失败"
+                return 1
+            fi
         fi
     fi
 

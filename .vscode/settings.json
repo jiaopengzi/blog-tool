@@ -18,6 +18,7 @@
         "datestyle",
         "dbfilename",
         "DECSTBM",
+        "dists",
         "dport",
         "dstnat",
         "everysec",
