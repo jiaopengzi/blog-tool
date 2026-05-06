@@ -351,7 +351,7 @@ validate_temporary_apt_source_or_fallback() {
     return 0
 }
 
-# 在基础软件安装前, 仅对中国大陆非腾讯云环境临时切换 apt 软件源.
+# 在基础软件安装前, 仅对国内非腾讯云环境临时切换 apt 软件源.
 # 返回: 0 表示无需切换或切换成功, 1 表示切换失败.
 prepare_temporary_apt_source_for_install() {
     log_debug "run prepare_temporary_apt_source_for_install"
@@ -397,7 +397,7 @@ prepare_temporary_apt_source_for_install() {
 
     APT_SOURCE_SWITCHED="true"
     APT_SELECTED_MIRROR="$selected_mirror"
-    log_info "检测到中国大陆非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
+    log_info "检测到国内非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
 
     validate_temporary_apt_source_or_fallback
 }

@@ -141,6 +141,7 @@ docker_create_client_temp_container() {
     fi
 
     # 创建临时容器（GitHub Actions 中无私有 registry，直接用本地 tag）
+    # shellcheck disable=SC2155
     local img_name="$(get_img_prefix)/blog-client:$version"
     if [ "${GITHUB_ACTIONS}" = "true" ]; then
         img_name="blog-client:$version"
@@ -318,7 +319,7 @@ docker_pull_client() {
         }
         docker_private_registry_login_logout run
     else
-        # 区域感知拉取: 国内非腾讯云走腾讯公共仓库, 拉取后 tag 回 $DOCKER_HUB_OWNER/blog-client
+        # 区域感知拉取: 腾讯云加速失败时自动切到国内非腾讯云公共镜像, 国内非腾讯云优先走腾讯公共仓库.
         docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-client" "$version"
     fi
 }

@@ -77,6 +77,12 @@ DOCKER_HUB_OWNER="jiaopengzi"   # docker hub 用户名
 # 腾讯云公共仓库地址, 用于国内非腾讯云环境免登录拉取公共镜像
 REGISTRY_REMOTE_SERVER_TENCENT="ccr.ccs.tencentyun.com/jiaopengzi"
 
+# 国内公共 Docker Hub 兜底镜像前缀, 按顺序尝试.
+# 主要用于腾讯云加速或腾讯公共仓库未及时同步 blog-server/blog-client 等小众镜像时兜底拉取.
+DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN=(
+    "docker.1ms.run|1MS"
+)
+
 START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整

@@ -5,6 +5,8 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : pgsql docker 相关操作
 
+# shellcheck disable=SC2153
+
 # postgresql.conf 文件
 get_content_postgresql_conf() {
   local postgres_port=$1
@@ -121,6 +123,11 @@ EOL
 # 启动 pgsql 容器
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  local runtime_pgsql_version=""
+
+  runtime_pgsql_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_PGSQL" "postgres" "$IMG_VERSION_PGSQL")
+  docker_pull_image_with_region "postgres" "$runtime_pgsql_version" || return 1
 
   # 权限设置
   setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"

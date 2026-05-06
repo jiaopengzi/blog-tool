@@ -333,6 +333,10 @@ DOCKER_HUB_OWNER="jiaopengzi"   # docker hub 用户名
 
 REGISTRY_REMOTE_SERVER_TENCENT="ccr.ccs.tencentyun.com/jiaopengzi"
 
+DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN=(
+    "docker.1ms.run|1MS"
+)
+
 START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整
@@ -2373,36 +2377,119 @@ docker_tag_push_public_registry_tencent() {
     log_info "推送到腾讯仓库成功: $tencent_image:$docker_tag_version"
 }
 
+docker_get_cn_public_mirror_image() {
+    local mirror_prefix="$1"
+    local standard_image="$2"
+
+    if [[ "$standard_image" == */* ]]; then
+        echo "$mirror_prefix/$standard_image"
+        return 0
+    fi
+
+    echo "$mirror_prefix/library/$standard_image"
+}
+
+docker_pull_image_from_source_and_retag() {
+    local source_image="$1"
+    local standard_image="$2"
+    local version="$3"
+    local source_label="$4"
+
+    if [ -z "$source_image" ] || [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "镜像来源拉取失败, 来源镜像名, 标准镜像名和版本不能为空"
+        return 1
+    fi
+
+    log_info "尝试从 $source_label 拉取镜像: $source_image:$version"
+
+    timeout_retry_docker_pull "$source_image" "$version" || {
+        log_warn "从 $source_label 拉取失败: $source_image:$version"
+        return 1
+    }
+
+    if [ "$source_image" = "$standard_image" ]; then
+        return 0
+    fi
+
+    sudo docker tag "$source_image:$version" "$standard_image:$version"
+    sudo docker image rm "$source_image:$version" >/dev/null 2>&1 || true
+
+    log_debug "已将 $source_image:$version 重打标签为 $standard_image:$version"
+}
+
+docker_pull_image_via_cn_public_mirrors() {
+    local standard_image="$1"
+    local version="$2"
+    local mirror_entry=""
+    local mirror_prefix=""
+    local mirror_name=""
+    local mirror_image=""
+
+    if [ "${#DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN[@]}" -eq 0 ]; then
+        log_error "国内公共 Docker 镜像兜底源未配置"
+        return 1
+    fi
+
+    for mirror_entry in "${DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN[@]}"; do
+        IFS='|' read -r mirror_prefix mirror_name <<<"$mirror_entry"
+
+        if [ -z "$mirror_prefix" ]; then
+            continue
+        fi
+
+        mirror_image=$(docker_get_cn_public_mirror_image "$mirror_prefix" "$standard_image")
+
+        if docker_pull_image_from_source_and_retag "$mirror_image" "$standard_image" "$version" "${mirror_name:-$mirror_prefix}"; then
+            return 0
+        fi
+    done
+
+    log_error "国内公共 Docker 镜像兜底拉取失败: $standard_image:$version"
+    return 1
+}
+
 docker_pull_image_with_region() {
     log_debug "run docker_pull_image_with_region"
 
     local standard_image="$1"
     local version="$2"
+    local region=""
+    local image_basename=""
+    local tencent_image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
         log_error "区域感知拉取失败, 镜像名和版本不能为空"
         return 1
     fi
 
-    local region
     region=$(detect_docker_region)
 
-    if [ "$region" != "cn_non_tencent" ]; then
+    if [ "$region" = "overseas" ]; then
         timeout_retry_docker_pull "$standard_image" "$version"
         return $?
     fi
 
-    local image_basename="${standard_image##*/}"
-    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+    if [ "$region" = "tencent_cn" ]; then
+        if timeout_retry_docker_pull "$standard_image" "$version"; then
+            return 0
+        fi
 
-    log_info "检测到国内非腾讯云环境, 从腾讯公共仓库拉取: $tencent_image:$version"
+        log_warn "腾讯云镜像加速拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+        docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+        return $?
+    fi
 
-    timeout_retry_docker_pull "$tencent_image" "$version" || return 1
+    image_basename="${standard_image##*/}"
+    tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
 
-    sudo docker tag "$tencent_image:$version" "$standard_image:$version"
-    sudo docker image rm "$tencent_image:$version" >/dev/null 2>&1 || true
+    if [ -n "$REGISTRY_REMOTE_SERVER_TENCENT" ]; then
+        if docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"; then
+            return 0
+        fi
+    fi
 
-    log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
+    log_warn "腾讯公共仓库拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+    docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
 }
 
 docker_get_base_image_with_region() {
@@ -4877,7 +4964,7 @@ prepare_temporary_apt_source_for_install() {
 
     APT_SOURCE_SWITCHED="true"
     APT_SELECTED_MIRROR="$selected_mirror"
-    log_info "检测到中国大陆非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
+    log_info "检测到国内非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
 
     validate_temporary_apt_source_or_fallback
 }
@@ -5303,6 +5390,24 @@ docker_clear_cache() {
     sudo docker image ls --filter "dangling=true" --quiet | xargs -r sudo docker rmi -f || true
 }
 
+is_wsl_environment() {
+    grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
+}
+
+restart_docker_service_with_timeout() {
+    local restart_timeout=30
+
+    if command -v timeout >/dev/null 2>&1; then
+        sudo timeout "$restart_timeout" systemctl restart docker 2>/dev/null && return 0
+        sudo timeout "$restart_timeout" service docker restart 2>/dev/null && return 0
+    else
+        sudo systemctl restart docker 2>/dev/null && return 0
+        sudo service docker restart 2>/dev/null && return 0
+    fi
+
+    return 1
+}
+
 set_daemon_config() {
     log_debug "run set_daemon_config"
 
@@ -5364,7 +5469,15 @@ EOF
     sudo mv "$tmp_file" "$target_file"
 
     log_info "docker 正在重启..."
-    sudo systemctl restart docker 2>/dev/null || sudo service docker restart 2>/dev/null
+    if restart_docker_service_with_timeout; then
+        log_info "docker 重启完成"
+    else
+        if is_wsl_environment; then
+            log_warn "WSL 环境下 docker 服务重启失败或超时, 请确认 WSL 已启用 systemd 或使用 Docker Desktop 集成"
+        else
+            log_warn "docker 服务重启失败或超时, 请手动执行 systemctl status docker 查看原因"
+        fi
+    fi
 
     log_info "如果您需要修改配置, 请编辑 $target_file 文件并重启 docker 服务"
 }
@@ -6569,6 +6682,8 @@ delete_es_kibana() {
   fi
 }
 
+# shellcheck disable=SC2153
+
 get_content_postgresql_conf() {
   local postgres_port=$1
 
@@ -6680,6 +6795,11 @@ EOL
 
 start_db_pgsql() {
   log_debug "run start_db_pgsql"
+
+  local runtime_pgsql_version=""
+
+  runtime_pgsql_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_PGSQL" "postgres" "$IMG_VERSION_PGSQL")
+  docker_pull_image_with_region "postgres" "$runtime_pgsql_version" || return 1
 
   setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
 
@@ -6845,6 +6965,11 @@ delete_db_pgsql() {
 
 start_db_redis() {
     log_debug "run start_db_redis"
+
+    local runtime_redis_version=""
+
+    runtime_redis_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_REDIS" "redis" "$IMG_VERSION_REDIS")
+    docker_pull_image_with_region "redis" "$runtime_redis_version" || return 1
 
     setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis"
 
@@ -7788,6 +7913,7 @@ docker_create_client_temp_container() {
         sudo docker rm -f temp_container_blog_client >/dev/null 2>&1 || true
     fi
 
+    # shellcheck disable=SC2155
     local img_name="$(get_img_prefix)/blog-client:$version"
     if [ "${GITHUB_ACTIONS}" = "true" ]; then
         img_name="blog-client:$version"

@@ -575,7 +575,92 @@ docker_tag_push_public_registry_tencent() {
     log_info "推送到腾讯仓库成功: $tencent_image:$docker_tag_version"
 }
 
-# 区域感知镜像拉取: 国内非腾讯云从腾讯仓库拉取并 tag 回标准名, 其他区域走默认拉取.
+# 生成带国内公共镜像前缀的镜像名.
+# 参数: $1 公共镜像前缀, 如 docker.m.daocloud.io.
+# 参数: $2 标准镜像名, 如 redis / $DOCKER_HUB_OWNER/blog-server.
+# 返回: 输出补全后的镜像名; 官方镜像会自动补 library 前缀.
+docker_get_cn_public_mirror_image() {
+    local mirror_prefix="$1"
+    local standard_image="$2"
+
+    if [[ "$standard_image" == */* ]]; then
+        echo "$mirror_prefix/$standard_image"
+        return 0
+    fi
+
+    echo "$mirror_prefix/library/$standard_image"
+}
+
+# 从指定来源拉取镜像, 成功后按标准镜像名重打标签.
+# 参数: $1 来源镜像名.
+# 参数: $2 标准镜像名.
+# 参数: $3 版本.
+# 参数: $4 来源展示名.
+# 返回: 0 表示拉取并重打标签成功, 非 0 表示失败.
+docker_pull_image_from_source_and_retag() {
+    local source_image="$1"
+    local standard_image="$2"
+    local version="$3"
+    local source_label="$4"
+
+    if [ -z "$source_image" ] || [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "镜像来源拉取失败, 来源镜像名, 标准镜像名和版本不能为空"
+        return 1
+    fi
+
+    log_info "尝试从 $source_label 拉取镜像: $source_image:$version"
+
+    timeout_retry_docker_pull "$source_image" "$version" || {
+        log_warn "从 $source_label 拉取失败: $source_image:$version"
+        return 1
+    }
+
+    if [ "$source_image" = "$standard_image" ]; then
+        return 0
+    fi
+
+    sudo docker tag "$source_image:$version" "$standard_image:$version"
+    sudo docker image rm "$source_image:$version" >/dev/null 2>&1 || true
+
+    log_debug "已将 $source_image:$version 重打标签为 $standard_image:$version"
+}
+
+# 使用国内非腾讯云公共镜像前缀兜底拉取 Docker Hub 公共镜像.
+# 参数: $1 标准镜像名.
+# 参数: $2 版本.
+# 返回: 0 表示成功, 非 0 表示全部候选源都失败.
+docker_pull_image_via_cn_public_mirrors() {
+    local standard_image="$1"
+    local version="$2"
+    local mirror_entry=""
+    local mirror_prefix=""
+    local mirror_name=""
+    local mirror_image=""
+
+    if [ "${#DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN[@]}" -eq 0 ]; then
+        log_error "国内公共 Docker 镜像兜底源未配置"
+        return 1
+    fi
+
+    for mirror_entry in "${DOCKER_HUB_PUBLIC_MIRROR_PREFIXES_CN[@]}"; do
+        IFS='|' read -r mirror_prefix mirror_name <<<"$mirror_entry"
+
+        if [ -z "$mirror_prefix" ]; then
+            continue
+        fi
+
+        mirror_image=$(docker_get_cn_public_mirror_image "$mirror_prefix" "$standard_image")
+
+        if docker_pull_image_from_source_and_retag "$mirror_image" "$standard_image" "$version" "${mirror_name:-$mirror_prefix}"; then
+            return 0
+        fi
+    done
+
+    log_error "国内公共 Docker 镜像兜底拉取失败: $standard_image:$version"
+    return 1
+}
+
+# 区域感知镜像拉取: 腾讯云优先走默认拉取, 失败后切到国内非腾讯云公共镜像; 国内非腾讯云优先走腾讯公共仓库, 失败后继续兜底.
 # 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
 # 参数: $2 版本
 docker_pull_image_with_region() {
@@ -583,32 +668,44 @@ docker_pull_image_with_region() {
 
     local standard_image="$1"
     local version="$2"
+    local region=""
+    local image_basename=""
+    local tencent_image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
         log_error "区域感知拉取失败, 镜像名和版本不能为空"
         return 1
     fi
 
-    local region
     region=$(detect_docker_region)
 
-    if [ "$region" != "cn_non_tencent" ]; then
+    if [ "$region" = "overseas" ]; then
         timeout_retry_docker_pull "$standard_image" "$version"
         return $?
     fi
 
-    # 国内非腾讯云: 从腾讯公共仓库拉取(无需登录), 拉取后 tag 为标准名以保持 compose 引用统一
-    local image_basename="${standard_image##*/}"
-    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+    if [ "$region" = "tencent_cn" ]; then
+        if timeout_retry_docker_pull "$standard_image" "$version"; then
+            return 0
+        fi
 
-    log_info "检测到国内非腾讯云环境, 从腾讯公共仓库拉取: $tencent_image:$version"
+        log_warn "腾讯云镜像加速拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+        docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+        return $?
+    fi
 
-    timeout_retry_docker_pull "$tencent_image" "$version" || return 1
+    # 国内非腾讯云: 优先从腾讯公共仓库拉取(无需登录), 失败后切到国内非腾讯云公共镜像, 拉取后统一 tag 为标准名.
+    image_basename="${standard_image##*/}"
+    tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
 
-    sudo docker tag "$tencent_image:$version" "$standard_image:$version"
-    sudo docker image rm "$tencent_image:$version" >/dev/null 2>&1 || true
+    if [ -n "$REGISTRY_REMOTE_SERVER_TENCENT" ]; then
+        if docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"; then
+            return 0
+        fi
+    fi
 
-    log_debug "已将 $tencent_image:$version 重打标签为 $standard_image:$version"
+    log_warn "腾讯公共仓库拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+    docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
 }
 
 # 获取构建阶段应使用的基础镜像引用.

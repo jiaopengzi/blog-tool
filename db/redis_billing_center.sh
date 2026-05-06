@@ -9,6 +9,11 @@
 start_db_redis_billing_center() {
     log_debug "run start_db_redis_billing_center"
 
+    local runtime_redis_version=""
+
+    runtime_redis_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" "redis" "$IMG_VERSION_REDIS")
+    docker_pull_image_with_region "redis" "$runtime_redis_version" || return 1
+
     # 权限设置
     setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"
 

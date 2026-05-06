@@ -8,6 +8,12 @@
 # 启动 pgsql 容器(billing center)
 start_db_pgsql_billing_center() {
   log_debug "run start_db_pgsql_billing_center"
+
+  local runtime_pgsql_version=""
+
+  runtime_pgsql_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" "postgres" "$IMG_VERSION_PGSQL")
+  docker_pull_image_with_region "postgres" "$runtime_pgsql_version" || return 1
+
   sudo docker compose -f "$DOCKER_COMPOSE_FILE_PGSQL_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_PGSQL_BILLING_CENTER" up -d
 }
 
