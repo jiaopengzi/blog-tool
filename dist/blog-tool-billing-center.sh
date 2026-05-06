@@ -324,14 +324,112 @@ START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整
 
-if command -v ifconfig >/dev/null 2>&1; then
-    HOST_INTRANET_IP=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $2}')
+ipv4_prefix_to_netmask() {
+    local prefix_length=$1
+    local full_octets=0
+    local remainder_bits=0
+    local octet_index
+    local current_octet=0
+    local netmask=""
 
-    HOST_INTRANET_MARK=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $4}')
-else
-    HOST_INTRANET_IP="127.0.0.1"
-    HOST_INTRANET_MARK="255.0.0.0"
-fi
+    if ! [[ "$prefix_length" =~ ^[0-9]+$ ]] || [ "$prefix_length" -lt 0 ] || [ "$prefix_length" -gt 32 ]; then
+        echo "255.0.0.0"
+        return 0
+    fi
+
+    full_octets=$((prefix_length / 8))
+    remainder_bits=$((prefix_length % 8))
+
+    for octet_index in 0 1 2 3; do
+        if [ "$octet_index" -lt "$full_octets" ]; then
+            current_octet=255
+        elif [ "$octet_index" -eq "$full_octets" ] && [ "$remainder_bits" -gt 0 ]; then
+            current_octet=$((256 - 2 ** (8 - remainder_bits)))
+        else
+            current_octet=0
+        fi
+
+        if [ -z "$netmask" ]; then
+            netmask="$current_octet"
+        else
+            netmask="$netmask.$current_octet"
+        fi
+    done
+
+    echo "$netmask"
+}
+
+detect_host_intranet_ip() {
+    local candidate_ip=""
+
+    if command -v ip >/dev/null 2>&1; then
+        candidate_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+
+        candidate_ip=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v hostname >/dev/null 2>&1; then
+        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i !~ /^127\./) {print $i; exit}}')
+        if [ -n "$candidate_ip" ]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_ip=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $2; exit}
+        ')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    echo "127.0.0.1"
+}
+
+detect_host_intranet_mask() {
+    local prefix_length=""
+    local candidate_mask=""
+
+    if command -v ip >/dev/null 2>&1; then
+        prefix_length=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[2]; exit}')
+        if [ -n "$prefix_length" ]; then
+            ipv4_prefix_to_netmask "$prefix_length"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_mask=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $4; exit}
+        ')
+        if [ -n "$candidate_mask" ]; then
+            echo "$candidate_mask"
+            return 0
+        fi
+    fi
+
+    echo "255.0.0.0"
+}
+
+refresh_host_intranet_network() {
+    HOST_INTRANET_IP=$(detect_host_intranet_ip)
+    HOST_INTRANET_MARK=$(detect_host_intranet_mask)
+}
+
+refresh_host_intranet_network
 
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
@@ -938,6 +1036,9 @@ check_install_base() {
         python3
     )
     local missing_commands=()
+    local missing_after_install=()
+    local cmd
+
     for cmd in "${which_software_list[@]}"; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing_commands+=("$cmd")
@@ -947,7 +1048,23 @@ check_install_base() {
     if [ ${#missing_commands[@]} -ne 0 ]; then
         if [ "${AUTO_MODE:-false}" = "true" ]; then
             log_info "--auto 模式检测到缺少基础软件, 将自动安装: ${missing_commands[*]}"
-            install_common_software
+            if ! install_common_software; then
+                log_error "--auto 模式安装基础软件失败: ${missing_commands[*]}"
+                exit 1
+            fi
+
+            for cmd in "${which_software_list[@]}"; do
+                if ! command -v "$cmd" >/dev/null 2>&1; then
+                    missing_after_install+=("$cmd")
+                fi
+            done
+
+            if [ ${#missing_after_install[@]} -ne 0 ]; then
+                log_error "--auto 模式安装基础软件后仍缺少命令: ${missing_after_install[*]}"
+                exit 1
+            fi
+
+            refresh_host_intranet_network
             return 0
         fi
 
@@ -955,7 +1072,22 @@ check_install_base() {
         is_install=$(read_user_input "是否开始安装基础依赖软件(默认n) [y|n]? " "n")
         if [ "$is_install" == "y" ]; then
             log_info "开始安装基础软件..."
-            install_common_software
+            if ! install_common_software; then
+                log_error "基础软件安装失败, 请修复后重新运行脚本."
+                exit 1
+            fi
+
+            for cmd in "${which_software_list[@]}"; do
+                if ! command -v "$cmd" >/dev/null 2>&1; then
+                    missing_after_install+=("$cmd")
+                fi
+            done
+
+            if [ ${#missing_after_install[@]} -ne 0 ]; then
+                log_error "基础软件安装后仍缺少命令: ${missing_after_install[*]}, 请检查 apt 源或软件包状态."
+                exit 1
+            fi
+
             log_info "基础软件安装完成, 请重新运行脚本."
             exit 0
         else
@@ -2226,6 +2358,11 @@ docker_get_base_image_with_region() {
 }
 
 DOCKER_REGION_CACHE=""
+
+reset_docker_region_cache() {
+    DOCKER_REGION_CACHE=""
+}
+
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then
         echo "$DOCKER_REGION_CACHE"
@@ -2233,8 +2370,27 @@ detect_docker_region() {
     fi
 
     local region="overseas"
-    if [[ $(curl -s --max-time 5 ipinfo.io/country) == "CN" ]]; then
-        if curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+    local country=""
+    local has_probe_tool="false"
+
+    if command -v curl >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(curl -s --max-time 5 ipinfo.io/country 2>/dev/null)
+    elif command -v wget >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(wget -qO- -T 5 ipinfo.io/country 2>/dev/null)
+    fi
+
+    if [ "$has_probe_tool" != "true" ]; then
+        log_debug "当前未安装 curl 或 wget, 暂时无法探测 docker 镜像源区域, 稍后重试"
+        echo "$region"
+        return 0
+    fi
+
+    if [[ "$country" == "CN" ]]; then
+        if command -v curl >/dev/null 2>&1 && curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+            region="tencent_cn"
+        elif command -v wget >/dev/null 2>&1 && wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
             region="tencent_cn"
         else
             region="cn_non_tencent"
@@ -4144,20 +4300,419 @@ update_yaml_block() {
     fi
 }
 
+APT_SOURCE_SWITCHED="false"
+
+APT_SOURCE_CREATED_FILES=()
+
+APT_SELECTED_MIRROR=""
+
+run_with_sudo_if_available() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
+apt_get_noninteractive() {
+    local sub_command=$1
+    shift
+
+    local -a apt_cmd=(
+        env
+        DEBIAN_FRONTEND=noninteractive
+        DEBIAN_PRIORITY=critical
+        NEEDRESTART_MODE=a
+        APT_LISTCHANGES_FRONTEND=none
+        UCF_FORCE_CONFDEF=1
+        UCF_FORCE_CONFFOLD=1
+        apt-get
+        -o Dpkg::Options::=--force-confdef
+        -o Dpkg::Options::=--force-confold
+        "$sub_command"
+    )
+
+    run_with_sudo_if_available "${apt_cmd[@]}" "$@"
+}
+
 apt_update() {
     log_debug "run apt_update"
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt update
-    else
-        apt update
-    fi
+    local -a apt_cmd=(
+        env
+        DEBIAN_FRONTEND=noninteractive
+        DEBIAN_PRIORITY=critical
+        NEEDRESTART_MODE=a
+        APT_LISTCHANGES_FRONTEND=none
+        UCF_FORCE_CONFDEF=1
+        UCF_FORCE_CONFFOLD=1
+        apt-get
+        -o Dpkg::Options::=--force-confdef
+        -o Dpkg::Options::=--force-confold
+        -o APT::Update::Error-Mode=any
+        update
+    )
+
+    run_with_sudo_if_available "${apt_cmd[@]}"
 }
 
 apt_install_y() {
     log_debug "run apt_install_y"
 
-    sudo apt install -y "$@"
+    apt_get_noninteractive install -y "$@"
+}
+
+apt_probe_url() {
+    local target_url=$1
+
+    if [ -z "$target_url" ]; then
+        return 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsL --connect-timeout 5 --max-time 10 -o /dev/null "$target_url"
+        return $?
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --spider -T 10 "$target_url"
+        return $?
+    fi
+
+    log_debug "当前未安装 curl 或 wget, 无法预探测 apt 镜像可用性"
+    return 1
+}
+
+apt_probe_mirror_for_current_system() {
+    local base_url=$1
+    local suite_name=""
+    local probe_url=""
+    local -a suites_to_probe=()
+
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        return 1
+    fi
+
+    suites_to_probe=(
+        "$SYSTEM_CODENAME"
+        "$SYSTEM_CODENAME-updates"
+        "$SYSTEM_CODENAME-backports"
+    )
+
+    for suite_name in "${suites_to_probe[@]}"; do
+        probe_url="${base_url%/}/dists/${suite_name}/InRelease"
+        if ! apt_probe_url "$probe_url"; then
+            log_debug "apt 镜像预探测失败: $probe_url"
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+select_debian_apt_mirror() {
+    local mirror_url=""
+    local -a mirror_candidates=(
+        "http://mirrors.tencent.com/debian/"
+        "https://mirrors.tuna.tsinghua.edu.cn/debian/"
+        "https://mirrors.aliyun.com/debian/"
+    )
+
+    for mirror_url in "${mirror_candidates[@]}"; do
+        if apt_probe_mirror_for_current_system "$mirror_url"; then
+            echo "$mirror_url"
+            return 0
+        fi
+    done
+
+    echo ""
+}
+
+select_ubuntu_apt_mirror() {
+    local mirror_url=""
+    local -a mirror_candidates=(
+        "http://mirrors.tencent.com/ubuntu/"
+        "https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+        "https://mirrors.aliyun.com/ubuntu/"
+    )
+
+    for mirror_url in "${mirror_candidates[@]}"; do
+        if apt_probe_mirror_for_current_system "$mirror_url"; then
+            echo "$mirror_url"
+            return 0
+        fi
+    done
+
+    echo ""
+}
+
+mark_apt_source_created_file() {
+    local file_path=$1
+
+    if [ -z "$file_path" ]; then
+        return 0
+    fi
+
+    APT_SOURCE_CREATED_FILES+=("$file_path")
+}
+
+backup_apt_source_file_once() {
+    local file_path=$1
+    local backup_path="${file_path}.blog-tool.bak"
+
+    if [ -f "$file_path" ]; then
+        if [ ! -f "$backup_path" ]; then
+            run_with_sudo_if_available cp "$file_path" "$backup_path"
+        fi
+        return 0
+    fi
+
+    mark_apt_source_created_file "$file_path"
+}
+
+apt_source_file_was_created() {
+    local file_path=$1
+    local created_file
+
+    for created_file in "${APT_SOURCE_CREATED_FILES[@]}"; do
+        if [ "$created_file" = "$file_path" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+switch_debian_apt_source_to_mirror() {
+    local mirror_url=$1
+
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Debian 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    if [ -z "$mirror_url" ]; then
+        log_warn "当前 Debian 未命中可用的 apt 镜像, 跳过 apt 换源"
+        return 1
+    fi
+
+    local legacy_source_file="/etc/apt/sources.list"
+    local deb822_source_file="/etc/apt/sources.list.d/debian.sources"
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: $mirror_url
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: $SYSTEM_CODENAME-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+# 默认注释了源码镜像以提高 apt update 速度, 如有需要可自行取消注释
+# 安全更新默认使用官方源, 更新最及时
+
+deb ${mirror_url%/}/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+
+deb https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+# deb-src https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
+EOF
+}
+
+switch_ubuntu_apt_source_to_mirror() {
+    local mirror_url=$1
+
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        log_warn "当前 Ubuntu 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    if [ -z "$mirror_url" ]; then
+        log_warn "当前 Ubuntu 未命中可用的 apt 镜像, 跳过 apt 换源"
+        return 1
+    fi
+
+    local deb822_source_file="/etc/apt/sources.list.d/ubuntu.sources"
+    local legacy_source_file="/etc/apt/sources.list"
+
+    if [ -f "$deb822_source_file" ]; then
+        backup_apt_source_file_once "$deb822_source_file"
+        cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
+Types: deb
+URIs: $mirror_url
+Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: $SYSTEM_CODENAME-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+        return 0
+    fi
+
+    backup_apt_source_file_once "$legacy_source_file"
+    cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
+deb ${mirror_url%/}/ $SYSTEM_CODENAME main restricted universe multiverse
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-updates main restricted universe multiverse
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu/ $SYSTEM_CODENAME-security main restricted universe multiverse
+EOF
+}
+
+validate_temporary_apt_source_or_fallback() {
+    log_debug "run validate_temporary_apt_source_or_fallback"
+
+    if [ "$APT_SOURCE_SWITCHED" != "true" ]; then
+        return 0
+    fi
+
+    if apt_update; then
+        log_info "临时切换的 apt 软件源校验通过"
+        return 0
+    fi
+
+    log_warn "临时切换的 apt 软件源不可用, 立即回退到原始软件源"
+
+    if ! restore_temporary_apt_source "true"; then
+        log_error "临时 apt 软件源不可用且恢复原始软件源失败"
+        return 1
+    fi
+
+    log_info "已回退到原始软件源, 将继续使用官方源安装基础软件"
+    return 0
+}
+
+prepare_temporary_apt_source_for_install() {
+    log_debug "run prepare_temporary_apt_source_for_install"
+
+    if [ "$APT_SOURCE_SWITCHED" = "true" ]; then
+        return 0
+    fi
+
+    local region
+    region=$(detect_docker_region)
+    if [ "$region" != "cn_non_tencent" ]; then
+        return 0
+    fi
+
+    detect_system || {
+        log_warn "未识别到 Debian 或 Ubuntu 系统, 跳过 apt 临时换源"
+        return 0
+    }
+
+    local selected_mirror=""
+
+    case "$SYSTEM_FAMILY" in
+    debian)
+        selected_mirror=$(select_debian_apt_mirror)
+        if [ -z "$selected_mirror" ]; then
+            log_warn "未找到可用的 Debian 临时 apt 镜像, 将继续使用官方源"
+            return 0
+        fi
+        switch_debian_apt_source_to_mirror "$selected_mirror" || return 1
+        ;;
+    ubuntu)
+        selected_mirror=$(select_ubuntu_apt_mirror)
+        if [ -z "$selected_mirror" ]; then
+            log_warn "未找到可用的 Ubuntu 临时 apt 镜像, 将继续使用官方源"
+            return 0
+        fi
+        switch_ubuntu_apt_source_to_mirror "$selected_mirror" || return 1
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+
+    APT_SOURCE_SWITCHED="true"
+    APT_SELECTED_MIRROR="$selected_mirror"
+    log_info "检测到中国大陆非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
+
+    validate_temporary_apt_source_or_fallback
+}
+
+restore_temporary_apt_source() {
+    log_debug "run restore_temporary_apt_source"
+    local should_update_after_restore="${1:-false}"
+
+    if [ "$APT_SOURCE_SWITCHED" != "true" ]; then
+        return 0
+    fi
+
+    local file_path
+    local backup_path
+    local restored_any="false"
+    local restore_failed="false"
+    local -a restore_targets=(
+        "/etc/apt/sources.list"
+        "/etc/apt/sources.list.d/debian.sources"
+        "/etc/apt/sources.list.d/ubuntu.sources"
+    )
+
+    for file_path in "${restore_targets[@]}"; do
+        backup_path="${file_path}.blog-tool.bak"
+
+        if [ -f "$backup_path" ]; then
+            if ! run_with_sudo_if_available mv -f "$backup_path" "$file_path"; then
+                restore_failed="true"
+            else
+                restored_any="true"
+            fi
+            continue
+        fi
+
+        if apt_source_file_was_created "$file_path"; then
+            if ! run_with_sudo_if_available rm -f "$file_path"; then
+                restore_failed="true"
+            else
+                restored_any="true"
+            fi
+        fi
+    done
+
+    APT_SOURCE_SWITCHED="false"
+    APT_SOURCE_CREATED_FILES=()
+    APT_SELECTED_MIRROR=""
+
+    if [ "$restore_failed" = "true" ]; then
+        log_error "恢复临时切换前的 apt 软件源失败, 请手动检查"
+        return 1
+    fi
+
+    if [ "$restored_any" = "true" ]; then
+        log_info "已恢复临时切换前的 apt 软件源"
+        if [ "$should_update_after_restore" = "true" ]; then
+            if ! apt_update; then
+                log_error "恢复 apt 软件源后执行 apt-get update 失败"
+                return 1
+            fi
+        fi
+    fi
+
+    return 0
 }
 
 detect_system() {
@@ -4290,15 +4845,62 @@ init_system_detection() {
 	fi
 }
 
-install_common_software() {
-    log_debug "run install_common_software"
+install_common_software_with_current_source() {
+    local install_status=0
 
     apt_update
+    install_status=$?
 
-    if command -v sudo >/dev/null 2>&1; then
-        sudo apt install -y "${BASE_SOFTWARE_LIST[@]}"
-    else
-        apt install -y "${BASE_SOFTWARE_LIST[@]}"
+    if [ "$install_status" -eq 0 ]; then
+        apt_install_y "${BASE_SOFTWARE_LIST[@]}"
+        install_status=$?
+    fi
+
+    return "$install_status"
+}
+
+install_common_software() {
+    log_debug "run install_common_software"
+    local install_status=0
+    local used_temporary_source="false"
+
+    if ! prepare_temporary_apt_source_for_install; then
+        log_warn "临时切换 apt 软件源失败, 将继续使用当前软件源安装基础软件"
+    elif [ "$APT_SOURCE_SWITCHED" = "true" ]; then
+        used_temporary_source="true"
+    fi
+
+    install_common_software_with_current_source
+    install_status=$?
+
+    if [ "$install_status" -ne 0 ] && [ "$used_temporary_source" = "true" ]; then
+        log_warn "临时 apt 软件源安装基础软件失败, 已恢复原软件源后重试"
+
+        if ! restore_temporary_apt_source; then
+            return 1
+        fi
+
+        used_temporary_source="false"
+        install_common_software_with_current_source
+        install_status=$?
+    fi
+
+    if [ "$used_temporary_source" = "true" ] && ! restore_temporary_apt_source; then
+        if [ "$install_status" -eq 0 ]; then
+            install_status=1
+        fi
+    fi
+
+    if [ "$install_status" -ne 0 ]; then
+        return "$install_status"
+    fi
+
+    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
+        reset_docker_region_cache
+    fi
+
+    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
+        refresh_host_intranet_network
     fi
 
     if ! grep -q "export HISTSIZE=*" "$HOME/.bashrc"; then
@@ -4567,6 +5169,20 @@ pull_docker_image_pro_all() {
     docker_pull_client
 }
 
+run_docker_install_script_directly() {
+    log_debug "run run_docker_install_script_directly"
+
+    local script_file="$1"
+    local mirror_alias="${2:-}"
+    local -a install_args=("$script_file")
+
+    if [[ -n "$mirror_alias" ]]; then
+        install_args+=("--mirror" "$mirror_alias")
+    fi
+
+    bash "${install_args[@]}"
+}
+
 __install_docker() {
     log_debug "run __install_docker"
 
@@ -4616,6 +5232,7 @@ __install_docker() {
     fi
 
     local fastest_docker_mirror
+    local install_mirror_alias=""
     if [[ "$is_manual_install" == "y" ]]; then
         fastest_docker_mirror=$(manual_select_docker_source)
     else
@@ -4628,6 +5245,8 @@ __install_docker() {
         sudo sed -i "s|DOWNLOAD_URL=\"https://mirrors.aliyun.com/docker-ce\"|DOWNLOAD_URL=\"$fastest_docker_mirror\"|g" "$script_file"
 
         sudo sed -i "s|Aliyun|MyFastMirror|g" "$script_file"
+
+        install_mirror_alias="MyFastMirror"
     else
         log_warn "未找到可用的 Docker CE 镜像源, 将使用默认官方源进行安装，可能会因为网络问题导致安装失败"
     fi
@@ -4636,17 +5255,17 @@ __install_docker() {
 
     log_info "正在安装 docker, 请耐心等待..."
 
-    if sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log; then
+    if run_docker_install_script_directly "$script_file" "$install_mirror_alias"; then
         log_info "docker 安装脚本执行完成"
 
         if command -v docker &>/dev/null && docker --version &>/dev/null; then
             log_info "docker 安装验证成功，docker 命令可用"
         else
-            log_error "docker 命令不可用，安装失败，请检查安装日志"
+            log_error "docker 命令不可用, 安装失败, 请根据上方安装输出排查"
             return 1
         fi
     else
-        log_error "docker 安装失败"
+        log_error "docker 安装失败, 请根据上方安装输出排查"
         return 1
     fi
 
@@ -4656,7 +5275,6 @@ __install_docker() {
 
     sudo rm -f "$script_file"
 
-    sudo rm -f ./install.log
 }
 
 docker_remove_history_data() {
