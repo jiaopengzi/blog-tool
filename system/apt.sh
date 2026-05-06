@@ -5,22 +5,56 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : apt 相关工具
 
-# 执行 apt update
-apt_update() {
-    log_debug "run apt_update"
-
+# 在存在 sudo 时使用 sudo 执行命令, 否则直接执行.
+# 参数: $@: 要执行的命令与参数.
+# 返回: 透传原命令退出码.
+run_with_sudo_if_available() {
     if command -v sudo >/dev/null 2>&1; then
-        sudo apt update
+        sudo "$@"
     else
-        apt update
+        "$@"
     fi
 }
 
-# 执行安装并设置同意
+# 使用非交互模式执行 apt-get, 避免 conffile 与 needrestart 阻塞安装流程.
+# 参数: $1: apt-get 子命令; $@: 其余参数.
+# 返回: 透传 apt-get 的退出码.
+apt_get_noninteractive() {
+    local sub_command=$1
+    shift
+
+    local -a apt_cmd=(
+        env
+        DEBIAN_FRONTEND=noninteractive
+        DEBIAN_PRIORITY=critical
+        NEEDRESTART_MODE=a
+        APT_LISTCHANGES_FRONTEND=none
+        UCF_FORCE_CONFDEF=1
+        UCF_FORCE_CONFFOLD=1
+        apt-get
+        -o Dpkg::Options::=--force-confdef
+        -o Dpkg::Options::=--force-confold
+        "$sub_command"
+    )
+
+    run_with_sudo_if_available "${apt_cmd[@]}" "$@"
+}
+
+# 执行 apt update.
+# 返回: 透传 apt-get update 退出码.
+apt_update() {
+    log_debug "run apt_update"
+
+    apt_get_noninteractive update
+}
+
+# 执行安装并自动接受默认配置.
+# 参数: $@: 要安装的软件包列表.
+# 返回: 透传 apt-get install 退出码.
 apt_install_y() {
     log_debug "run apt_install_y"
 
-    sudo apt install -y "$@"
+    apt_get_noninteractive install -y "$@"
 }
 
 # 添加 backports 源
