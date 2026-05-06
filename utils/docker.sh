@@ -708,31 +708,31 @@ docker_pull_image_with_region() {
     docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
 }
 
-# 获取构建阶段应使用的基础镜像引用.
-# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
+# 校验本地是否已存在指定镜像.
+# 参数: $1 标准镜像名.
 # 参数: $2 版本.
-# 返回: 输出当前区域下最合适的镜像引用, 供 Dockerfile FROM 使用.
-docker_get_base_image_with_region() {
-    log_debug "run docker_get_base_image_with_region"
-
+# 参数: $3 镜像缺失时的补充提示, 可选.
+# 返回: 本地镜像存在返回 0, 否则返回 1.
+docker_require_local_image() {
     local standard_image="$1"
     local version="$2"
+    local hint_message="${3:-请先执行对应的拉取镜像命令.}"
+    local image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
-        log_error "获取区域基础镜像失败, 镜像名和版本不能为空"
+        log_error "校验本地镜像失败, 镜像名和版本不能为空"
         return 1
     fi
 
-    local region
-    region=$(detect_docker_region)
+    image="$standard_image:$version"
 
-    if [ "$region" != "cn_non_tencent" ]; then
-        echo "$standard_image:$version"
+    if sudo docker image inspect "$image" >/dev/null 2>&1; then
         return 0
     fi
 
-    local image_basename="${standard_image##*/}"
-    echo "$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename:$version"
+    log_error "本地镜像不存在: $image"
+    log_error "$hint_message"
+    return 1
 }
 
 # 检测 docker 镜像源区域: 输出 tencent_cn | cn_non_tencent | overseas, 结果在进程内缓存

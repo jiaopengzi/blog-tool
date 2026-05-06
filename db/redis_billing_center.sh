@@ -12,7 +12,7 @@ start_db_redis_billing_center() {
     local runtime_redis_version=""
 
     runtime_redis_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_REDIS_BILLING_CENTER" "redis" "$IMG_VERSION_REDIS")
-    docker_pull_image_with_region "redis" "$runtime_redis_version" || return 1
+    docker_require_local_image "redis" "$runtime_redis_version" "请先执行拉取生产数据库镜像-计费中心, 或单独拉取 redis 镜像后再安装." || return 1
 
     # 权限设置
     setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis_billing_center"

@@ -83,7 +83,7 @@ ensure_es_image_with_ik() {
 
   # 先确定目标镜像标签. 这里仍复用 Elasticsearch 官方镜像名称, 但通过本地重建让同名 tag 变为带 IK 的镜像.
   es_image=$(get_es_image_with_ik "$es_version") || return 1
-  es_base_image=$(docker_get_base_image_with_region "elasticsearch" "$es_version") || return 1
+  es_base_image="elasticsearch:$es_version"
 
   # 优先复用已经构建好的本地镜像. 通过自定义 label 判断该镜像是否确实由 blog-tool 构建, 且插件版本与 ES 版本匹配.
   if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
@@ -99,16 +99,15 @@ ensure_es_image_with_ik() {
   # 构建前先准备插件压缩包. 官方推荐思路是将插件作为镜像构建输入, 而不是等容器启动后再动态安装.
   ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
 
-  # 构建前先按区域策略拉取基础镜像.
-  # 这样在国内非腾讯云环境会优先从腾讯公共仓库取回镜像, 同时 Dockerfile 也会直接引用腾讯仓库地址, 避免 BuildKit 回源 docker.io.
-  docker_pull_image_with_region "elasticsearch" "$es_version" || return 1
+  # 安装阶段不再负责拉取基础镜像, 这里只消费拉取阶段已经准备好的本地标准 tag.
+  docker_require_local_image "elasticsearch" "$es_version" "请先执行拉取生产数据库镜像, 或单独拉取 elasticsearch 镜像后再安装." || return 1
 
   # 准备临时构建上下文. 这里动态生成 Dockerfile, 让插件安装发生在 docker build 阶段.
   setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$BLOG_TOOL_ENV" "$build_context_dir"
   sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
   sudo chown "$JPZ_UID:$JPZ_GID" "$build_context_dir/analysis-ik.zip"
 
-  # 使用按区域选择后的 Elasticsearch 基础镜像.
+  # 使用拉取阶段已经准备好的 Elasticsearch 基础镜像.
   # 构建阶段临时切到 root, 是为了安装插件和清理临时文件.
   # 插件安装完成后再切回 1000:0, 保持容器运行身份与官方镜像一致.
   # 这样容器启动时直接使用已预装插件的镜像, 不再依赖启动期动态安装插件.

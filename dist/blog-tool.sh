@@ -2492,27 +2492,26 @@ docker_pull_image_with_region() {
     docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
 }
 
-docker_get_base_image_with_region() {
-    log_debug "run docker_get_base_image_with_region"
-
+docker_require_local_image() {
     local standard_image="$1"
     local version="$2"
+    local hint_message="${3:-请先执行对应的拉取镜像命令.}"
+    local image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
-        log_error "获取区域基础镜像失败, 镜像名和版本不能为空"
+        log_error "校验本地镜像失败, 镜像名和版本不能为空"
         return 1
     fi
 
-    local region
-    region=$(detect_docker_region)
+    image="$standard_image:$version"
 
-    if [ "$region" != "cn_non_tencent" ]; then
-        echo "$standard_image:$version"
+    if sudo docker image inspect "$image" >/dev/null 2>&1; then
         return 0
     fi
 
-    local image_basename="${standard_image##*/}"
-    echo "$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename:$version"
+    log_error "本地镜像不存在: $image"
+    log_error "$hint_message"
+    return 1
 }
 
 DOCKER_REGION_CACHE=""
@@ -5958,7 +5957,7 @@ ensure_es_image_with_ik() {
   fi
 
   es_image=$(get_es_image_with_ik "$es_version") || return 1
-  es_base_image=$(docker_get_base_image_with_region "elasticsearch" "$es_version") || return 1
+  es_base_image="elasticsearch:$es_version"
 
   if sudo docker image inspect "$es_image" >/dev/null 2>&1; then
     image_has_ik_label=$(sudo docker image inspect --format='{{ index .Config.Labels "blog-tool.es.ik-plugin" }}' "$es_image" 2>/dev/null || true)
@@ -5972,7 +5971,7 @@ ensure_es_image_with_ik() {
 
   ik_zip_shared=$(prepare_es_ik_zip "$es_version") || return 1
 
-  docker_pull_image_with_region "elasticsearch" "$es_version" || return 1
+  docker_require_local_image "elasticsearch" "$es_version" "请先执行拉取生产数据库镜像, 或单独拉取 elasticsearch 镜像后再安装." || return 1
 
   setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$BLOG_TOOL_ENV" "$build_context_dir"
   sudo cp "$ik_zip_shared" "$build_context_dir/analysis-ik.zip"
@@ -6799,7 +6798,7 @@ start_db_pgsql() {
   local runtime_pgsql_version=""
 
   runtime_pgsql_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_PGSQL" "postgres" "$IMG_VERSION_PGSQL")
-  docker_pull_image_with_region "postgres" "$runtime_pgsql_version" || return 1
+  docker_require_local_image "postgres" "$runtime_pgsql_version" "请先执行拉取生产数据库镜像, 或单独拉取 postgres 镜像后再安装." || return 1
 
   setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/pgsql"
 
@@ -6969,7 +6968,7 @@ start_db_redis() {
     local runtime_redis_version=""
 
     runtime_redis_version=$(get_docker_compose_image_version_or_default "$DOCKER_COMPOSE_FILE_REDIS" "redis" "$IMG_VERSION_REDIS")
-    docker_pull_image_with_region "redis" "$runtime_redis_version" || return 1
+    docker_require_local_image "redis" "$runtime_redis_version" "请先执行拉取生产数据库镜像, 或单独拉取 redis 镜像后再安装." || return 1
 
     setup_directory "$DB_UID" "$DB_GID" 700 "$DATA_VOLUME_DIR/redis"
 
