@@ -5,15 +5,68 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : 系统软件安装
 
+# 使用当前 apt 软件源安装基础软件包.
+# 返回: 0 表示安装成功, 非 0 表示更新或安装失败.
+install_common_software_with_current_source() {
+    local install_status=0
+
+    apt_update
+    install_status=$?
+
+    if [ "$install_status" -eq 0 ]; then
+        apt_install_y "${BASE_SOFTWARE_LIST[@]}"
+        install_status=$?
+    fi
+
+    return "$install_status"
+}
+
 # 安装常用软件
 install_common_software() {
     log_debug "run install_common_software"
+    local install_status=0
+    local used_temporary_source="false"
 
-    # 安装常用软件
-    apt_update
+    if ! prepare_temporary_apt_source_for_install; then
+        log_warn "临时切换 apt 软件源失败, 将继续使用当前软件源安装基础软件"
+    elif [ "$APT_SOURCE_SWITCHED" = "true" ]; then
+        used_temporary_source="true"
+    fi
 
-    # 统一走非交互安装, 避免 openssh-server 等软件弹出确认对话框.
-    apt_install_y "${BASE_SOFTWARE_LIST[@]}"
+    install_common_software_with_current_source
+    install_status=$?
+
+    if [ "$install_status" -ne 0 ] && [ "$used_temporary_source" = "true" ]; then
+        log_warn "临时 apt 软件源安装基础软件失败, 已恢复原软件源后重试"
+
+        if ! restore_temporary_apt_source; then
+            return 1
+        fi
+
+        used_temporary_source="false"
+        install_common_software_with_current_source
+        install_status=$?
+    fi
+
+    if [ "$used_temporary_source" = "true" ] && ! restore_temporary_apt_source; then
+        if [ "$install_status" -eq 0 ]; then
+            install_status=1
+        fi
+    fi
+
+    if [ "$install_status" -ne 0 ]; then
+        return "$install_status"
+    fi
+
+    # 安装完网络探测工具后清空区域缓存, 确保后续流程重新判定当前环境.
+    if declare -F reset_docker_region_cache >/dev/null 2>&1; then
+        reset_docker_region_cache
+    fi
+
+    # 首次安装基础软件后刷新内网 IP, 避免 --auto 初始值误回退到 127.0.0.1.
+    if declare -F refresh_host_intranet_network >/dev/null 2>&1; then
+        refresh_host_intranet_network
+    fi
 
     # 设置历史记录大小
     if ! grep -q "export HISTSIZE=*" "$HOME/.bashrc"; then
