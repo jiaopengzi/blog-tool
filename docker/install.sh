@@ -5,7 +5,29 @@
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : 安装 docker
 
-# 执行 docker 安装和配置
+# 直接执行外部 Docker 安装脚本.
+# 参数: $1: 外部安装脚本路径.
+# 参数: $2: 镜像别名, 为空时不传镜像参数.
+# 返回: 外部安装脚本退出码, 非 0 表示安装失败.
+run_docker_install_script_directly() {
+    log_debug "run run_docker_install_script_directly"
+
+    local script_file="$1"
+    local mirror_alias="${2:-}"
+    local -a install_args=("$script_file")
+
+    if [[ -n "$mirror_alias" ]]; then
+        install_args+=("--mirror" "$mirror_alias")
+    fi
+
+    # 避免通过外层 tee 管道包装安装脚本, 否则在 WSL 中可能因后台进程继承标准输出而假死.
+    # 同时保持与用户手工执行 install-docker.sh 一致, 让外部脚本自行决定 sudo 提权路径.
+    bash "${install_args[@]}"
+}
+
+# 执行 docker 安装和配置.
+# 参数: $1: 是否为手动安装, y 表示手动安装, 其他值表示自动安装.
+# 返回: 0 表示安装成功, 非 0 表示安装失败.
 __install_docker() {
     log_debug "run __install_docker"
 
@@ -61,6 +83,7 @@ __install_docker() {
 
     # 获取最快的 Docker CE 镜像源
     local fastest_docker_mirror
+    local install_mirror_alias=""
     # 如果是手动安装，则不使用镜像源加速
     if [[ "$is_manual_install" == "y" ]]; then
         fastest_docker_mirror=$(manual_select_docker_source)
@@ -77,6 +100,8 @@ __install_docker() {
 
         # 将所有字符串 Aliyun 替换为 MyFastMirror
         sudo sed -i "s|Aliyun|MyFastMirror|g" "$script_file"
+
+        install_mirror_alias="MyFastMirror"
     else
         log_warn "未找到可用的 Docker CE 镜像源, 将使用默认官方源进行安装，可能会因为网络问题导致安装失败"
     fi
@@ -86,19 +111,19 @@ __install_docker() {
 
     log_info "正在安装 docker, 请耐心等待..."
 
-    # 执行安装脚本并记录日志
-    if sudo bash "$script_file" --mirror MyFastMirror 2>&1 | tee -a ./install.log; then
+    # 直接执行外部安装脚本, 避免外层日志管道导致 WSL 中的安装流程假死.
+    if run_docker_install_script_directly "$script_file" "$install_mirror_alias"; then
         log_info "docker 安装脚本执行完成"
 
         # 进一步验证 docker 是否真的安装成功
         if command -v docker &>/dev/null && docker --version &>/dev/null; then
             log_info "docker 安装验证成功，docker 命令可用"
         else
-            log_error "docker 命令不可用，安装失败，请检查安装日志"
+            log_error "docker 命令不可用, 安装失败, 请根据上方安装输出排查"
             return 1
         fi
     else
-        log_error "docker 安装失败"
+        log_error "docker 安装失败, 请根据上方安装输出排查"
         return 1
     fi
 
@@ -110,8 +135,6 @@ __install_docker() {
     # 移除安装脚本
     sudo rm -f "$script_file"
 
-    # 移除安装日志
-    sudo rm -f ./install.log
 }
 
 # 卸载 docker 的历史数据.
