@@ -99,8 +99,11 @@ check_install_base() {
         jq
         python3
     )
-    # 使用 command -v 检查 $which_software_list 命令是否存在
     local missing_commands=()
+    local missing_after_install=()
+    local cmd
+
+    # 使用 command -v 检查基础命令是否存在.
     for cmd in "${which_software_list[@]}"; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing_commands+=("$cmd")
@@ -111,7 +114,23 @@ check_install_base() {
     if [ ${#missing_commands[@]} -ne 0 ]; then
         if [ "${AUTO_MODE:-false}" = "true" ]; then
             log_info "--auto 模式检测到缺少基础软件, 将自动安装: ${missing_commands[*]}"
-            install_common_software
+            if ! install_common_software; then
+                log_error "--auto 模式安装基础软件失败: ${missing_commands[*]}"
+                exit 1
+            fi
+
+            for cmd in "${which_software_list[@]}"; do
+                if ! command -v "$cmd" >/dev/null 2>&1; then
+                    missing_after_install+=("$cmd")
+                fi
+            done
+
+            if [ ${#missing_after_install[@]} -ne 0 ]; then
+                log_error "--auto 模式安装基础软件后仍缺少命令: ${missing_after_install[*]}"
+                exit 1
+            fi
+
+            refresh_host_intranet_network
             return 0
         fi
 
@@ -119,7 +138,22 @@ check_install_base() {
         is_install=$(read_user_input "是否开始安装基础依赖软件(默认n) [y|n]? " "n")
         if [ "$is_install" == "y" ]; then
             log_info "开始安装基础软件..."
-            install_common_software
+            if ! install_common_software; then
+                log_error "基础软件安装失败, 请修复后重新运行脚本."
+                exit 1
+            fi
+
+            for cmd in "${which_software_list[@]}"; do
+                if ! command -v "$cmd" >/dev/null 2>&1; then
+                    missing_after_install+=("$cmd")
+                fi
+            done
+
+            if [ ${#missing_after_install[@]} -ne 0 ]; then
+                log_error "基础软件安装后仍缺少命令: ${missing_after_install[*]}, 请检查 apt 源或软件包状态."
+                exit 1
+            fi
+
             log_info "基础软件安装完成, 请重新运行脚本."
             exit 0
         else

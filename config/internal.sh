@@ -83,7 +83,7 @@ DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3,
 
 # 将 IPv4 前缀长度转换为点分十进制子网掩码.
 # 参数: $1: 前缀长度, 如 24.
-# 返回: 打印对应子网掩码, 失败时返回默认值 255.0.0.0.
+# 返回: 打印点分十进制子网掩码, 无法转换时返回 255.0.0.0.
 ipv4_prefix_to_netmask() {
     local prefix_length=$1
     local full_octets=0
@@ -139,7 +139,7 @@ detect_host_intranet_ip() {
     fi
 
     if command -v hostname >/dev/null 2>&1; then
-        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i !~ /^127\./) {print $i; exit}}')
+        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i !~ /^127\./) {print $i; exit}}')
         if [ -n "$candidate_ip" ]; then
             echo "$candidate_ip"
             return 0
@@ -188,7 +188,7 @@ detect_host_intranet_mask() {
     echo "255.0.0.0"
 }
 
-# 刷新当前主机的内网 IPv4 地址和子网掩码全局变量.
+# 刷新主机内网 IPv4 地址和子网掩码全局变量.
 # 返回: 始终返回 0.
 refresh_host_intranet_network() {
     HOST_INTRANET_IP=$(detect_host_intranet_ip)

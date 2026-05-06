@@ -647,38 +647,6 @@ reset_docker_region_cache() {
     DOCKER_REGION_CACHE=""
 }
 
-# 使用当前可用工具探测公网国家代码.
-# 返回: stdout 输出国家代码, 探测失败时输出空字符串.
-detect_docker_country_code() {
-    if command -v curl >/dev/null 2>&1; then
-        curl -s --max-time 5 ipinfo.io/country
-        return 0
-    fi
-
-    if command -v wget >/dev/null 2>&1; then
-        wget -qO- -T 5 ipinfo.io/country 2>/dev/null
-        return 0
-    fi
-
-    return 0
-}
-
-# 判断腾讯云内网 Docker 镜像加速地址是否可达.
-# 返回: 可达返回 0, 不可达返回 1.
-docker_tencent_internal_mirror_is_reachable() {
-    if command -v curl >/dev/null 2>&1; then
-        curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1
-        return $?
-    fi
-
-    if command -v wget >/dev/null 2>&1; then
-        wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1
-        return $?
-    fi
-
-    return 1
-}
-
 detect_docker_region() {
     if [ -n "$DOCKER_REGION_CACHE" ]; then
         echo "$DOCKER_REGION_CACHE"
@@ -687,16 +655,26 @@ detect_docker_region() {
 
     local region="overseas"
     local country=""
+    local has_probe_tool="false"
 
-    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+    if command -v curl >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(curl -s --max-time 5 ipinfo.io/country 2>/dev/null)
+    elif command -v wget >/dev/null 2>&1; then
+        has_probe_tool="true"
+        country=$(wget -qO- -T 5 ipinfo.io/country 2>/dev/null)
+    fi
+
+    if [ "$has_probe_tool" != "true" ]; then
         log_debug "当前未安装 curl 或 wget, 暂时无法探测 docker 镜像源区域, 稍后重试"
         echo "$region"
         return 0
     fi
 
-    country=$(detect_docker_country_code)
     if [[ "$country" == "CN" ]]; then
-        if docker_tencent_internal_mirror_is_reachable; then
+        if command -v curl >/dev/null 2>&1 && curl -s --max-time 5 -I https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
+            region="tencent_cn"
+        elif command -v wget >/dev/null 2>&1 && wget -q --spider -T 5 https://mirror.ccs.tencentyun.com/ >/dev/null 2>&1; then
             region="tencent_cn"
         else
             region="cn_non_tencent"
