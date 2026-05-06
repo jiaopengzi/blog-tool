@@ -11,6 +11,9 @@ APT_SOURCE_SWITCHED="false"
 # 记录本轮临时切换时创建的新源文件, 便于恢复时删除.
 APT_SOURCE_CREATED_FILES=()
 
+# 记录本轮安装阶段选中的临时 apt 镜像源, 便于日志定位.
+APT_SELECTED_MIRROR=""
+
 # 在存在 sudo 时使用 sudo 执行命令, 否则直接执行.
 # 参数: $@: 要执行的命令与参数.
 # 返回: 透传原命令退出码.
@@ -78,6 +81,101 @@ apt_install_y() {
     apt_get_noninteractive install -y "$@"
 }
 
+# 使用当前可用的 HTTP 探测工具检查目标 URL 是否可访问.
+# 参数: $1: 要探测的 URL.
+# 返回: 0 表示可访问, 1 表示不可访问或当前缺少探测工具.
+apt_probe_url() {
+    local target_url=$1
+
+    if [ -z "$target_url" ]; then
+        return 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsL --connect-timeout 5 --max-time 10 -o /dev/null "$target_url"
+        return $?
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --spider -T 10 "$target_url"
+        return $?
+    fi
+
+    log_debug "当前未安装 curl 或 wget, 无法预探测 apt 镜像可用性"
+    return 1
+}
+
+# 探测当前系统下某个 apt 镜像是否覆盖主仓库、updates 与 backports.
+# 参数: $1: 镜像基础 URL.
+# 返回: 0 表示当前系统关键 suites 均可访问, 1 表示至少一个 suite 不可访问.
+apt_probe_mirror_for_current_system() {
+    local base_url=$1
+    local suite_name=""
+    local probe_url=""
+    local -a suites_to_probe=()
+
+    detect_system
+    if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
+        return 1
+    fi
+
+    suites_to_probe=(
+        "$SYSTEM_CODENAME"
+        "$SYSTEM_CODENAME-updates"
+        "$SYSTEM_CODENAME-backports"
+    )
+
+    for suite_name in "${suites_to_probe[@]}"; do
+        probe_url="${base_url%/}/dists/${suite_name}/InRelease"
+        if ! apt_probe_url "$probe_url"; then
+            log_debug "apt 镜像预探测失败: $probe_url"
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# 选择当前系统可用的 Debian 临时 apt 镜像源.
+# 返回: 输出首个可用镜像基础 URL; 若均不可用则输出空字符串.
+select_debian_apt_mirror() {
+    local mirror_url=""
+    local -a mirror_candidates=(
+        "http://mirrors.tencent.com/debian/"
+        "https://mirrors.tuna.tsinghua.edu.cn/debian/"
+        "https://mirrors.aliyun.com/debian/"
+    )
+
+    for mirror_url in "${mirror_candidates[@]}"; do
+        if apt_probe_mirror_for_current_system "$mirror_url"; then
+            echo "$mirror_url"
+            return 0
+        fi
+    done
+
+    echo ""
+}
+
+# 选择当前系统可用的 Ubuntu 临时 apt 镜像源.
+# 返回: 输出首个可用镜像基础 URL; 若均不可用则输出空字符串.
+select_ubuntu_apt_mirror() {
+    local mirror_url=""
+    local -a mirror_candidates=(
+        "http://mirrors.tencent.com/ubuntu/"
+        "https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+        "https://mirrors.aliyun.com/ubuntu/"
+    )
+
+    for mirror_url in "${mirror_candidates[@]}"; do
+        if apt_probe_mirror_for_current_system "$mirror_url"; then
+            echo "$mirror_url"
+            return 0
+        fi
+    done
+
+    echo ""
+}
+
 # 记录当前临时切换时新创建的 apt 源文件.
 # 参数: $1: 文件路径.
 # 返回: 始终返回 0.
@@ -124,12 +222,20 @@ apt_source_file_was_created() {
     return 1
 }
 
-# 将 Debian 软件源临时切换为腾讯云镜像, 并保留官方安全更新.
-# 返回: 0 表示写入成功, 1 表示系统代号未知或写入失败.
-switch_debian_apt_source_to_tencent() {
+# 将 Debian 软件源临时切换为指定镜像, 并保留官方安全更新.
+# 参数: $1: 镜像基础 URL.
+# 返回: 0 表示写入成功, 1 表示系统代号未知、镜像为空或写入失败.
+switch_debian_apt_source_to_mirror() {
+    local mirror_url=$1
+
     detect_system
     if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
         log_warn "当前 Debian 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    if [ -z "$mirror_url" ]; then
+        log_warn "当前 Debian 未命中可用的 apt 镜像, 跳过 apt 换源"
         return 1
     fi
 
@@ -140,7 +246,7 @@ switch_debian_apt_source_to_tencent() {
         backup_apt_source_file_once "$deb822_source_file"
         cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
 Types: deb
-URIs: http://mirrors.tencent.com/debian/
+URIs: $mirror_url
 Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
@@ -159,26 +265,34 @@ EOF
 # 默认注释了源码镜像以提高 apt update 速度, 如有需要可自行取消注释
 # 安全更新默认使用官方源, 更新最及时
 
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+deb ${mirror_url%/}/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME main contrib non-free non-free-firmware
 
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME-updates main contrib non-free non-free-firmware
 
-deb http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
-# deb-src http://mirrors.tencent.com/debian/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
+# deb-src ${mirror_url%/}/ $SYSTEM_CODENAME-backports main contrib non-free non-free-firmware
 
 deb https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
 # deb-src https://security.debian.org/debian-security $SYSTEM_CODENAME-security main contrib non-free non-free-firmware
 EOF
 }
 
-# 将 Ubuntu 软件源临时切换为腾讯云镜像, 并保留官方安全更新.
-# 返回: 0 表示写入成功, 1 表示系统代号未知或写入失败.
-switch_ubuntu_apt_source_to_tencent() {
+# 将 Ubuntu 软件源临时切换为指定镜像, 并保留官方安全更新.
+# 参数: $1: 镜像基础 URL.
+# 返回: 0 表示写入成功, 1 表示系统代号未知、镜像为空或写入失败.
+switch_ubuntu_apt_source_to_mirror() {
+    local mirror_url=$1
+
     detect_system
     if [ -z "$SYSTEM_CODENAME" ] || [ "$SYSTEM_CODENAME" = "unknown" ]; then
         log_warn "当前 Ubuntu 系统代号未知, 跳过 apt 换源"
+        return 1
+    fi
+
+    if [ -z "$mirror_url" ]; then
+        log_warn "当前 Ubuntu 未命中可用的 apt 镜像, 跳过 apt 换源"
         return 1
     fi
 
@@ -189,7 +303,7 @@ switch_ubuntu_apt_source_to_tencent() {
         backup_apt_source_file_once "$deb822_source_file"
         cat <<EOF | run_with_sudo_if_available tee "$deb822_source_file" >/dev/null
 Types: deb
-URIs: http://mirrors.tencentyun.com/ubuntu/
+URIs: $mirror_url
 Suites: $SYSTEM_CODENAME $SYSTEM_CODENAME-updates $SYSTEM_CODENAME-backports
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
@@ -205,9 +319,9 @@ EOF
 
     backup_apt_source_file_once "$legacy_source_file"
     cat <<EOF | run_with_sudo_if_available tee "$legacy_source_file" >/dev/null
-deb http://mirrors.tencent.com/ubuntu/ $SYSTEM_CODENAME main restricted universe multiverse
-deb http://mirrors.tencent.com/ubuntu/ $SYSTEM_CODENAME-updates main restricted universe multiverse
-deb http://mirrors.tencent.com/ubuntu/ $SYSTEM_CODENAME-backports main restricted universe multiverse
+deb ${mirror_url%/}/ $SYSTEM_CODENAME main restricted universe multiverse
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-updates main restricted universe multiverse
+deb ${mirror_url%/}/ $SYSTEM_CODENAME-backports main restricted universe multiverse
 deb http://security.ubuntu.com/ubuntu/ $SYSTEM_CODENAME-security main restricted universe multiverse
 EOF
 }
@@ -257,12 +371,24 @@ prepare_temporary_apt_source_for_install() {
         return 0
     }
 
+    local selected_mirror=""
+
     case "$SYSTEM_FAMILY" in
     debian)
-        switch_debian_apt_source_to_tencent || return 1
+        selected_mirror=$(select_debian_apt_mirror)
+        if [ -z "$selected_mirror" ]; then
+            log_warn "未找到可用的 Debian 临时 apt 镜像, 将继续使用官方源"
+            return 0
+        fi
+        switch_debian_apt_source_to_mirror "$selected_mirror" || return 1
         ;;
     ubuntu)
-        switch_ubuntu_apt_source_to_tencent || return 1
+        selected_mirror=$(select_ubuntu_apt_mirror)
+        if [ -z "$selected_mirror" ]; then
+            log_warn "未找到可用的 Ubuntu 临时 apt 镜像, 将继续使用官方源"
+            return 0
+        fi
+        switch_ubuntu_apt_source_to_mirror "$selected_mirror" || return 1
         ;;
     *)
         return 0
@@ -270,7 +396,8 @@ prepare_temporary_apt_source_for_install() {
     esac
 
     APT_SOURCE_SWITCHED="true"
-    log_info "检测到中国大陆非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到腾讯云镜像"
+    APT_SELECTED_MIRROR="$selected_mirror"
+    log_info "检测到中国大陆非腾讯云环境, 安装基础软件前已临时切换 apt 软件源到: $APT_SELECTED_MIRROR"
 
     validate_temporary_apt_source_or_fallback
 }
@@ -317,6 +444,7 @@ restore_temporary_apt_source() {
 
     APT_SOURCE_SWITCHED="false"
     APT_SOURCE_CREATED_FILES=()
+    APT_SELECTED_MIRROR=""
 
     if [ "$restore_failed" = "true" ]; then
         log_error "恢复临时切换前的 apt 软件源失败, 请手动检查"
