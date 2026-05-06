@@ -81,18 +81,121 @@ START_TIME=$(date +%s) # 记录开始时间
 APP_NAME="jpz"         # 应用名称 不能包含大写字母和字符
 DISPLAY_COLS=3         # 输出显示的列数, 用于输出对齐, 一般为 3, 可以根据实际情况调整
 
-# 检查 ifconfig 是否存在
-if command -v ifconfig >/dev/null 2>&1; then
-    # 默认内网 IP
-    HOST_INTRANET_IP=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $2}')
+# 将 IPv4 前缀长度转换为点分十进制子网掩码.
+# 参数: $1: 前缀长度, 如 24.
+# 返回: 打印点分十进制子网掩码, 无法转换时返回 255.0.0.0.
+ipv4_prefix_to_netmask() {
+    local prefix_length=$1
+    local full_octets=0
+    local remainder_bits=0
+    local octet_index
+    local current_octet=0
+    local netmask=""
 
-    # 默认子网掩码
-    HOST_INTRANET_MARK=$(ifconfig | sed -n '/^[eE]/,+3p' | grep 'inet ' | awk '{print $4}')
-else
-    # 如果 ifconfig 不存在, 使用回环地址
-    HOST_INTRANET_IP="127.0.0.1"
-    HOST_INTRANET_MARK="255.0.0.0"
-fi
+    if ! [[ "$prefix_length" =~ ^[0-9]+$ ]] || [ "$prefix_length" -lt 0 ] || [ "$prefix_length" -gt 32 ]; then
+        echo "255.0.0.0"
+        return 0
+    fi
+
+    full_octets=$((prefix_length / 8))
+    remainder_bits=$((prefix_length % 8))
+
+    for octet_index in 0 1 2 3; do
+        if [ "$octet_index" -lt "$full_octets" ]; then
+            current_octet=255
+        elif [ "$octet_index" -eq "$full_octets" ] && [ "$remainder_bits" -gt 0 ]; then
+            current_octet=$((256 - 2 ** (8 - remainder_bits)))
+        else
+            current_octet=0
+        fi
+
+        if [ -z "$netmask" ]; then
+            netmask="$current_octet"
+        else
+            netmask="$netmask.$current_octet"
+        fi
+    done
+
+    echo "$netmask"
+}
+
+# 优先使用系统自带命令探测首个非回环 IPv4 地址.
+# 返回: 打印检测到的 IPv4 地址, 未命中时返回 127.0.0.1.
+detect_host_intranet_ip() {
+    local candidate_ip=""
+
+    if command -v ip >/dev/null 2>&1; then
+        candidate_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+
+        candidate_ip=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v hostname >/dev/null 2>&1; then
+        candidate_ip=$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i !~ /^127\./) {print $i; exit}}')
+        if [ -n "$candidate_ip" ]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_ip=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $2; exit}
+        ')
+        if [ -n "$candidate_ip" ] && [[ ! "$candidate_ip" =~ ^127\. ]]; then
+            echo "$candidate_ip"
+            return 0
+        fi
+    fi
+
+    echo "127.0.0.1"
+}
+
+# 探测首个全局 IPv4 对应的子网掩码.
+# 返回: 打印点分十进制子网掩码, 未命中时返回 255.0.0.0.
+detect_host_intranet_mask() {
+    local prefix_length=""
+    local candidate_mask=""
+
+    if command -v ip >/dev/null 2>&1; then
+        prefix_length=$(ip -o -4 addr show scope global up 2>/dev/null | awk '{split($4, addr, "/"); print addr[2]; exit}')
+        if [ -n "$prefix_length" ]; then
+            ipv4_prefix_to_netmask "$prefix_length"
+            return 0
+        fi
+    fi
+
+    if command -v ifconfig >/dev/null 2>&1; then
+        candidate_mask=$(ifconfig 2>/dev/null | awk '
+            /^[^[:space:]]/ {iface=$1; sub(":$", "", iface)}
+            /inet / && iface != "lo" {print $4; exit}
+        ')
+        if [ -n "$candidate_mask" ]; then
+            echo "$candidate_mask"
+            return 0
+        fi
+    fi
+
+    echo "255.0.0.0"
+}
+
+# 刷新主机内网 IPv4 地址和子网掩码全局变量.
+# 返回: 始终返回 0.
+refresh_host_intranet_network() {
+    HOST_INTRANET_IP=$(detect_host_intranet_ip)
+    HOST_INTRANET_MARK=$(detect_host_intranet_mask)
+}
+
+refresh_host_intranet_network
 
 # 私有 ca 证书存放目录
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"

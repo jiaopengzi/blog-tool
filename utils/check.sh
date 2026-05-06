@@ -112,6 +112,7 @@ check_install_base() {
         if [ "${AUTO_MODE:-false}" = "true" ]; then
             log_info "--auto 模式检测到缺少基础软件, 将自动安装: ${missing_commands[*]}"
             install_common_software
+            refresh_host_intranet_network
             return 0
         fi
 
