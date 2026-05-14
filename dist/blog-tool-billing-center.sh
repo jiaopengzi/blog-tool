@@ -438,12 +438,12 @@ refresh_host_intranet_network
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
-IMG_VERSION_REDIS="8.6.2"    # redis 版本
+IMG_VERSION_REDIS="8.6.3"    # redis 版本
 IMG_VERSION_PGSQL="18.3"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
-IMG_VERSION_ES="9.3.4"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.3.4" # 与 es 保持版本一致
+IMG_VERSION_ES="9.4.1"     # 7.17.28 8.18.1
+IMG_VERSION_KIBANA="9.4.1" # 与 es 保持版本一致
 
 JPZ_UID=2025    # 服务端用户
 JPZ_GID=2025    # 服务端用户组
