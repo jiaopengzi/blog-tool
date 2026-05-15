@@ -210,7 +210,7 @@ CERT_DAYS_VALID=3650
 
 # docker 镜像版本
 IMG_VERSION_REDIS="8.6.3"    # redis 版本
-IMG_VERSION_PGSQL="18.3"     # pgsql 版本
+IMG_VERSION_PGSQL="18.4"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 # https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-9.3.1.zip

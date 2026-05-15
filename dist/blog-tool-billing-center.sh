@@ -439,7 +439,7 @@ CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=3650
 
 IMG_VERSION_REDIS="8.6.3"    # redis 版本
-IMG_VERSION_PGSQL="18.3"     # pgsql 版本
+IMG_VERSION_PGSQL="18.4"     # pgsql 版本
 IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
 
 IMG_VERSION_ES="9.4.1"     # 7.17.28 8.18.1
