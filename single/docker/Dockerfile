@@ -303,6 +303,7 @@ COPY --from=client-artifacts /usr/share/nginx/html /usr/share/nginx/html
 COPY --from=client-artifacts /etc/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=client-artifacts /etc/nginx/redirects.map /etc/nginx/redirects.map
 
+# rootfs 按容器绝对路径组织, 这里直接复制到 / 后, rootfs/usr/local/bin/blog-entrypoint.sh 会落到镜像内 /usr/local/bin/blog-entrypoint.sh.
 COPY single/docker/rootfs/ /
 
 RUN mkdir -p /opt/blog-client \

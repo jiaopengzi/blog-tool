@@ -4,6 +4,8 @@
 # Blog        : https://jiaopengzi.com
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
 # Description : blog 单镜像运行入口, 负责初始化并拉起 nginx、blog-server、PostgreSQL、Redis、Elasticsearch.
+# Note        : 此文件保留在 single/docker/rootfs/usr/local/bin, 是为了与容器内 /usr/local/bin/blog-entrypoint.sh 的落点保持一致.
+# Note        : single/docker/rootfs 目录按容器根文件系统布局组织, 构建时通过 COPY single/docker/rootfs/ / 直接还原到镜像内, 因此这里的目录层级来自容器路径映射, 不是源码层级设计过深.
 
 set -euo pipefail
 
