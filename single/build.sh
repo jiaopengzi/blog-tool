@@ -929,7 +929,6 @@ single_build_env_image() {
     log_info "开始构建单镜像运行时环境镜像: $SINGLE_ENV_IMAGE_NAME"
 
     sudo DOCKER_BUILDKIT=1 docker build \
-        --build-arg POSTGRES_VERSION="$IMG_VERSION_PGSQL" \
         --build-arg POSTGRES_MAJOR="$IMG_VERSION_PGSQL_MAJOR" \
         --build-arg REDIS_VERSION="$IMG_VERSION_REDIS" \
         --build-arg ELASTICSEARCH_VERSION="$IMG_VERSION_ES" \
@@ -995,11 +994,6 @@ single_build_image() {
     sudo DOCKER_BUILDKIT=1 docker build \
         --build-arg BLOG_VERSION="$single_version" \
         --build-arg NODE_VERSION="$IMG_VERSION_NODE" \
-        --build-arg POSTGRES_VERSION="$IMG_VERSION_PGSQL" \
-        --build-arg POSTGRES_MAJOR="$IMG_VERSION_PGSQL_MAJOR" \
-        --build-arg REDIS_VERSION="$IMG_VERSION_REDIS" \
-        --build-arg ELASTICSEARCH_VERSION="$IMG_VERSION_ES" \
-        --build-arg NGINX_VERSION="$IMG_VERSION_NGINX" \
         "${build_args[@]}" \
         -t "$SINGLE_IMAGE_NAME:build" \
         -f "$dockerfile_path" \
