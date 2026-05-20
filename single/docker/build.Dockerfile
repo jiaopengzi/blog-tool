@@ -1,4 +1,8 @@
 # blog 单镜像应用装配 Dockerfile
+# 复用优先级:
+# 1. 优先消费 blog-client/Dockerfile.dev 与 blog-server-dev/Dockerfile_dev 预热出的 build 镜像.
+# 2. 未命中时回退消费 blog-client/Dockerfile.env 与 blog-server-dev/Dockerfile_golang 预热出的环境镜像.
+# 3. 再未命中时, 才使用本文件中的 fallback stage 独立完成环境准备与源码构建.
 
 ARG NODE_VERSION=24.15.0
 ARG FFMPEG_IMAGE=jiaopengzi/ffmpeg:8.1.1

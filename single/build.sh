@@ -115,6 +115,14 @@ single_can_sign_image() {
     [[ -n "${COSIGN_PRIVATE_KEY:-}" ]] && [[ -n "${COSIGN_PRIVATE_KEY_PWD:-}" ]]
 }
 
+# 解析 blog-server:build 构建所需的签名私钥文件.
+# 返回: 打印可用私钥路径, 未命中则不输出.
+single_resolve_server_sign_key() {
+    if [[ -n "${SIGN_PRIVATE_KEY:-}" ]] && [[ -f "${SIGN_PRIVATE_KEY}" ]]; then
+        echo "$SIGN_PRIVATE_KEY"
+    fi
+}
+
 # 输出单镜像帮助信息.
 single_print_help() {
     cat <<EOF
@@ -143,7 +151,7 @@ single_print_help() {
         3. --push-single 默认仅推送本地 blog:build 到 REGISTRY_REMOTE_SERVER_PUBLIC, 缺少版本号时会提示输入.
         4. 腾讯云与 docker.io 仅在显式传入 --push-tencent 或 --push-docker-hub 时才会执行增量推送.
         5. REGISTRY_REMOTE_SERVER_PUBLIC 与 REGISTRY_REMOTE_SERVER 共用用户名和密码.
-        6. 装配阶段优先复用 blog-client:build 和 blog-server:build, 未命中时再回退到 blog-client:env 和 blog-server:golang.
+        6. 装配阶段优先复用 blog-client:build 和 blog-server:build; 未命中时优先按 blog-client 的 Dockerfile.dev 与 blog-server-dev 的 Dockerfile_dev 预热, 后端缺少签名私钥时再回退到 blog-client:env 和 blog-server:golang.
         7. --run-single 会在宿主机侧预处理数据目录和自定义 HTTPS 证书, 适合直接使用宿主机证书路径启动单镜像.
 EOF
 }
@@ -808,6 +816,25 @@ single_ensure_client_env_image() {
     sudo DOCKER_BUILDKIT=1 docker build -t blog-client:env -f "$dockerfile_path" "$SINGLE_CLIENT_ROOT" || return 1
 }
 
+# 缺失时按 blog-client 原始 Dockerfile.dev 构建前端构建产物镜像.
+single_ensure_client_build_image() {
+    local dockerfile_path="$SINGLE_CLIENT_ROOT/Dockerfile.dev"
+
+    if single_has_local_image "blog-client:build"; then
+        return 0
+    fi
+
+    if [[ ! -f "$dockerfile_path" ]]; then
+        log_error "未找到 blog-client 构建 Dockerfile: $dockerfile_path"
+        return 1
+    fi
+
+    single_ensure_client_env_image || return 1
+
+    log_info "未找到前端构建产物镜像 blog-client:build, 开始基于 Dockerfile.dev 首次构建"
+    sudo DOCKER_BUILDKIT=1 docker build -t blog-client:build -f "$dockerfile_path" "$SINGLE_CLIENT_ROOT" || return 1
+}
+
 # 缺失时按 blog-server-dev 原始 Dockerfile_golang 构建后端 Golang 环境镜像.
 single_ensure_server_golang_image() {
     local dockerfile_path="$SINGLE_SERVER_ROOT/Dockerfile_golang"
@@ -823,6 +850,36 @@ single_ensure_server_golang_image() {
 
     log_info "未找到后端环境镜像 blog-server:golang, 开始基于 Dockerfile_golang 首次构建"
     sudo DOCKER_BUILDKIT=1 docker build -t blog-server:golang -f "$dockerfile_path" "$SINGLE_SERVER_ROOT" || return 1
+}
+
+# 缺失时按 blog-server-dev 原始 Dockerfile_dev 构建后端构建产物镜像.
+single_ensure_server_build_image() {
+    local dockerfile_path="$SINGLE_SERVER_ROOT/Dockerfile_dev"
+    local sign_key=""
+
+    if single_has_local_image "blog-server:build"; then
+        return 0
+    fi
+
+    sign_key="$(single_resolve_server_sign_key)"
+    if [[ -z "$sign_key" ]]; then
+        log_warn "未检测到 SIGN_PRIVATE_KEY, 跳过基于 Dockerfile_dev 预热 blog-server:build"
+        return 1
+    fi
+
+    if [[ ! -f "$dockerfile_path" ]]; then
+        log_error "未找到 blog-server-dev 构建 Dockerfile: $dockerfile_path"
+        return 1
+    fi
+
+    single_ensure_server_golang_image || return 1
+
+    log_info "未找到后端构建产物镜像 blog-server:build, 开始基于 Dockerfile_dev 首次构建"
+    sudo DOCKER_BUILDKIT=1 docker build \
+        --secret id=sign_key,src="$sign_key" \
+        -t blog-server:build \
+        -f "$dockerfile_path" \
+        "$SINGLE_SERVER_ROOT" || return 1
 }
 
 # 准备单镜像构建上下文.
@@ -929,6 +986,7 @@ single_build_env_image() {
     log_info "开始构建单镜像运行时环境镜像: $SINGLE_ENV_IMAGE_NAME"
 
     sudo DOCKER_BUILDKIT=1 docker build \
+        --build-arg POSTGRES_VERSION="$IMG_VERSION_PGSQL" \
         --build-arg POSTGRES_MAJOR="$IMG_VERSION_PGSQL_MAJOR" \
         --build-arg REDIS_VERSION="$IMG_VERSION_REDIS" \
         --build-arg ELASTICSEARCH_VERSION="$IMG_VERSION_ES" \
@@ -948,9 +1006,9 @@ single_build_image() {
     local single_version="$1"
     local dockerfile_path="$SINGLE_CONTEXT_DIR/$SINGLE_DOCKERFILE_BUILD_RELATIVE"
     local client_build_image=""
-    local client_env_image=""
     local server_build_image=""
     local server_golang_image=""
+    local server_sign_key=""
     local build_args=()
 
     if [[ ! -f "$dockerfile_path" ]]; then
@@ -959,25 +1017,25 @@ single_build_image() {
     fi
 
     client_build_image="$(single_resolve_client_build_image)"
-    client_env_image="$(single_resolve_client_env_image)"
     server_build_image="$(single_resolve_server_build_image)"
     server_golang_image="$(single_resolve_server_golang_image)"
+    server_sign_key="$(single_resolve_server_sign_key)"
 
-    if [[ -n "$client_build_image" ]]; then
-        log_info "复用前端构建产物镜像: $client_build_image"
-        build_args+=(--build-arg "CLIENT_BUILD_IMAGE=$client_build_image")
-    elif [[ -n "$client_env_image" ]]; then
-        log_info "复用前端环境镜像: $client_env_image"
-        build_args+=(--build-arg "CLIENT_ENV_IMAGE=$client_env_image")
-    else
-        single_ensure_client_env_image || return 1
-        client_env_image="blog-client:env"
-        log_info "前端环境镜像首次构建完成: $client_env_image"
-        build_args+=(--build-arg "CLIENT_ENV_IMAGE=$client_env_image")
+    if [[ -z "$client_build_image" ]]; then
+        single_ensure_client_build_image || return 1
+        client_build_image="blog-client:build"
+        log_info "前端构建产物镜像首次构建完成: $client_build_image"
     fi
+    log_info "复用前端构建产物镜像: $client_build_image"
+    build_args+=(--build-arg "CLIENT_BUILD_IMAGE=$client_build_image")
 
     if [[ -n "$server_build_image" ]]; then
         log_info "复用后端构建产物镜像: $server_build_image"
+        build_args+=(--build-arg "SERVER_BUILD_IMAGE=$server_build_image")
+    elif [[ -n "$server_sign_key" ]]; then
+        single_ensure_server_build_image || return 1
+        server_build_image="blog-server:build"
+        log_info "后端构建产物镜像首次构建完成: $server_build_image"
         build_args+=(--build-arg "SERVER_BUILD_IMAGE=$server_build_image")
     elif [[ -n "$server_golang_image" ]]; then
         log_info "复用后端环境镜像: $server_golang_image"
