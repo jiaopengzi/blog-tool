@@ -695,6 +695,80 @@ single_find_workspace_root() {
     return 1
 }
 
+# 加载 single 自动拉取源码所需的 Git 前缀配置.
+# 说明: 这里仅加载 git_prefix_local, 避免为了 clone 源码额外要求 single 不需要的 dev 配置.
+single_load_git_clone_env() {
+    if [[ -n "${GIT_PREFIX_LOCAL:-}" ]]; then
+        GIT_LOCAL="$GIT_PREFIX_LOCAL:$GIT_USER"
+        return 0
+    fi
+
+    load_interactive_config \
+        GIT_PREFIX_LOCAL \
+        "$BLOG_TOOL_ENV/git_prefix_local" \
+        "请输入内网 Git 地址前缀如：git@10.0.0.100" \
+        "git@127.0.0.1"
+
+    GIT_LOCAL="$GIT_PREFIX_LOCAL:$GIT_USER"
+}
+
+# 检查仓库目录是否包含 single 构建所需的关键文件.
+# 参数: $1: 仓库目录.
+# 参数: $@: 需要存在的相对路径列表.
+single_repo_has_required_files() {
+    local repo_dir="$1"
+    shift
+    local required_file=""
+
+    if [[ ! -d "$repo_dir" ]]; then
+        return 1
+    fi
+
+    for required_file in "$@"; do
+        if [[ ! -f "$repo_dir/$required_file" ]]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# 在工作区中确保目标源码仓库存在, 缺失或残缺时自动重新拉取.
+# 参数: $1: 仓库目录名.
+# 参数: $@: 该仓库必须存在的关键文件.
+single_ensure_workspace_repo() {
+    local repo_name="$1"
+    shift
+    local repo_dir="$SINGLE_WORKSPACE_ROOT/$repo_name"
+    local current_dir="$PWD"
+
+    if single_repo_has_required_files "$repo_dir" "$@"; then
+        return 0
+    fi
+
+    if [[ -d "$repo_dir" ]]; then
+        log_warn "检测到 $repo_name 目录缺少 single 构建所需文件, 将删除后重新拉取: $repo_dir"
+        sudo rm -rf "$repo_dir"
+    else
+        log_info "未找到 $repo_name 源码目录, 开始自动拉取到: $repo_dir"
+    fi
+
+    single_load_git_clone_env || return 1
+
+    sudo mkdir -p "$SINGLE_WORKSPACE_ROOT"
+    cd "$SINGLE_WORKSPACE_ROOT" || return 1
+    git_clone "$repo_name" "$GIT_LOCAL" || {
+        cd "$current_dir" || return 1
+        return 1
+    }
+    cd "$current_dir" || return 1
+
+    if ! single_repo_has_required_files "$repo_dir" "$@"; then
+        log_error "$repo_name 拉取完成后仍缺少 single 构建所需文件: $repo_dir"
+        return 1
+    fi
+}
+
 # 判断源码模式下是否具备 single/docker 文件.
 single_has_source_docker_assets() {
     [[ -n "$SINGLE_TOOL_ROOT" ]] \
@@ -727,23 +801,21 @@ single_init_repo_paths() {
     fi
 
     if ! SINGLE_WORKSPACE_ROOT="$(single_find_workspace_root)"; then
-        log_error "未找到包含 blog-client 与 blog-server-dev 的工作区根目录, 请将 blog-tool-dev.sh 放在三仓库共同父目录内, 或在该工作区中运行"
-        return 1
+        if [[ -n "$SINGLE_TOOL_ROOT" ]]; then
+            SINGLE_WORKSPACE_ROOT="$(dirname "$SINGLE_TOOL_ROOT")"
+            log_warn "未检测到现成的 single 工作区, 将使用 blog-tool 同级目录作为源码拉取目录: $SINGLE_WORKSPACE_ROOT"
+        else
+            SINGLE_WORKSPACE_ROOT="$ROOT_DIR"
+            log_warn "未检测到现成的 single 工作区, 将使用当前脚本所在目录作为源码拉取目录: $SINGLE_WORKSPACE_ROOT"
+        fi
     fi
 
     SINGLE_CLIENT_ROOT="$SINGLE_WORKSPACE_ROOT/blog-client"
     SINGLE_SERVER_ROOT="$SINGLE_WORKSPACE_ROOT/blog-server-dev"
     SINGLE_DOWNLOAD_CACHE_DIR="$SINGLE_WORKSPACE_ROOT/blog-cache"
 
-    if [[ ! -d "$SINGLE_CLIENT_ROOT" ]]; then
-        log_error "未找到 blog-client 仓库: $SINGLE_CLIENT_ROOT"
-        return 1
-    fi
-
-    if [[ ! -d "$SINGLE_SERVER_ROOT" ]]; then
-        log_error "未找到 blog-server-dev 仓库: $SINGLE_SERVER_ROOT"
-        return 1
-    fi
+    single_ensure_workspace_repo "blog-client" "Dockerfile.env" "Dockerfile.dev" "package.json" || return 1
+    single_ensure_workspace_repo "blog-server-dev" "Dockerfile_golang" "Dockerfile_dev" "go.mod" || return 1
 
     if single_has_embedded_docker_assets; then
         return 0
