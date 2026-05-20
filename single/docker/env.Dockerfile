@@ -28,7 +28,16 @@ RUN set -eux; \
     'done' >/usr/local/bin/apt-retry; \
     chmod +x /usr/local/bin/apt-retry; \
     /usr/local/bin/apt-retry apt-get update; \
-    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends bash ca-certificates curl gnupg tar; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    gnupg \
+    locales \
+    openssl \
+    passwd \
+    tar \
+    tzdata; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
@@ -62,13 +71,11 @@ RUN set -eux; \
     redis_download_url="https://github.com/redis/redis/archive/refs/tags/${REDIS_VERSION}.tar.gz"; \
     /usr/local/bin/apt-retry apt-get update; \
     /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
-    ca-certificates \
     dpkg-dev \
     gcc \
     g++ \
     libc6-dev \
     libssl-dev \
-    wget \
     make; \
     arch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
     case "$arch" in \
@@ -133,8 +140,6 @@ ENV PATH=/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}
 
 RUN set -eux; \
     nginx_apt_version="${NGINX_VERSION}-1~noble"; \
-    /usr/local/bin/apt-retry apt-get update; \
-    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends locales openssl passwd tzdata; \
     printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d; \
     chmod +x /usr/sbin/policy-rc.d; \
     mkdir -p /etc/postgresql-common; \
