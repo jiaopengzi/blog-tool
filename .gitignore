@@ -13,6 +13,8 @@ bin
 .feat
 .debug
 .bug
+blog-single-cache/*
+!blog-single-cache/.gitkeep
 
 # python 目录 下的忽略规则
 python/__pycache__/

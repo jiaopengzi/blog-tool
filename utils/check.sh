@@ -233,6 +233,7 @@ load_config_from_file_and_validate() {
     local config_file=$2
     local error_prefix=${3:-""}
     local must_exist=${4:-"true"}
+    local read_mode=${5:-"single_line"}
 
     # 1) 如果文件存在 -> 检查可读性 -> 读取(只取首行)并去除首尾空白 -> 校验非空 -> 赋值并返回
     # 2) 如果文件不存在且 must_exist 为 true -> 报错
@@ -243,12 +244,17 @@ load_config_from_file_and_validate() {
             log_error "${error_prefix}${config_file} 存在但不可读, 请检查权限"
         fi
 
-        # 只读取文件第一行, 避免读取大文件并去除首尾空白
+        # 默认只读取文件第一行, 对于 PEM 等多行内容可通过 read_mode=full_content 整文件读取
         local file_value
-        IFS= read -r file_value <"$config_file"
-        # 去除首尾空白字符
-        file_value="${file_value#"${file_value%%[![:space:]]*}"}"
-        file_value="${file_value%"${file_value##*[![:space:]]}"}"
+
+        if [ "$read_mode" = "full_content" ]; then
+            file_value=$(cat "$config_file")
+        else
+            IFS= read -r file_value <"$config_file"
+            # 单行模式下去除首尾空白字符, 避免普通配置项被意外带入空格
+            file_value="${file_value#"${file_value%%[![:space:]]*}"}"
+            file_value="${file_value%"${file_value##*[![:space:]]}"}"
+        fi
 
         # 文件为空时报错
         if [ -z "$file_value" ]; then
@@ -279,6 +285,7 @@ load_env_or_file_config() {
     local config_file=$3
     local error_prefix=${4:-""}
     local must_exist=${5:-"true"}
+    local read_mode=${6:-"single_line"}
 
     if [ -n "${!env_var_name:-}" ]; then
         # 优先判断环境变量是否有值, 直接使用
@@ -286,7 +293,7 @@ load_env_or_file_config() {
         log_debug "${var_name} 已从环境变量 ${env_var_name} 读取, 长度: $(printf '%s' "${!env_var_name}" | wc -c | awk '{print $1}')"
     else
         # 环境变量未设置, 尝试从文件加载
-        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist"
+        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist" "$read_mode"
         if [ -n "${!var_name:-}" ]; then
             log_debug "${var_name} 已从配置文件读取: $config_file"
         else

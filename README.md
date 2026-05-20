@@ -145,6 +145,107 @@ sudo bash blog-tool.sh --uninstall
 | 计费中心版 | `blog-tool-billing-center.sh` | 计费中心部署 |
 | 开发版 | `blog-tool-dev.sh` | 含全部功能，面向开发者 |
 
+## 单镜像构建
+
+开发版 `--build-single` 命令, 用于将 `blog-client`、`blog-server-dev`、PostgreSQL、Redis、Elasticsearch 打包为一个独立镜像 `blog`。
+
+### 1. 构建并推送单镜像
+
+按 `env -> build -> push` 分阶段执行:
+
+```bash
+sudo bash blog-tool-dev.sh --env-single
+sudo bash blog-tool-dev.sh --build-single --version v1.0.0
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0
+```
+
+单镜像的目标机部署只依赖 Docker, 不需要再安装 `blog-tool-dev.sh`。
+
+也可以单独执行 `--build-single` 或 `--push-single`, 如果未传 `--version`, 脚本会提示输入单镜像版本号。
+
+默认 `--push-single` 只推送到 `REGISTRY_REMOTE_SERVER_PUBLIC/blog`。如果需要额外推送腾讯云或 Docker Hub, 需要显式加参数:
+
+```bash
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-tencent
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-docker-hub
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-tencent --push-docker-hub
+```
+
+推送顺序如下:
+
+1. 默认推送到 `REGISTRY_REMOTE_SERVER_PUBLIC/blog`。
+2. 仅在显式传入 `--push-tencent` 时, 才尝试增量推送到 `REGISTRY_REMOTE_SERVER_TENCENT/blog`。
+3. 仅在显式传入 `--push-docker-hub` 时, 才尝试增量推送到 `docker.io/jiaopengzi/blog`。
+
+当腾讯云或 Docker Hub 凭据未配置时, 对应增量推送会自动跳过, 不影响默认公开仓库推送。
+
+### 2. 运行单镜像
+
+单镜像约定只挂载一个总目录, 默认使用 HTTPS, 并在首次启动时自动生成 CA 证书与 HTTPS 证书。若第二次启动发现证书已存在, 则不会重复生成。
+
+single 镜像会根据可见内存自动选择更保守的 ES、PostgreSQL、Nginx 参数。若是 4G 左右机器, 建议在启动容器前, 直接在部署宿主机执行一次如下命令。
+
+```bash
+sudo sysctl vm.overcommit_memory=1
+```
+
+如需手动覆盖自动档位, 可在 `docker run` 时传入以下环境变量:
+
+- `BLOG_MEMORY_PROFILE=small`
+- `BLOG_ES_JAVA_OPTS=-Xms384m -Xmx384m`
+- `BLOG_PG_SHARED_BUFFERS=64MB`
+- `BLOG_PG_MAX_CONNECTIONS=40`
+
+使用宿主机内网 IP 部署。
+
+```bash
+HOST_IP="$(hostname -I | awk '{print $1}')" && sudo docker run -d \
+  --name blog \
+  -p 443:443 \
+  -v /data/blog:/data \
+  -e BLOG_PUBLIC_HOST="$HOST_IP" \
+  jiaopengzi/blog:latest
+```
+
+首次启动后, 可从宿主机挂载目录导出 CA 证书:
+
+```bash
+/data/blog/certs/internal-ca/ca.crt
+```
+
+使用自定义证书以及和域名
+
+```bash
+sudo docker run -d \
+  --name blog \
+  -p 443:443 \
+  -v /data/blog:/data \
+  -v /your/path/cert.pem:/data/blog-client/nginx/ssl/cert.pem \
+  -v /your/path/cert.key:/data/blog-client/nginx/ssl/cert.key \
+  -e BLOG_PUBLIC_HOST=blog.example.com \
+  jiaopengzi/blog:latest
+```
+
+如果您更习惯先把证书整理到数据目录, 也可以预先放到
+`/data/blog/blog-client/nginx/ssl/cert.pem` 和
+`/data/blog/blog-client/nginx/ssl/cert.key`, 再只挂载 `-v /data/blog:/data` 启动。
+
+常用运行时环境变量:
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `BLOG_PUBLIC_HOST` | `localhost` | 对外访问域名或 IP, 用于生成默认证书和后端 host |
+| `BLOG_HTTPS_PORT` | `443` | 容器内 HTTPS 监听端口 |
+| `BLOG_PG_PORT` | `15432` | 容器内 PostgreSQL 监听端口 |
+| `BLOG_REDIS_PORT` | `16379` | 容器内 Redis 监听端口 |
+| `BLOG_ES_PORT` | `19200` | 容器内 Elasticsearch HTTPS 监听端口 |
+
+说明:
+
+- 仅执行 `sudo docker run -d blog:latest` 不会自动发布宿主机端口, 仍需显式添加 `-p 443:443`, 否则无法从宿主机或局域网访问; 启动摘要也会用 warning 明确提示这一点。
+- 数据库默认不占用容器内常见端口, 如果需要对外连接数据库, 请自行增加端口映射, 例如 `-p 5432:15432`。
+- Elasticsearch 内置 IK 分词器, 默认保留空的 `my.dic`, 可在挂载目录中按需维护。
+
 ## 项目结构
 
 ```text

@@ -26,9 +26,10 @@ GIT_API_PREFIX_GITHUB="https://api.github.com"
 GIT_API_PREFIX_GITEE="https://gitee.com/api/v5"
 
 # 私有仓库配置主要用于开发阶段
-REGISTRY_REMOTE_SERVER="" # 远端服务器地址
-REGISTRY_USER_NAME=""     # docker registry 用户名
-REGISTRY_PASSWORD=""      # 私有仓库密码
+REGISTRY_REMOTE_SERVER="${REGISTRY_REMOTE_SERVER:-}" # 远端服务器地址
+REGISTRY_REMOTE_SERVER_PUBLIC="${REGISTRY_REMOTE_SERVER_PUBLIC:-}" # 单镜像公开分发仓库地址, 复用私有仓库用户名和密码
+REGISTRY_USER_NAME="${REGISTRY_USER_NAME:-}"     # docker registry 用户名
+REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"      # 私有仓库密码
 
 # 腾讯云公共仓库配置, 推送时需要凭据, 拉取时无需登录; 地址默认值由 config/internal.sh 提供
 REGISTRY_USER_NAME_TENCENT="${REGISTRY_USER_NAME_TENCENT:-}" # 腾讯 docker registry 用户名

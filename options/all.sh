@@ -81,6 +81,9 @@ OPTIONS_ALL=(
     # 构建并推送结果镜像
     "构建并推送 billing center:docker_build_push_billing_center"
     "构建并推送 server client:docker_build_push_server_client"
+    "构建单镜像运行时环境:docker_build_single_env"
+    "仅构建单镜像:docker_build_single"
+    "仅推送单镜像:docker_push_single"
     "server 产物复制到本地:server_artifacts_copy_to_local"
     "构建并推送 server:docker_build_push_server"
     "仅构建 server:docker_build_server"

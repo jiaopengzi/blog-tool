@@ -281,9 +281,9 @@ RUN_MODE="pro"
 
 BLOG_TOOL_BUILD_TYPE="${BLOG_TOOL_BUILD_TYPE:-dev}"
 
-DATA_VOLUME_DIR="$ROOT_DIR/volume"
+DATA_VOLUME_DIR="${DATA_VOLUME_DIR:-$ROOT_DIR/volume}"
 
-BLOG_TOOL_ENV="$DATA_VOLUME_DIR/blog_tool_env"
+BLOG_TOOL_ENV="${BLOG_TOOL_ENV:-$DATA_VOLUME_DIR/blog_tool_env}"
 
 BASE_SOFTWARE_LIST=(
     sudo
@@ -1209,6 +1209,7 @@ load_config_from_file_and_validate() {
     local config_file=$2
     local error_prefix=${3:-""}
     local must_exist=${4:-"true"}
+    local read_mode=${5:-"single_line"}
 
     if [ -e "$config_file" ]; then
         if [ ! -r "$config_file" ]; then
@@ -1216,9 +1217,14 @@ load_config_from_file_and_validate() {
         fi
 
         local file_value
-        IFS= read -r file_value <"$config_file"
-        file_value="${file_value#"${file_value%%[![:space:]]*}"}"
-        file_value="${file_value%"${file_value##*[![:space:]]}"}"
+
+        if [ "$read_mode" = "full_content" ]; then
+            file_value=$(cat "$config_file")
+        else
+            IFS= read -r file_value <"$config_file"
+            file_value="${file_value#"${file_value%%[![:space:]]*}"}"
+            file_value="${file_value%"${file_value##*[![:space:]]}"}"
+        fi
 
         if [ -z "$file_value" ]; then
             log_error "${error_prefix}${config_file} 文件为空, 请写入有效值"
@@ -1239,12 +1245,13 @@ load_env_or_file_config() {
     local config_file=$3
     local error_prefix=${4:-""}
     local must_exist=${5:-"true"}
+    local read_mode=${6:-"single_line"}
 
     if [ -n "${!env_var_name:-}" ]; then
         printf -v "$var_name" '%s' "${!env_var_name}"
         log_debug "${var_name} 已从环境变量 ${env_var_name} 读取, 长度: $(printf '%s' "${!env_var_name}" | wc -c | awk '{print $1}')"
     else
-        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist"
+        load_config_from_file_and_validate "$var_name" "$config_file" "$error_prefix" "$must_exist" "$read_mode"
         if [ -n "${!var_name:-}" ]; then
             log_debug "${var_name} 已从配置文件读取: $config_file"
         else
@@ -8095,6 +8102,29 @@ docker_client_delete() {
 }
 
 main() {
+    if [ "${1:-}" = "--env-single" ] || [ "${1:-}" = "--build-single" ] || [ "${1:-}" = "--push-single" ] || [ "${1:-}" = "--run-single" ]; then
+        if [ "user" != "dev" ]; then
+            echo "当前发行版不支持单镜像命令, 请使用开发版 blog-tool-dev.sh" >&2
+            exit 1
+        fi
+
+        disclaimer_msg
+
+        local single_command="$1"
+        shift
+
+        if [ "${single_command:-}" = "--env-single" ]; then
+            single_cli_main env "$@"
+        elif [ "${single_command:-}" = "--build-single" ]; then
+            single_cli_main build "$@"
+        elif [ "${single_command:-}" = "--push-single" ]; then
+            single_cli_main push "$@"
+        else
+            single_cli_main run "$@"
+        fi
+        return
+    fi
+
     if [ "${1:-}" = "--auto" ]; then
         if [ "user" = "billing_center" ]; then
             echo "billing-center 发行版不支持 --auto 一键安装 blog-server/blog-client" >&2

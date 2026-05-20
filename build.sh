@@ -172,7 +172,7 @@ get_build_dirs() {
     case "$build_type" in
     billing_center) echo "config options utils system docker db billing-center" ;;
     user) echo "config options utils system docker db server client" ;;
-    *) echo "config options utils system docker db billing-center server client" ;; # dev 版包含所有目录
+    *) echo "config options utils system docker db billing-center server client single" ;; # dev 版包含所有目录
     esac
 }
 
@@ -284,6 +284,30 @@ append_main() {
 
     cat >>"$target_file" <<-EOM
 main() {
+    if [ "\${1:-}" = "--env-single" ] || [ "\${1:-}" = "--build-single" ] || [ "\${1:-}" = "--push-single" ] || [ "\${1:-}" = "--run-single" ]; then
+        if [ "$build_type" != "dev" ]; then
+            echo "当前发行版不支持单镜像命令, 请使用开发版 blog-tool-dev.sh" >&2
+            exit 1
+        fi
+
+        # 免责声明
+        disclaimer_msg
+
+        local single_command="\$1"
+        shift
+
+        if [ "\${single_command:-}" = "--env-single" ]; then
+            single_cli_main env "\$@"
+        elif [ "\${single_command:-}" = "--build-single" ]; then
+            single_cli_main build "\$@"
+        elif [ "\${single_command:-}" = "--push-single" ]; then
+            single_cli_main push "\$@"
+        else
+            single_cli_main run "\$@"
+        fi
+        return
+    fi
+
     if [ "\${1:-}" = "--auto" ]; then
         if [ "$build_type" = "billing_center" ]; then
             echo "billing-center 发行版不支持 --auto 一键安装 blog-server/blog-client" >&2
