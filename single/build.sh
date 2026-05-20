@@ -16,7 +16,7 @@ SINGLE_CONTEXT_DOWNLOAD_CACHE_DIR="$SINGLE_CONTEXT_DIR/blog-cache" # 单镜像�
 SINGLE_DOCKERFILE_RELATIVE="single/docker/Dockerfile"           # 单镜像全量 Dockerfile 相对路径
 SINGLE_DOCKERFILE_ENV_RELATIVE="single/docker/env.Dockerfile"   # 单镜像运行时环境 Dockerfile 相对路径
 SINGLE_DOCKERFILE_BUILD_RELATIVE="single/docker/build.Dockerfile" # 单镜像装配 Dockerfile 相对路径
-SINGLE_TOOL_ROOT=""                                             # blog-tool 根目录
+SINGLE_TOOL_ROOT=""                                             # blog-tool 根目录, 仅在源码模式下需要
 SINGLE_WORKSPACE_ROOT=""                                        # 三仓库共同父目录
 SINGLE_CLIENT_ROOT=""                                           # blog-client 根目录
 SINGLE_SERVER_ROOT=""                                           # blog-server-dev 根目录
@@ -625,6 +625,19 @@ single_is_tool_root() {
     [[ -f "$candidate_dir/blog-tool.code-workspace" ]] && [[ -d "$candidate_dir/single/docker" ]]
 }
 
+# 判断给定目录是否为 single 运行依赖的工作区根目录.
+# 参数: $1: 待判断目录.
+single_is_workspace_root() {
+    local candidate_dir="$1"
+
+    [[ -d "$candidate_dir/blog-client" ]] && [[ -d "$candidate_dir/blog-server-dev" ]]
+}
+
+# 判断当前发行版是否已经内嵌 single/docker 资产.
+single_has_embedded_docker_assets() {
+    [[ -n "${SINGLE_DOCKER_BASE64:-}" ]]
+}
+
 # 定位 blog-tool 根目录.
 # 返回: 打印 blog-tool 根目录绝对路径.
 single_find_tool_root() {
@@ -654,16 +667,70 @@ single_find_tool_root() {
         ((depth++)) || true
     done
 
-    log_error "未找到 blog-tool 根目录, 请在 blog-tool 仓库内运行该命令"
     return 1
+}
+
+# 定位 single 运行依赖的工作区根目录.
+# 返回: 打印同时包含 blog-client 和 blog-server-dev 的目录绝对路径.
+single_find_workspace_root() {
+    local search_dir="$ROOT_DIR"
+    local parent_dir=""
+    local depth=0
+
+    while [[ $depth -lt 6 ]]; do
+        if single_is_workspace_root "$search_dir"; then
+            echo "$search_dir"
+            return 0
+        fi
+
+        parent_dir="$(dirname "$search_dir")"
+        if [[ "$parent_dir" == "$search_dir" ]]; then
+            break
+        fi
+
+        search_dir="$parent_dir"
+        ((depth++)) || true
+    done
+
+    return 1
+}
+
+# 判断源码模式下是否具备 single/docker 文件.
+single_has_source_docker_assets() {
+    [[ -n "$SINGLE_TOOL_ROOT" ]] \
+        && [[ -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_RELATIVE" ]] \
+        && [[ -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_ENV_RELATIVE" ]] \
+        && [[ -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_BUILD_RELATIVE" ]]
+}
+
+# 将开发版脚本中内嵌的 single/docker 资产解压到目标目录.
+# 参数: $1: 目标目录, 通常为构建上下文根目录.
+single_extract_embedded_docker_assets() {
+    local target_dir="$1"
+
+    if ! single_has_embedded_docker_assets; then
+        log_error "当前发行版未内嵌 single/docker 资产"
+        return 1
+    fi
+
+    sudo mkdir -p "$target_dir"
+    printf '%s' "$SINGLE_DOCKER_BASE64" | base64 -d | gzip -d | sudo tar -xf - -C "$target_dir"
 }
 
 # 初始化三个仓库路径.
 single_init_repo_paths() {
     log_debug "run single_init_repo_paths"
 
-    SINGLE_TOOL_ROOT="$(single_find_tool_root)" || return 1
-    SINGLE_WORKSPACE_ROOT="$(dirname "$SINGLE_TOOL_ROOT")"
+    SINGLE_TOOL_ROOT=""
+    if SINGLE_TOOL_ROOT="$(single_find_tool_root)"; then
+        :
+    fi
+
+    if ! SINGLE_WORKSPACE_ROOT="$(single_find_workspace_root)"; then
+        log_error "未找到包含 blog-client 与 blog-server-dev 的工作区根目录, 请将 blog-tool-dev.sh 放在三仓库共同父目录内, 或在该工作区中运行"
+        return 1
+    fi
+
     SINGLE_CLIENT_ROOT="$SINGLE_WORKSPACE_ROOT/blog-client"
     SINGLE_SERVER_ROOT="$SINGLE_WORKSPACE_ROOT/blog-server-dev"
     SINGLE_DOWNLOAD_CACHE_DIR="$SINGLE_WORKSPACE_ROOT/blog-cache"
@@ -678,18 +745,16 @@ single_init_repo_paths() {
         return 1
     fi
 
-    if [[ ! -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_RELATIVE" ]]; then
-        log_error "未找到单镜像全量 Dockerfile: $SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_RELATIVE"
-        return 1
+    if single_has_embedded_docker_assets; then
+        return 0
     fi
 
-    if [[ ! -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_ENV_RELATIVE" ]]; then
-        log_error "未找到单镜像运行时环境 Dockerfile: $SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_ENV_RELATIVE"
-        return 1
-    fi
-
-    if [[ ! -f "$SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_BUILD_RELATIVE" ]]; then
-        log_error "未找到单镜像装配 Dockerfile: $SINGLE_TOOL_ROOT/$SINGLE_DOCKERFILE_BUILD_RELATIVE"
+    if ! single_has_source_docker_assets; then
+        if [[ -n "$SINGLE_TOOL_ROOT" ]]; then
+            log_error "未找到完整的 single/docker 源码资产, 请检查: $SINGLE_TOOL_ROOT/single/docker"
+        else
+            log_error "当前环境既没有 blog-tool/single/docker 源码目录, 也没有内嵌 single/docker 资产, 无法继续单镜像构建"
+        fi
         return 1
     fi
 }
@@ -717,6 +782,25 @@ single_copy_tree() {
         --exclude='.pnpm-store' \
         --exclude='.turbo' \
         -cf - -C "$src_dir" . | sudo tar -xf - -C "$dest_dir"
+}
+
+# 准备 single/docker 构建资产.
+# 参数: $1: 构建上下文根目录.
+single_prepare_docker_assets() {
+    local context_root="$1"
+
+    if single_has_embedded_docker_assets; then
+        single_extract_embedded_docker_assets "$context_root" || return 1
+    else
+        single_copy_tree "$SINGLE_TOOL_ROOT/single/docker" "$context_root/single/docker" || return 1
+    fi
+
+    if [[ ! -f "$context_root/$SINGLE_DOCKERFILE_RELATIVE" ]] \
+        || [[ ! -f "$context_root/$SINGLE_DOCKERFILE_ENV_RELATIVE" ]] \
+        || [[ ! -f "$context_root/$SINGLE_DOCKERFILE_BUILD_RELATIVE" ]]; then
+        log_error "single/docker 资产准备失败, 构建上下文中缺少 Dockerfile"
+        return 1
+    fi
 }
 
 # 下载并复用 single 构建依赖归档.
@@ -893,7 +977,7 @@ single_prepare_build_context() {
 
     single_copy_tree "$SINGLE_CLIENT_ROOT" "$SINGLE_CONTEXT_DIR/blog-client" || return 1
     single_copy_tree "$SINGLE_SERVER_ROOT" "$SINGLE_CONTEXT_DIR/blog-server-dev" || return 1
-    single_copy_tree "$SINGLE_TOOL_ROOT/single/docker" "$SINGLE_CONTEXT_DIR/single/docker" || return 1
+    single_prepare_docker_assets "$SINGLE_CONTEXT_DIR" || return 1
     single_prepare_env_download_cache || return 1
 
     log_info "单镜像构建上下文已准备完成: $SINGLE_CONTEXT_DIR"

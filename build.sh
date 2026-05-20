@@ -164,6 +164,23 @@ base64_encode_py_scripts() {
     done
 }
 
+# 将 single/docker 目录进行 gzip 压缩并 base64 编码后嵌入到开发版 shell 脚本中.
+# 参数: $1: single/docker 相对路径.
+# 参数: $2: 输出的 shell 脚本文件.
+base64_encode_single_docker_assets() {
+    local single_docker_dir="$1"
+    local output_file="$2"
+    local single_docker_base64_content=""
+
+    if [[ ! -d "$ROOT_DIR/$single_docker_dir" ]]; then
+        echo "❌ 错误：single docker 目录不存在: $ROOT_DIR/$single_docker_dir" >&2
+        exit 1
+    fi
+
+    single_docker_base64_content="$(tar -czf - -C "$ROOT_DIR" "$single_docker_dir" | base64 -w 0)"
+    echo "SINGLE_DOCKER_BASE64='${single_docker_base64_content}'" >>"$output_file"
+}
+
 # 根据构建类型获取需要合并的目录列表(目录顺序决定了脚本加载顺序, 存在依赖关系)
 # 参数: $1: 构建类型 dev | user | billing_center
 get_build_dirs() {
@@ -764,6 +781,11 @@ build() {
 
     # 嵌入 python 脚本
     base64_encode_py_scripts "$ROOT_DIR/python" "$target_file"
+
+    # 开发版额外嵌入 single/docker 资产, 让 blog-tool-dev.sh 脱离 blog-tool 仓库目录后仍可构建单镜像.
+    if [ "$build_type" == "dev" ]; then
+        base64_encode_single_docker_assets "single/docker" "$target_file"
+    fi
 
     # 处理其他脚本文件
     handle_other "$target_file" "$build_type"
