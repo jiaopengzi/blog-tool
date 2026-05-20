@@ -1,13 +1,14 @@
 # blog 单镜像运行时环境 Dockerfile
 
 ARG UBUNTU_VERSION=24.04
+ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
 ARG REDIS_VERSION=8.6.3
 ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
 ARG ELASTICSEARCH_VERSION=9.4.1
 ARG NGINX_VERSION=1.31.0
 
-FROM ubuntu:${UBUNTU_VERSION} AS ubuntu-apt-base
+FROM ubuntu:${UBUNTU_VERSION} AS ubuntu-runtime-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -32,16 +33,21 @@ RUN set -eux; \
     bash \
     ca-certificates \
     curl \
-    gnupg \
-    locales \
     openssl \
-    passwd \
-    tar \
     tzdata; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-FROM ubuntu-apt-base AS elasticsearch-with-ik
+FROM ubuntu-runtime-base AS ubuntu-build-base
+
+RUN set -eux; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
+    tar; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+FROM ubuntu-build-base AS elasticsearch-with-ik
 
 ARG ELASTICSEARCH_VERSION=9.4.1
 
@@ -69,7 +75,7 @@ RUN set -eux; \
     rm -f /tmp/analysis-ik.zip; \
     rm -rf ./blog-cache
 
-FROM ubuntu-apt-base AS redis-binaries
+FROM ubuntu-build-base AS redis-binaries
 
 ARG REDIS_VERSION=8.6.3
 ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
@@ -103,6 +109,7 @@ RUN set -eux; \
     python3-dev \
     unzip \
     rsync \
+    wget \
     clang \
     automake \
     autoconf \
@@ -138,20 +145,24 @@ RUN set -eux; \
     strip /usr/local/bin/redis-server /usr/local/bin/redis-cli || true; \
     rm -rf /tmp/redis.tar.gz /tmp/redis-src ./blog-cache
 
-FROM ubuntu-apt-base
+FROM ubuntu-runtime-base
 
+ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
 ARG NGINX_VERSION=1.31.0
 
 ENV TZ=Asia/Shanghai
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 ENV PATH=/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}
 
 RUN set -eux; \
     nginx_apt_version="${NGINX_VERSION}-1~noble"; \
+    postgres_version_prefix="${POSTGRES_VERSION}-"; \
     printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d; \
     chmod +x /usr/sbin/policy-rc.d; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends gnupg; \
     mkdir -p /etc/postgresql-common; \
     printf '%s\n' 'create_main_cluster = false' >/etc/postgresql-common/createcluster.conf; \
     install -d /usr/share/postgresql-common/pgdg /usr/share/keyrings; \
@@ -161,9 +172,16 @@ RUN set -eux; \
     printf '%s\n' 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu noble nginx' >/etc/apt/sources.list.d/nginx.list; \
     printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' >/etc/apt/preferences.d/99nginx; \
     /usr/local/bin/apt-retry apt-get update; \
-    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends "nginx=${nginx_apt_version}" "postgresql-${POSTGRES_MAJOR}" "postgresql-client-${POSTGRES_MAJOR}"; \
-    sed -i '/^# en_US.UTF-8 UTF-8$/s/^# //' /etc/locale.gen; \
-    locale-gen en_US.UTF-8; \
+    postgresql_apt_version="$(apt-cache madison "postgresql-${POSTGRES_MAJOR}" | awk -v version_prefix="$postgres_version_prefix" '$3 ~ ("^" version_prefix) { print $3; exit }')"; \
+    postgresql_client_apt_version="$(apt-cache madison "postgresql-client-${POSTGRES_MAJOR}" | awk -v version_prefix="$postgres_version_prefix" '$3 ~ ("^" version_prefix) { print $3; exit }')"; \
+    if [ -z "$postgresql_apt_version" ] || [ -z "$postgresql_client_apt_version" ]; then \
+    echo "❌ 错误: 未在 pgdg 源中找到 PostgreSQL ${POSTGRES_VERSION} 对应的完整包版本" >&2; \
+    apt-cache madison "postgresql-${POSTGRES_MAJOR}" >&2 || true; \
+    apt-cache madison "postgresql-client-${POSTGRES_MAJOR}" >&2 || true; \
+    exit 1; \
+    fi; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends "nginx=${nginx_apt_version}" "postgresql-${POSTGRES_MAJOR}=${postgresql_apt_version}" "postgresql-client-${POSTGRES_MAJOR}=${postgresql_client_apt_version}"; \
+    apt-get purge -y --auto-remove gnupg; \
     if ! getent group blog-server >/dev/null; then groupadd --system blog-server; fi; \
     if ! id -u blog-server >/dev/null 2>&1; then useradd --system -g blog-server -m -d /home/blog-server -s /bin/bash blog-server; fi; \
     if ! getent group elasticsearch >/dev/null; then groupadd --system elasticsearch; fi; \
