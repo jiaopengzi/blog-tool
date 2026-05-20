@@ -1,13 +1,23 @@
 # blog 单镜像 Dockerfile
+# 复用优先级:
+# 1. 优先消费 blog-client/Dockerfile.dev 与 blog-server-dev/Dockerfile_dev 预热出的 build 镜像.
+# 2. 未命中时回退消费 blog-client/Dockerfile.env 与 blog-server-dev/Dockerfile_golang 预热出的环境镜像.
+# 3. 再未命中时, 才使用本文件中的 fallback stage 独立完成环境准备与源码构建.
 
 ARG NODE_VERSION=24.15.0
 ARG UBUNTU_VERSION=24.04
+ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
 ARG REDIS_VERSION=8.6.3
+ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
 ARG ELASTICSEARCH_VERSION=9.4.1
+ARG NGINX_VERSION=1.31.0
 ARG FFMPEG_IMAGE=jiaopengzi/ffmpeg:8.1.1
+ARG CLIENT_BUILD_IMAGE=client-build-fallback
 ARG CLIENT_ENV_IMAGE=client-env-fallback
+ARG SERVER_BUILD_IMAGE=server-build-fallback
 ARG SERVER_GOLANG_IMAGE=server-golang-fallback
+ARG BLOG_ENV_IMAGE=blog-env-fallback
 
 FROM node:${NODE_VERSION} AS client-env-fallback
 
@@ -30,6 +40,14 @@ WORKDIR /app
 COPY blog-client/ ./
 
 RUN pnpm build
+
+FROM scratch AS client-build-fallback
+
+COPY --from=client-builder /app/dist /usr/share/nginx/html
+COPY blog-client/LICENSE /usr/share/nginx/html/LICENSE
+COPY blog-client/redirects.map /etc/nginx/redirects.map
+
+FROM ${CLIENT_BUILD_IMAGE} AS client-artifacts
 
 FROM golang:1.26.3-alpine AS server-golang-fallback
 
@@ -56,146 +74,232 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/boot ./
     && cp -r ./docs /out/docs \
     && rm -rf /out/docs/md
 
-FROM ubuntu:${UBUNTU_VERSION} AS elasticsearch-with-ik
+FROM scratch AS server-build-fallback
 
-ARG ELASTICSEARCH_VERSION=9.4.1
+COPY --from=server-builder /out/blog-server /home/blog-server/blog-server
+COPY --from=server-builder /out/boot /home/blog-server/boot
+COPY --from=server-builder /out/config /home/blog-server/config
+COPY --from=server-builder /out/templates /home/blog-server/templates
+COPY --from=server-builder /out/docs /home/blog-server/docs
+COPY blog-server-dev/LICENSE /home/blog-server/LICENSE
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    curl \
-    tar \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ELASTICSEARCH_VERSION}-linux-x86_64.tar.gz" -o /tmp/elasticsearch.tar.gz \
-    && mkdir -p /opt/elasticsearch \
-    && tar -xzf /tmp/elasticsearch.tar.gz -C /opt/elasticsearch --strip-components=1 \
-    && rm -f /tmp/elasticsearch.tar.gz \
-    && curl -fsSL "https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-${ELASTICSEARCH_VERSION}.zip" -o /tmp/analysis-ik.zip \
-    && /opt/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip \
-    && rm -f /tmp/analysis-ik.zip
-
-FROM ubuntu:${UBUNTU_VERSION} AS redis-binaries
-
-ARG REDIS_VERSION=8.6.3
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-    build-essential \
-    ca-certificates \
-    curl \
-    tar \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL "https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz" -o /tmp/redis.tar.gz \
-    && mkdir -p /tmp/redis-src \
-    && tar -xzf /tmp/redis.tar.gz -C /tmp/redis-src --strip-components=1 \
-    && make -C /tmp/redis-src -j"$(nproc)" BUILD_TLS=no \
-    && install -m 0755 /tmp/redis-src/src/redis-server /usr/local/bin/redis-server \
-    && install -m 0755 /tmp/redis-src/src/redis-cli /usr/local/bin/redis-cli \
-    && rm -rf /tmp/redis.tar.gz /tmp/redis-src
+FROM ${SERVER_BUILD_IMAGE} AS server-artifacts
 
 FROM ${FFMPEG_IMAGE} AS ffmpeg-binaries
 
-FROM ubuntu:${UBUNTU_VERSION}
-
-ARG POSTGRES_MAJOR=18
-ARG ELASTICSEARCH_VERSION=9.4.1
-ARG BLOG_VERSION=dev
+FROM ubuntu:${UBUNTU_VERSION} AS ubuntu-runtime-base
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-ENV BLOG_VERSION=${BLOG_VERSION}
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
-ENV PATH=/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'attempt=1' \
+    'while true; do' \
+    '    if "$@"; then' \
+    '        exit 0' \
+    '    fi' \
+    '    if [ "$attempt" -ge 5 ]; then' \
+    '        exit 1' \
+    '    fi' \
+    '    attempt=$((attempt + 1))' \
+    '    rm -rf /var/lib/apt/lists/*' \
+    'done' >/usr/local/bin/apt-retry; \
+    chmod +x /usr/local/bin/apt-retry; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     curl \
-    gnupg \
-    gnupg2 \
-    locales \
     openssl \
-    passwd \
-    procps \
-    tar \
-    tzdata \
-    ubuntu-keyring \
-    lsb-release \
-    && printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d \
-    && chmod +x /usr/sbin/policy-rc.d \
-    && mkdir -p /etc/postgresql-common \
-    && printf '%s\n' 'create_main_cluster = false' >/etc/postgresql-common/createcluster.conf \
-    && install -d /usr/share/postgresql-common/pgdg \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-    && printf '%s\n' \
-    'Types: deb' \
-    'URIs: https://apt.postgresql.org/pub/repos/apt' \
-    'Suites: noble-pgdg' \
-    'Components: main' \
-    'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' \
-    >/etc/apt/sources.list.d/pgdg.sources \
-    && curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
-    && printf '%s\n' 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/ubuntu noble nginx' >/etc/apt/sources.list.d/nginx.list \
-    && printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' >/etc/apt/preferences.d/99nginx \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-    nginx \
-    postgresql-${POSTGRES_MAJOR} \
-    postgresql-client-${POSTGRES_MAJOR} \
-    && sed -i '/^# en_US.UTF-8 UTF-8$/s/^# //' /etc/locale.gen \
-    && locale-gen en_US.UTF-8 \
-    && rm -f /usr/sbin/policy-rc.d \
-    && apt-get autoremove -y \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    tzdata; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
-COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-server
-COPY --from=redis-binaries /usr/local/bin/redis-cli /usr/local/bin/redis-cli
-COPY --from=ffmpeg-binaries /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
-COPY --from=ffmpeg-binaries /usr/local/bin/ffprobe /usr/local/bin/ffprobe
+FROM ubuntu-runtime-base AS ubuntu-build-base
 
-COPY --from=elasticsearch-with-ik /opt/elasticsearch /opt/elasticsearch
+RUN set -eux; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
+    tar; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/elasticsearch/config/analysis-ik \
-    && printf '%s\n' \
+FROM ubuntu-build-base AS elasticsearch-with-ik
+
+ARG ELASTICSEARCH_VERSION=9.4.1
+
+COPY blog-cache/ ./blog-cache/
+
+RUN set -eux; \
+    elasticsearch_archive="elasticsearch-${ELASTICSEARCH_VERSION}-linux-x86_64.tar.gz"; \
+    ik_archive="elasticsearch-analysis-ik-${ELASTICSEARCH_VERSION}.zip"; \
+    if [ -f "./blog-cache/${elasticsearch_archive}" ]; then cp "./blog-cache/${elasticsearch_archive}" /tmp/elasticsearch.tar.gz; else curl -fsSL "https://artifacts.elastic.co/downloads/elasticsearch/${elasticsearch_archive}" -o /tmp/elasticsearch.tar.gz; fi; \
+    mkdir -p /opt/elasticsearch; \
+    tar -xzf /tmp/elasticsearch.tar.gz -C /opt/elasticsearch --strip-components=1; \
+    rm -f /tmp/elasticsearch.tar.gz; \
+    if [ -f "./blog-cache/${ik_archive}" ]; then cp "./blog-cache/${ik_archive}" /tmp/analysis-ik.zip; else curl -fsSL "https://release.infinilabs.com/analysis-ik/stable/${ik_archive}" -o /tmp/analysis-ik.zip; fi; \
+    /opt/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip; \
+    mkdir -p /opt/elasticsearch/config/analysis-ik; \
+    printf '%s\n' \
     '<?xml version="1.0" encoding="UTF-8"?>' \
     '<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">' \
     '<properties>' \
     '    <comment>IK Analyzer 扩展配置</comment>' \
     '    <entry key="ext_dict">my.dic</entry>' \
     '    <entry key="ext_stopwords"></entry>' \
-    '</properties>' >/opt/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml \
-    && touch /opt/elasticsearch/config/analysis-ik/my.dic \
-    && if ! getent group blog-server >/dev/null; then groupadd --system blog-server; fi \
-    && if ! id -u blog-server >/dev/null 2>&1; then useradd --system -g blog-server -m -d /home/blog-server -s /bin/bash blog-server; fi \
-    && if ! getent group elasticsearch >/dev/null; then groupadd --system elasticsearch; fi \
-    && if ! id -u elasticsearch >/dev/null 2>&1; then useradd --system -g elasticsearch -m -d /home/elasticsearch -s /bin/bash elasticsearch; fi \
-    && mkdir -p /data /var/cache/nginx /var/lib/nginx /run/nginx /home/blog-server /var/run/postgresql /var/lib/postgresql \
-    && chmod 3775 /var/run/postgresql \
-    && chown -R postgres:postgres /var/run/postgresql /var/lib/postgresql \
-    && chown -R blog-server:blog-server /home/blog-server \
-    && chown -R elasticsearch:elasticsearch /opt/elasticsearch /home/elasticsearch \
-    && chown -R www-data:www-data /var/cache/nginx /var/lib/nginx /run/nginx \
-    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo "Asia/Shanghai" >/etc/timezone
+    '</properties>' >/opt/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml; \
+    touch /opt/elasticsearch/config/analysis-ik/my.dic; \
+    rm -f /tmp/analysis-ik.zip; \
+    rm -rf ./blog-cache
 
-COPY --from=server-builder /out/blog-server /home/blog-server/blog-server
-COPY --from=server-builder /out/boot /home/blog-server/boot
-COPY --from=server-builder /out/config /home/blog-server/config-default
-COPY --from=server-builder /out/templates /home/blog-server/templates
-COPY --from=server-builder /out/docs /home/blog-server/docs
-COPY blog-server-dev/LICENSE /home/blog-server/LICENSE
+FROM ubuntu-build-base AS redis-binaries
 
-COPY --from=client-builder /app/dist /usr/share/nginx/html
-COPY blog-client/LICENSE /usr/share/nginx/html/LICENSE
-COPY blog-client/redirects.map /etc/nginx/redirects.map
+ARG REDIS_VERSION=8.6.3
+ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
+
+COPY blog-cache/ ./blog-cache/
+
+RUN set -eux; \
+    redis_archive="redis-${REDIS_VERSION}-official-src.tar.gz"; \
+    redis_download_url="https://github.com/redis/redis/archive/refs/tags/${REDIS_VERSION}.tar.gz"; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
+    dpkg-dev \
+    gcc \
+    g++ \
+    libc6-dev \
+    libssl-dev \
+    make; \
+    arch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
+    case "$arch" in \
+    amd64|arm64) \
+    export BUILD_WITH_MODULES=yes; \
+    export INSTALL_RUST_TOOLCHAIN=yes; \
+    export DISABLE_WERRORS=yes; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends \
+    git \
+    cmake \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    unzip \
+    rsync \
+    wget \
+    clang \
+    automake \
+    autoconf \
+    libtool; \
+    ;; \
+    *) \
+    export BUILD_WITH_MODULES=no; \
+    ;; \
+    esac; \
+    rm -rf /var/lib/apt/lists/*; \
+    if [ -f "./blog-cache/${redis_archive}" ]; then cp "./blog-cache/${redis_archive}" /tmp/redis.tar.gz; else curl -fsSL "$redis_download_url" -o /tmp/redis.tar.gz; fi; \
+    echo "${REDIS_DOWNLOAD_SHA} */tmp/redis.tar.gz" | sha256sum -c -; \
+    mkdir -p /tmp/redis-src; \
+    tar -xzf /tmp/redis.tar.gz -C /tmp/redis-src --strip-components=1; \
+    grep -E '^ *createBoolConfig[(]"protected-mode",.*, *1 *,.*[)],$' /tmp/redis-src/src/config.c; \
+    sed -ri 's!^( *createBoolConfig[(]"protected-mode",.*, *)1( *,.*[)],)$!\10\2!' /tmp/redis-src/src/config.c; \
+    grep -E '^ *createBoolConfig[(]"protected-mode",.*, *0 *,.*[)],$' /tmp/redis-src/src/config.c; \
+    gnu_arch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
+    extra_jemalloc_configure_flags="--build=$gnu_arch"; \
+    case "${arch##*-}" in \
+    amd64|i386|x32) extra_jemalloc_configure_flags="$extra_jemalloc_configure_flags --with-lg-page=12" ;; \
+    *) extra_jemalloc_configure_flags="$extra_jemalloc_configure_flags --with-lg-page=16" ;; \
+    esac; \
+    extra_jemalloc_configure_flags="$extra_jemalloc_configure_flags --with-lg-hugepage=21"; \
+    grep -F 'cd jemalloc && ./configure ' /tmp/redis-src/deps/Makefile; \
+    sed -ri 's!cd jemalloc && ./configure !&'"$extra_jemalloc_configure_flags"' !' /tmp/redis-src/deps/Makefile; \
+    grep -F "cd jemalloc && ./configure $extra_jemalloc_configure_flags " /tmp/redis-src/deps/Makefile; \
+    export BUILD_TLS=yes; \
+    make -C /tmp/redis-src -j"$(nproc)" all; \
+    make -C /tmp/redis-src install; \
+    install -m 0755 /tmp/redis-src/src/redis-server /usr/local/bin/redis-server; \
+    install -m 0755 /tmp/redis-src/src/redis-cli /usr/local/bin/redis-cli; \
+    strip /usr/local/bin/redis-server /usr/local/bin/redis-cli || true; \
+    rm -rf /tmp/redis.tar.gz /tmp/redis-src ./blog-cache
+
+FROM ubuntu-runtime-base AS blog-env-fallback
+
+ARG POSTGRES_VERSION=18.4
+ARG POSTGRES_MAJOR=18
+ARG NGINX_VERSION=1.31.0
+
+ENV TZ=Asia/Shanghai
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PATH=/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}
+
+RUN set -eux; \
+    nginx_apt_version="${NGINX_VERSION}-1~noble"; \
+    postgres_version_prefix="${POSTGRES_VERSION}-"; \
+    printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d; \
+    chmod +x /usr/sbin/policy-rc.d; \
+    /usr/local/bin/apt-retry apt-get update; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends gnupg; \
+    mkdir -p /etc/postgresql-common; \
+    printf '%s\n' 'create_main_cluster = false' >/etc/postgresql-common/createcluster.conf; \
+    install -d /usr/share/postgresql-common/pgdg /usr/share/keyrings; \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
+    printf '%s\n' 'Types: deb' 'URIs: https://apt.postgresql.org/pub/repos/apt' 'Suites: noble-pgdg' 'Components: main' 'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' >/etc/apt/sources.list.d/pgdg.sources; \
+    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg; \
+    printf '%s\n' 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu noble nginx' >/etc/apt/sources.list.d/nginx.list; \
+    printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' >/etc/apt/preferences.d/99nginx; \
+    /usr/local/bin/apt-retry apt-get update; \
+    postgresql_apt_version="$(apt-cache madison "postgresql-${POSTGRES_MAJOR}" | awk -v version_prefix="$postgres_version_prefix" '$3 ~ ("^" version_prefix) { print $3; exit }')"; \
+    postgresql_client_apt_version="$(apt-cache madison "postgresql-client-${POSTGRES_MAJOR}" | awk -v version_prefix="$postgres_version_prefix" '$3 ~ ("^" version_prefix) { print $3; exit }')"; \
+    if [ -z "$postgresql_apt_version" ] || [ -z "$postgresql_client_apt_version" ]; then \
+    echo "❌ 错误: 未在 pgdg 源中找到 PostgreSQL ${POSTGRES_VERSION} 对应的完整包版本" >&2; \
+    apt-cache madison "postgresql-${POSTGRES_MAJOR}" >&2 || true; \
+    apt-cache madison "postgresql-client-${POSTGRES_MAJOR}" >&2 || true; \
+    exit 1; \
+    fi; \
+    /usr/local/bin/apt-retry apt-get install -y --no-install-recommends "nginx=${nginx_apt_version}" "postgresql-${POSTGRES_MAJOR}=${postgresql_apt_version}" "postgresql-client-${POSTGRES_MAJOR}=${postgresql_client_apt_version}"; \
+    apt-get purge -y --auto-remove gnupg; \
+    if ! getent group blog-server >/dev/null; then groupadd --system blog-server; fi; \
+    if ! id -u blog-server >/dev/null 2>&1; then useradd --system -g blog-server -m -d /home/blog-server -s /bin/bash blog-server; fi; \
+    if ! getent group elasticsearch >/dev/null; then groupadd --system elasticsearch; fi; \
+    if ! id -u elasticsearch >/dev/null 2>&1; then useradd --system -g elasticsearch -m -d /home/elasticsearch -s /bin/bash elasticsearch; fi; \
+    mkdir -p /data /var/cache/nginx /var/lib/nginx /run/nginx /home/blog-server /var/run/postgresql /var/lib/postgresql; \
+    chmod 3775 /var/run/postgresql; \
+    chown -R postgres:postgres /var/run/postgresql /var/lib/postgresql; \
+    chown -R blog-server:blog-server /home/blog-server; \
+    chown -R www-data:www-data /var/cache/nginx /var/lib/nginx /run/nginx; \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime; \
+    echo 'Asia/Shanghai' >/etc/timezone; \
+    rm -f /usr/sbin/policy-rc.d; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/*
+
+COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-cli /usr/local/bin/
+COPY --from=redis-binaries /usr/local/lib/redis /usr/local/lib/redis
+COPY --chown=elasticsearch:elasticsearch --from=elasticsearch-with-ik /opt/elasticsearch /opt/elasticsearch
+
+VOLUME ["/data"]
+
+FROM ${BLOG_ENV_IMAGE}
+
+ARG BLOG_VERSION=dev
+
+ENV BLOG_VERSION=${BLOG_VERSION}
+
+COPY --from=ffmpeg-binaries /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-binaries /usr/local/bin/ffprobe /usr/local/bin/ffprobe
+
+COPY --from=server-artifacts /home/blog-server/blog-server /home/blog-server/blog-server
+COPY --from=server-artifacts /home/blog-server/boot /home/blog-server/boot
+COPY --from=server-artifacts /home/blog-server/config /home/blog-server/config-default
+COPY --from=server-artifacts /home/blog-server/templates /home/blog-server/templates
+COPY --from=server-artifacts /home/blog-server/docs /home/blog-server/docs
+COPY --from=server-artifacts /home/blog-server/LICENSE /home/blog-server/LICENSE
+
+COPY --from=client-artifacts /usr/share/nginx/html /usr/share/nginx/html
+COPY --from=client-artifacts /etc/nginx/redirects.map /etc/nginx/redirects.map
 
 COPY single/docker/rootfs/ /
 
