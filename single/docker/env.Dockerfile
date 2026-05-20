@@ -56,6 +56,16 @@ RUN set -eux; \
     rm -f /tmp/elasticsearch.tar.gz; \
     if [ -f "./blog-cache/${ik_archive}" ]; then cp "./blog-cache/${ik_archive}" /tmp/analysis-ik.zip; else curl -fsSL "https://release.infinilabs.com/analysis-ik/stable/${ik_archive}" -o /tmp/analysis-ik.zip; fi; \
     /opt/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip; \
+    mkdir -p /opt/elasticsearch/config/analysis-ik; \
+    printf '%s\n' \
+    '<?xml version="1.0" encoding="UTF-8"?>' \
+    '<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">' \
+    '<properties>' \
+    '    <comment>IK Analyzer 扩展配置</comment>' \
+    '    <entry key="ext_dict">my.dic</entry>' \
+    '    <entry key="ext_stopwords"></entry>' \
+    '</properties>' >/opt/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml; \
+    touch /opt/elasticsearch/config/analysis-ik/my.dic; \
     rm -f /tmp/analysis-ik.zip; \
     rm -rf ./blog-cache
 
@@ -169,22 +179,8 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/*
 
-COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-server
-COPY --from=redis-binaries /usr/local/bin/redis-cli /usr/local/bin/redis-cli
+COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-cli /usr/local/bin/
 COPY --from=redis-binaries /usr/local/lib/redis /usr/local/lib/redis
 COPY --chown=elasticsearch:elasticsearch --from=elasticsearch-with-ik /opt/elasticsearch /opt/elasticsearch
-
-RUN mkdir -p /opt/elasticsearch/config/analysis-ik \
-    && printf '%s\n' \
-    '<?xml version="1.0" encoding="UTF-8"?>' \
-    '<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">' \
-    '<properties>' \
-    '    <comment>IK Analyzer 扩展配置</comment>' \
-    '    <entry key="ext_dict">my.dic</entry>' \
-    '    <entry key="ext_stopwords"></entry>' \
-    '</properties>' >/opt/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml \
-    && touch /opt/elasticsearch/config/analysis-ik/my.dic \
-    && chown -R elasticsearch:elasticsearch /home/elasticsearch \
-    && rm -rf ./blog-cache
 
 VOLUME ["/data"]
