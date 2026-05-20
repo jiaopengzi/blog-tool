@@ -38,6 +38,7 @@ FROM scratch AS client-build-fallback
 
 COPY --from=client-builder /app/dist /usr/share/nginx/html
 COPY blog-client/LICENSE /usr/share/nginx/html/LICENSE
+COPY blog-client/nginx.conf /etc/nginx/nginx.conf
 COPY blog-client/redirects.map /etc/nginx/redirects.map
 
 FROM ${CLIENT_BUILD_IMAGE} AS client-artifacts
@@ -97,11 +98,14 @@ COPY --from=server-artifacts /home/blog-server/docs /home/blog-server/docs
 COPY --from=server-artifacts /home/blog-server/LICENSE /home/blog-server/LICENSE
 
 COPY --from=client-artifacts /usr/share/nginx/html /usr/share/nginx/html
+COPY --from=client-artifacts /etc/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=client-artifacts /etc/nginx/redirects.map /etc/nginx/redirects.map
 
 COPY single/docker/rootfs/ /
 
-RUN chmod +x /usr/local/bin/blog-entrypoint.sh /home/blog-server/blog-server /home/blog-server/boot \
+RUN mkdir -p /opt/blog-client \
+    && cp -a /etc/nginx /opt/blog-client/nginx-template \
+    && chmod +x /usr/local/bin/blog-entrypoint.sh /home/blog-server/blog-server /home/blog-server/boot \
     && printf '%s\n' "$BLOG_VERSION" >/home/blog-server/VERSION \
     && chown -R blog-server:blog-server /home/blog-server
 
