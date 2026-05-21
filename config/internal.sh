@@ -206,7 +206,7 @@ refresh_host_intranet_network
 # 私有 ca 证书存放目录
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 # 证书有效期(天)
-CERT_DAYS_VALID=3650
+CERT_DAYS_VALID=36525
 
 # docker 镜像版本
 IMG_VERSION_REDIS="8.6.3"    # redis 版本

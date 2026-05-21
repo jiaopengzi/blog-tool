@@ -449,7 +449,7 @@ refresh_host_intranet_network() {
 refresh_host_intranet_network
 
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
-CERT_DAYS_VALID=3650
+CERT_DAYS_VALID=36525
 
 IMG_VERSION_REDIS="8.6.3"    # redis 版本
 IMG_VERSION_PGSQL="18.4"     # pgsql 版本
