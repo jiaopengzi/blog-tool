@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # blog 单镜像运行时环境 Dockerfile
 
 ARG UBUNTU_VERSION=24.04
@@ -7,6 +8,10 @@ ARG REDIS_VERSION=8.6.3
 ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
 ARG ELASTICSEARCH_VERSION=9.4.1
 ARG NGINX_VERSION=1.31.0
+
+FROM scratch AS cached-assets
+
+COPY blog-cache/ /blog-cache/
 
 FROM ubuntu:${UBUNTU_VERSION} AS ubuntu-runtime-base
 
@@ -51,16 +56,15 @@ FROM ubuntu-build-base AS elasticsearch-with-ik
 
 ARG ELASTICSEARCH_VERSION=9.4.1
 
-COPY blog-cache/ ./blog-cache/
-
-RUN set -eux; \
+RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
+    set -eux; \
     elasticsearch_archive="elasticsearch-${ELASTICSEARCH_VERSION}-linux-x86_64.tar.gz"; \
     ik_archive="elasticsearch-analysis-ik-${ELASTICSEARCH_VERSION}.zip"; \
-    if [ -f "./blog-cache/${elasticsearch_archive}" ]; then cp "./blog-cache/${elasticsearch_archive}" /tmp/elasticsearch.tar.gz; else curl -fsSL "https://artifacts.elastic.co/downloads/elasticsearch/${elasticsearch_archive}" -o /tmp/elasticsearch.tar.gz; fi; \
+    if [ -f "/blog-cache/${elasticsearch_archive}" ]; then cp "/blog-cache/${elasticsearch_archive}" /tmp/elasticsearch.tar.gz; else curl -fsSL "https://artifacts.elastic.co/downloads/elasticsearch/${elasticsearch_archive}" -o /tmp/elasticsearch.tar.gz; fi; \
     mkdir -p /opt/elasticsearch; \
     tar -xzf /tmp/elasticsearch.tar.gz -C /opt/elasticsearch --strip-components=1; \
     rm -f /tmp/elasticsearch.tar.gz; \
-    if [ -f "./blog-cache/${ik_archive}" ]; then cp "./blog-cache/${ik_archive}" /tmp/analysis-ik.zip; else curl -fsSL "https://release.infinilabs.com/analysis-ik/stable/${ik_archive}" -o /tmp/analysis-ik.zip; fi; \
+    if [ -f "/blog-cache/${ik_archive}" ]; then cp "/blog-cache/${ik_archive}" /tmp/analysis-ik.zip; else curl -fsSL "https://release.infinilabs.com/analysis-ik/stable/${ik_archive}" -o /tmp/analysis-ik.zip; fi; \
     /opt/elasticsearch/bin/elasticsearch-plugin install --batch file:///tmp/analysis-ik.zip; \
     mkdir -p /opt/elasticsearch/config/analysis-ik; \
     printf '%s\n' \
@@ -74,17 +78,15 @@ RUN set -eux; \
     touch /opt/elasticsearch/config/analysis-ik/my.dic; \
     rm -rf /opt/elasticsearch/jdk/jmods /opt/elasticsearch/jdk/include /opt/elasticsearch/jdk/man; \
     rm -f /opt/elasticsearch/jdk/lib/ct.sym; \
-    rm -f /tmp/analysis-ik.zip; \
-    rm -rf ./blog-cache
+    rm -f /tmp/analysis-ik.zip
 
 FROM ubuntu-build-base AS redis-binaries
 
 ARG REDIS_VERSION=8.6.3
 ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
 
-COPY blog-cache/ ./blog-cache/
-
-RUN set -eux; \
+RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
+    set -eux; \
     redis_archive="redis-${REDIS_VERSION}-official-src.tar.gz"; \
     redis_download_url="https://github.com/redis/redis/archive/refs/tags/${REDIS_VERSION}.tar.gz"; \
     /usr/local/bin/apt-retry apt-get update; \
@@ -122,7 +124,7 @@ RUN set -eux; \
     ;; \
     esac; \
     rm -rf /var/lib/apt/lists/*; \
-    if [ -f "./blog-cache/${redis_archive}" ]; then cp "./blog-cache/${redis_archive}" /tmp/redis.tar.gz; else curl -fsSL "$redis_download_url" -o /tmp/redis.tar.gz; fi; \
+    if [ -f "/blog-cache/${redis_archive}" ]; then cp "/blog-cache/${redis_archive}" /tmp/redis.tar.gz; else curl -fsSL "$redis_download_url" -o /tmp/redis.tar.gz; fi; \
     echo "${REDIS_DOWNLOAD_SHA} */tmp/redis.tar.gz" | sha256sum -c -; \
     mkdir -p /tmp/redis-src; \
     tar -xzf /tmp/redis.tar.gz -C /tmp/redis-src --strip-components=1; \
@@ -145,7 +147,7 @@ RUN set -eux; \
     install -m 0755 /tmp/redis-src/src/redis-server /usr/local/bin/redis-server; \
     install -m 0755 /tmp/redis-src/src/redis-cli /usr/local/bin/redis-cli; \
     strip /usr/local/bin/redis-server /usr/local/bin/redis-cli || true; \
-    rm -rf /tmp/redis.tar.gz /tmp/redis-src ./blog-cache
+    rm -rf /tmp/redis.tar.gz /tmp/redis-src
 
 FROM ubuntu-runtime-base
 
