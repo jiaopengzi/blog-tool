@@ -176,8 +176,6 @@ sudo bash blog-tool-dev.sh --push-single --repo --tencent --docker-hub
 2. 仅在显式传入 `--tencent` 时, 才推送到 `REGISTRY_REMOTE_SERVER_TENCENT/blog`。
 3. 仅在显式传入 `--docker-hub` 时, 才推送到 `docker.io/jiaopengzi/blog`。
 
-脚本会在构建完成后打印 debug 级别的 server 版本、client 版本和 single 计算结果。推送前还会比较远端版本标签对应的镜像内容与本地 `blog:build`; 只有内容一致时, 才会跳过该目标仓库的推送与签名。
-
 当目标仓库凭据未配置时, 对应仓库推送会自动跳过, 不影响其它已显式选择的仓库。
 
 ### 2. 运行独立镜像

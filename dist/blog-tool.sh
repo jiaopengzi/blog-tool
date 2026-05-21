@@ -91,7 +91,7 @@ get_level_num() {
 }
 
 # 核心日志函数(不再处理 caller_info, 由调用方传入)
-# 参数：$1=日志级别, $2=日志消息, $3=调用者信息(格式如 [file:line])
+# 参数: $1=日志级别, $2=日志消息, $3=调用者信息(格式如 [file:line])
 log() {
     local level="$1"
     local message="$2"
@@ -104,10 +104,10 @@ log() {
     if ! [[ "error warn info debug" =~ (^| )$level( |$) ]]; then
         echo -e "${RED}[WARN] 无效日志级别: $level, 已转为info${NC}" >&2
         level="info"
-        message="无效级别[$level] → 原始消息: $message"
+        message="无效级别[$level] -> 原始消息: $message"
     fi
 
-    # 2. 过滤：当前级别优先级低于全局阈值则跳过
+    # 2. 过滤: 当前级别优先级低于全局阈值则跳过
     local current_num global_num
     current_num=$(get_level_num "$level")
     global_num=$(get_level_num "$LOG_LEVEL")
@@ -194,7 +194,7 @@ log_debug() {
     local caller_info="[${BASH_SOURCE[1]##*/}:${BASH_LINENO[0]}]"
     log "debug" "$message" "$caller_info"
 }
-
+### content from utils/log_ui.sh
 # 免责声明信息
 disclaimer_msg() {
     # 检查免责声明接受标记文件

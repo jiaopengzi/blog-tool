@@ -20,13 +20,6 @@ SINGLE_TOOL_ROOT=""                                             # blog-tool 根�
 SINGLE_PUSH_REPO_ENABLED="false"                                # 是否显式启用默认公开私有仓库推送
 SINGLE_PUSH_TENCENT_ENABLED="false"                             # 是否显式启用腾讯云仓库推送
 SINGLE_PUSH_DOCKER_HUB_ENABLED="false"                          # 是否显式启用 Docker Hub 推送
-SINGLE_RUN_IMAGE_REF=""                                         # single 运行镜像引用
-SINGLE_RUN_DATA_DIR="/data/blog"                               # single 运行数据目录
-SINGLE_RUN_CONTAINER_NAME="blog"                               # single 运行容器名称
-SINGLE_RUN_PUBLIC_HOST=""                                       # single 运行对外地址
-SINGLE_RUN_HTTPS_CERT_FILE=""                                  # single 运行时宿主机证书路径
-SINGLE_RUN_HTTPS_KEY_FILE=""                                   # single 运行时宿主机私钥路径
-SINGLE_RUN_HTTPS_PORT="443"                                    # single 运行时 HTTPS 端口
 SINGLE_COMPONENT_SERVER_VERSION=""                              # 最近一次从镜像中解析出的后端版本号
 SINGLE_COMPONENT_CLIENT_VERSION=""                              # 最近一次从镜像中解析出的前端版本号
 SINGLE_BUILD_SERVER_VERSION=""                                  # 本次 single 构建指定的后端版本号
@@ -91,7 +84,6 @@ single_print_help() {
     sudo bash blog-tool-dev.sh --env-single
     sudo bash blog-tool-dev.sh --build-single --server v1.0.0 --client v1.0.0
     sudo bash blog-tool-dev.sh --push-single --repo
-    sudo bash blog-tool-dev.sh --run-single [--image jiaopengzi/blog:v1.0.0]
 
 参数:
     --server                      仅对 --build-single 生效, 指定要拉取的 blog-server 版本.
@@ -99,13 +91,6 @@ single_print_help() {
     --repo                        仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_PUBLIC.
     --tencent                     仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_TENCENT.
     --docker-hub                  仅对 --push-single 生效, 显式推送到 Docker Hub.
-    --image                       仅对 --run-single 生效, 指定运行镜像, 默认优先使用本地 blog:build.
-    --data-dir                    仅对 --run-single 生效, 指定单镜像数据目录, 默认 /data/blog.
-    --name                        仅对 --run-single 生效, 指定容器名称, 默认 blog.
-    --public-host                 仅对 --run-single 生效, 指定对外访问域名或 IP.
-    --https-cert                  仅对 --run-single 生效, 指定宿主机 HTTPS 证书路径.
-    --https-key                   仅对 --run-single 生效, 指定宿主机 HTTPS 私钥路径.
-    --https-port                  仅对 --run-single 生效, 指定宿主机与容器 HTTPS 端口, 默认 443.
   -h, --help                    查看帮助信息.
 
 说明:
@@ -115,7 +100,6 @@ single_print_help() {
     4. 单镜像推送支持任意组合选择多个目标仓库, 会按 repo -> tencent -> docker-hub 顺序执行.
     5. REGISTRY_REMOTE_SERVER_PUBLIC 与 REGISTRY_REMOTE_SERVER 共用用户名和密码.
     6. 装配阶段直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像, single/docker/build.Dockerfile 不再自行构建前后端产物.
-    7. --run-single 会在宿主机侧预处理数据目录和自定义 HTTPS 证书, 适合直接使用宿主机证书路径启动单镜像.
 EOF
 }
 
@@ -130,13 +114,6 @@ single_parse_cli_args() {
     SINGLE_PUSH_DOCKER_HUB_ENABLED="false"
     SINGLE_BUILD_SERVER_VERSION=""
     SINGLE_BUILD_CLIENT_VERSION=""
-    SINGLE_RUN_IMAGE_REF=""
-    SINGLE_RUN_DATA_DIR="/data/blog"
-    SINGLE_RUN_CONTAINER_NAME="blog"
-    SINGLE_RUN_PUBLIC_HOST=""
-    SINGLE_RUN_HTTPS_CERT_FILE=""
-    SINGLE_RUN_HTTPS_KEY_FILE=""
-    SINGLE_RUN_HTTPS_PORT="443"
 
     shift
 
@@ -209,139 +186,6 @@ single_parse_cli_args() {
             fi
             SINGLE_PUSH_DOCKER_HUB_ENABLED="true"
             ;;
-        --image=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --image 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_IMAGE_REF="${1#*=}"
-            ;;
-        --image)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --image 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --image 缺少镜像值"
-                return 1
-            fi
-            SINGLE_RUN_IMAGE_REF="$1"
-            ;;
-        --data-dir=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --data-dir 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_DATA_DIR="${1#*=}"
-            ;;
-        --data-dir)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --data-dir 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --data-dir 缺少目录值"
-                return 1
-            fi
-            SINGLE_RUN_DATA_DIR="$1"
-            ;;
-        --name=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --name 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_CONTAINER_NAME="${1#*=}"
-            ;;
-        --name)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --name 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --name 缺少容器名称"
-                return 1
-            fi
-            SINGLE_RUN_CONTAINER_NAME="$1"
-            ;;
-        --public-host=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --public-host 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_PUBLIC_HOST="${1#*=}"
-            ;;
-        --public-host)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --public-host 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --public-host 缺少域名或 IP"
-                return 1
-            fi
-            SINGLE_RUN_PUBLIC_HOST="$1"
-            ;;
-        --https-cert=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-cert 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_CERT_FILE="${1#*=}"
-            ;;
-        --https-cert)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-cert 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --https-cert 缺少证书路径"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_CERT_FILE="$1"
-            ;;
-        --https-key=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-key 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_KEY_FILE="${1#*=}"
-            ;;
-        --https-key)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-key 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --https-key 缺少私钥路径"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_KEY_FILE="$1"
-            ;;
-        --https-port=*)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-port 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_PORT="${1#*=}"
-            ;;
-        --https-port)
-            if [[ "$single_action" != "run" ]]; then
-                log_error "参数 --https-port 仅支持与 --run-single 一起使用"
-                return 1
-            fi
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 --https-port 缺少端口值"
-                return 1
-            fi
-            SINGLE_RUN_HTTPS_PORT="$1"
-            ;;
         -h|--help)
             single_print_help
             return 2
@@ -368,113 +212,6 @@ single_parse_cli_args() {
         log_error "参数 --build-single 必须同时指定 --server 和 --client 版本"
         return 1
     fi
-}
-
-# 仅检查 single 运行入口所需的基础环境.
-single_check_run_env() {
-    single_require_dev_build || return 1
-
-    check_is_root
-    check_character
-    check_env_path
-    check_install_base
-    single_check_docker_ready || return 1
-}
-
-# 解析 single 运行使用的镜像引用.
-# 返回: 打印最终镜像引用.
-single_resolve_run_image_ref() {
-    if [[ -n "$SINGLE_RUN_IMAGE_REF" ]]; then
-        echo "$SINGLE_RUN_IMAGE_REF"
-        return 0
-    fi
-
-    if single_has_local_image "$SINGLE_IMAGE_NAME:build"; then
-        echo "$SINGLE_IMAGE_NAME:build"
-        return 0
-    fi
-
-    log_error "未找到可运行的单镜像, 请显式传入 --image 或先执行 --build-single"
-    return 1
-}
-
-# 预创建 single 运行所需数据目录.
-single_prepare_run_data_dir() {
-    local data_dir="$1"
-
-    sudo mkdir -p "$data_dir/blog-client/nginx/ssl"
-    sudo chmod 755 "$data_dir" "$data_dir/blog-client" "$data_dir/blog-client/nginx"
-    sudo chmod 700 "$data_dir/blog-client/nginx/ssl"
-}
-
-# 将宿主机 HTTPS 证书复制到 single 数据目录, 与 --auto 的 client 证书覆盖语义对齐.
-single_prepare_run_https_cert() {
-    local data_dir="$1"
-    local cert_file="$2"
-    local key_file="$3"
-    local target_ssl_dir="$data_dir/blog-client/nginx/ssl"
-
-    if [[ -z "$cert_file" && -z "$key_file" ]]; then
-        return 0
-    fi
-
-    if [[ -z "$cert_file" || -z "$key_file" ]]; then
-        log_error "--https-cert 和 --https-key 需要同时提供"
-        return 1
-    fi
-
-    if [[ ! -r "$cert_file" || ! -r "$key_file" ]]; then
-        log_error "宿主机 HTTPS 证书路径不存在或不可读, 请检查 --https-cert 或 --https-key"
-        return 1
-    fi
-
-    single_prepare_run_data_dir "$data_dir"
-    sudo cp -f "$cert_file" "$target_ssl_dir/cert.pem"
-    sudo cp -f "$key_file" "$target_ssl_dir/cert.key"
-    sudo chmod 600 "$target_ssl_dir/cert.key"
-    sudo chmod 644 "$target_ssl_dir/cert.pem"
-    log_info "已将宿主机 HTTPS 证书复制到: $target_ssl_dir"
-}
-
-# 运行 single 镜像, 在宿主机侧预处理证书和数据目录.
-docker_run_single() {
-    log_debug "run docker_run_single"
-
-    local image_ref=""
-    local public_host=""
-    local container_id=""
-
-    single_check_run_env || return 1
-
-    image_ref="$(single_resolve_run_image_ref)" || return 1
-    public_host="${SINGLE_RUN_PUBLIC_HOST:-$(single_resolve_default_public_host)}"
-
-    if ! [[ "$SINGLE_RUN_HTTPS_PORT" =~ ^[0-9]+$ ]]; then
-        log_error "--https-port 必须为数字"
-        return 1
-    fi
-
-    if sudo docker ps -a --format '{{.Names}}' | grep -Fxq "$SINGLE_RUN_CONTAINER_NAME"; then
-        log_error "容器名称已存在: $SINGLE_RUN_CONTAINER_NAME, 请先删除或改用 --name"
-        return 1
-    fi
-
-    single_prepare_run_data_dir "$SINGLE_RUN_DATA_DIR"
-    single_prepare_run_https_cert "$SINGLE_RUN_DATA_DIR" "$SINGLE_RUN_HTTPS_CERT_FILE" "$SINGLE_RUN_HTTPS_KEY_FILE" || return 1
-
-    log_info "开始运行单镜像容器, 镜像: $image_ref"
-    container_id="$(sudo docker run -d \
-        --name "$SINGLE_RUN_CONTAINER_NAME" \
-        -p "$SINGLE_RUN_HTTPS_PORT:$SINGLE_RUN_HTTPS_PORT" \
-        -v "$SINGLE_RUN_DATA_DIR:/data" \
-        -e "BLOG_PUBLIC_HOST=$public_host" \
-        -e "BLOG_HTTPS_PORT=$SINGLE_RUN_HTTPS_PORT" \
-        "$image_ref")" || return 1
-
-    log_info "单镜像容器启动命令已提交, 容器 ID: $container_id"
-    log_info "数据目录: $SINGLE_RUN_DATA_DIR"
-    log_info "访问地址: https://$public_host"
-    log_info "查看日志: sudo docker logs -f $SINGLE_RUN_CONTAINER_NAME"
 }
 
 # 确保当前功能仅在开发版工具中使用.
@@ -1523,7 +1260,7 @@ docker_build_push_single() {
 }
 
 # 处理 single CLI 命令入口.
-# 参数: $1: 动作类型, env | build | push | run.
+# 参数: $1: 动作类型, env | build | push.
 # 参数: $@: 命令行参数.
 single_cli_main() {
     log_debug "run single_cli_main"
@@ -1552,9 +1289,6 @@ single_cli_main() {
         ;;
     push)
         docker_push_single
-        ;;
-    run)
-        docker_run_single
         ;;
     *)
         log_error "不支持的 single 动作: $single_action"

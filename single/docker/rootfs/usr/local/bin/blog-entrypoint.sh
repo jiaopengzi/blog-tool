@@ -9,6 +9,14 @@
 
 set -euo pipefail
 
+LOG_LEVEL="${LOG_LEVEL:-info}"
+LOG_FILE="${LOG_FILE:-/var/log/blog-entrypoint.log}"
+BLOG_TOOL_ENV="${BLOG_TOOL_ENV:-/tmp/blog_tool_env}"
+
+mkdir -p "$(dirname "$LOG_FILE")" "$BLOG_TOOL_ENV"
+# shellcheck disable=SC1091
+source /usr/local/lib/blog-tool/log.sh
+
 BLOG_PUBLIC_HOST_SOURCE="default"
 if [[ -n "${BLOG_PUBLIC_HOST:-}" ]]; then
     BLOG_PUBLIC_HOST_SOURCE="BLOG_PUBLIC_HOST"
@@ -158,18 +166,6 @@ warn_if_vm_overcommit_disabled() {
     if [[ "$overcommit_value" != "1" ]]; then
         log_warn "检测到宿主机 vm.overcommit_memory=${overcommit_value:-unknown}, Redis 可能告警; 建议在宿主机执行: sudo sysctl vm.overcommit_memory=1"
     fi
-}
-
-log_info() {
-    printf '[blog] %s\n' "$1"
-}
-
-log_warn() {
-    printf '[blog][warn] %s\n' "$1" >&2
-}
-
-log_error() {
-    printf '[blog][error] %s\n' "$1" >&2
 }
 
 # 返回 PostgreSQL 可执行文件绝对路径, 避免 su 切换用户后 PATH 被重置导致找不到命令.

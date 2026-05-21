@@ -25,9 +25,25 @@ OUTPUT_FILE_BILLING_CENTER="$OUTPUT_DIR/blog-tool-billing-center.sh" # 计费中
 DEV_SH="config/dev.sh"                                               # 开发配置文件路径
 USER_SH="config/user.sh"                                             # 用户配置文件路径
 USER_BILLING_CENTER_SH="config/user_billing_center.sh"               # 计费中心用户配置文件路径
-LOG_SH="utils/log.sh"                                                # 日志记录脚本路径
+LOG_SH="utils/log.sh"                                                # 日志核心脚本路径
+LOG_UI_SH="utils/log_ui.sh"                                          # 日志扩展脚本路径(免责声明、logo 等)
+SINGLE_LIB_LOG_SH="single/docker/rootfs/usr/local/lib/blog-tool/log.sh" # single 容器日志核心库路径
 COMMENT_SRC_TEXT="#"                                                 # 处理注释的源文本
 COMMENT_TAR_TEXT="#!!!"                                              # 处理注释的目标文本
+
+# 同步日志核心脚本到 single rootfs/lib, 避免手工维护镜像内日志实现.
+sync_single_log_library() {
+    local source_log_core="$ROOT_DIR/$LOG_SH"
+    local target_single_log="$ROOT_DIR/$SINGLE_LIB_LOG_SH"
+
+    if [[ ! -f "$source_log_core" ]]; then
+        echo "❌ 错误：日志核心脚本不存在: $source_log_core" >&2
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$target_single_log")"
+    install -m 0644 "$source_log_core" "$target_single_log"
+}
 
 # 添加注释块
 add_comment_block() {
@@ -121,12 +137,21 @@ handle_user() {
         } >>"$target_file"
     fi
 
-    # 日志记录比较底层, 放在靠前的位置
+    # 日志核心最底层, 先于日志扩展注入
     if [ -f "$LOG_SH" ]; then
         {
             printf "### content from %s\n" "$LOG_SH"
-            # 去掉头注释, 保留其他内容(从第一行到第一个空行)
             sed '1,/^$/d' "$LOG_SH"
+            printf "\n"
+        } >>"$target_file"
+    fi
+
+    # 日志扩展依赖日志核心, 放在 log.sh 之后
+    if [ -f "$LOG_UI_SH" ]; then
+        {
+            printf "### content from %s\n" "$LOG_UI_SH"
+            # 去掉头注释, 保留其他内容(从第一行到第一个空行)
+            sed '1,/^$/d' "$LOG_UI_SH"
             printf "\n" # 添加空行以分隔内容
         } >>"$target_file"
     fi
@@ -203,7 +228,7 @@ should_skip_file() {
 
     # 跳过已单独处理的文件(用户配置文件、日志脚本)和模块入口文件 _.sh
     case "$file" in
-    "$USER_SH" | "$USER_BILLING_CENTER_SH" | "$LOG_SH") return 0 ;;
+    "$USER_SH" | "$USER_BILLING_CENTER_SH" | "$LOG_SH" | "$LOG_UI_SH") return 0 ;;
     esac
     [[ "$filename" == "_.sh" ]] && return 0
 
@@ -834,6 +859,8 @@ copy_to_parent_dir() {
 
 # 执行构建
 main() {
+    sync_single_log_library
+
     mkdir -p "$OUTPUT_DIR"
 
     # 初始化输出文件(存在则删除后重建)
