@@ -1013,7 +1013,7 @@ handle_signal() {
 }
 
 show_boot_summary() {
-    log_info "blog 单镜像启动完成"
+    log_info "blog 启动完成"
     log_info "访问地址: $(server_public_url)"
     log_info "对外访问主机来源: $BLOG_PUBLIC_HOST_SOURCE"
     log_info "默认仅提供 HTTPS 访问, 误用 http:// 访问 443 端口时会自动跳转到 https://"
