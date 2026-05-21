@@ -10,20 +10,16 @@
 SINGLE_IMAGE_NAME="blog"                                        # 单镜像名称
 SINGLE_ENV_IMAGE_NAME="$SINGLE_IMAGE_NAME:env"                 # 单镜像运行时环境镜像
 SINGLE_CONTEXT_PARENT_DIR="${BLOG_TOOL_ENV:-$ROOT_DIR/volume/blog_tool_env}/single-image"
-SINGLE_DOWNLOAD_CACHE_DIR=""                                    # single 下载缓存目录, 运行时按仓库根目录初始化
+SINGLE_DOWNLOAD_CACHE_DIR="${BLOG_TOOL_ENV:-$ROOT_DIR/volume/blog_tool_env}/single-image-cache" # single 下载缓存目录, 独立于构建上下文保留
 SINGLE_CONTEXT_DIR="$SINGLE_CONTEXT_PARENT_DIR/context"         # 单镜像构建上下文目录
 SINGLE_CONTEXT_DOWNLOAD_CACHE_DIR="$SINGLE_CONTEXT_DIR/blog-cache" # 单镜像上下文下载缓存目录
 SINGLE_DOCKERFILE_RELATIVE="single/docker/Dockerfile"           # 单镜像全量 Dockerfile 相对路径
 SINGLE_DOCKERFILE_ENV_RELATIVE="single/docker/env.Dockerfile"   # 单镜像运行时环境 Dockerfile 相对路径
 SINGLE_DOCKERFILE_BUILD_RELATIVE="single/docker/build.Dockerfile" # 单镜像装配 Dockerfile 相对路径
 SINGLE_TOOL_ROOT=""                                             # blog-tool 根目录, 仅在源码模式下需要
-SINGLE_WORKSPACE_ROOT=""                                        # 三仓库共同父目录
-SINGLE_CLIENT_ROOT=""                                           # blog-client 根目录
-SINGLE_SERVER_ROOT=""                                           # blog-server-dev 根目录
 SINGLE_PUSH_REPO_ENABLED="false"                                # 是否显式启用默认公开私有仓库推送
 SINGLE_PUSH_TENCENT_ENABLED="false"                             # 是否显式启用腾讯云仓库推送
 SINGLE_PUSH_DOCKER_HUB_ENABLED="false"                          # 是否显式启用 Docker Hub 推送
-SINGLE_PARSED_VERSION=""                                        # single CLI 最近一次解析出的版本号
 SINGLE_RUN_IMAGE_REF=""                                         # single 运行镜像引用
 SINGLE_RUN_DATA_DIR="/data/blog"                               # single 运行数据目录
 SINGLE_RUN_CONTAINER_NAME="blog"                               # single 运行容器名称
@@ -31,6 +27,10 @@ SINGLE_RUN_PUBLIC_HOST=""                                       # single 运行�
 SINGLE_RUN_HTTPS_CERT_FILE=""                                  # single 运行时宿主机证书路径
 SINGLE_RUN_HTTPS_KEY_FILE=""                                   # single 运行时宿主机私钥路径
 SINGLE_RUN_HTTPS_PORT="443"                                    # single 运行时 HTTPS 端口
+SINGLE_COMPONENT_SERVER_VERSION=""                              # 最近一次从镜像中解析出的后端版本号
+SINGLE_COMPONENT_CLIENT_VERSION=""                              # 最近一次从镜像中解析出的前端版本号
+SINGLE_BUILD_SERVER_VERSION=""                                  # 本次 single 构建指定的后端版本号
+SINGLE_BUILD_CLIENT_VERSION=""                                  # 本次 single 构建指定的前端版本号
 
 # 解析 single 部署阶段默认对外主机名.
 # 说明: 优先使用 DOMAIN_NAME, 未设置时回退为宿主机内网 IP, 与 --auto 的 deploy 语义保持一致.
@@ -79,49 +79,9 @@ single_has_local_image() {
     sudo docker image inspect "$image_name" >/dev/null 2>&1
 }
 
-# 解析前端环境镜像.
-# 返回: 打印可复用镜像名, 未命中则不输出.
-single_resolve_client_env_image() {
-    if single_has_local_image "blog-client:env"; then
-        echo "blog-client:env"
-    fi
-}
-
-# 解析前端构建产物镜像.
-# 返回: 打印可复用镜像名, 未命中则不输出.
-single_resolve_client_build_image() {
-    if single_has_local_image "blog-client:build"; then
-        echo "blog-client:build"
-    fi
-}
-
-# 解析后端 Golang 环境镜像.
-# 返回: 打印可复用镜像名, 未命中则不输出.
-single_resolve_server_golang_image() {
-    if single_has_local_image "blog-server:golang"; then
-        echo "blog-server:golang"
-    fi
-}
-
-# 解析后端构建产物镜像.
-# 返回: 打印可复用镜像名, 未命中则不输出.
-single_resolve_server_build_image() {
-    if single_has_local_image "blog-server:build"; then
-        echo "blog-server:build"
-    fi
-}
-
 # 判断当前是否具备镜像签名条件.
 single_can_sign_image() {
     [[ -n "${COSIGN_PRIVATE_KEY:-}" ]] && [[ -n "${COSIGN_PRIVATE_KEY_PWD:-}" ]]
-}
-
-# 解析 blog-server:build 构建所需的签名私钥文件.
-# 返回: 打印可用私钥路径, 未命中则不输出.
-single_resolve_server_sign_key() {
-    if [[ -n "${SIGN_PRIVATE_KEY:-}" ]] && [[ -f "${SIGN_PRIVATE_KEY}" ]]; then
-        echo "$SIGN_PRIVATE_KEY"
-    fi
 }
 
 # 输出单镜像帮助信息.
@@ -129,47 +89,47 @@ single_print_help() {
     cat <<EOF
 用法:
     sudo bash blog-tool-dev.sh --env-single
-  sudo bash blog-tool-dev.sh --build-single --version v1.0.0
-        sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --repo
-        sudo bash blog-tool-dev.sh --run-single [--image repo.example.com/blog:v1.0.0]
+    sudo bash blog-tool-dev.sh --build-single --server v1.0.0 --client v1.0.0
+    sudo bash blog-tool-dev.sh --push-single --repo
+    sudo bash blog-tool-dev.sh --run-single [--image jiaopengzi/blog:v1.0.0]
 
 参数:
-  --version, --single-version   指定单镜像版本号, 例如 v1.0.0.
-        --repo                        仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_PUBLIC.
-        --tencent                     仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_TENCENT.
-        --docker-hub                  仅对 --push-single 生效, 显式推送到 Docker Hub.
-        --image                       仅对 --run-single 生效, 指定运行镜像, 默认优先使用本地 blog:build.
-        --data-dir                    仅对 --run-single 生效, 指定单镜像数据目录, 默认 /data/blog.
-        --name                        仅对 --run-single 生效, 指定容器名称, 默认 blog.
-        --public-host                 仅对 --run-single 生效, 指定对外访问域名或 IP.
-        --https-cert                  仅对 --run-single 生效, 指定宿主机 HTTPS 证书路径.
-        --https-key                   仅对 --run-single 生效, 指定宿主机 HTTPS 私钥路径.
-        --https-port                  仅对 --run-single 生效, 指定宿主机与容器 HTTPS 端口, 默认 443.
+    --server                      仅对 --build-single 生效, 指定要拉取的 blog-server 版本.
+    --client                      仅对 --build-single 生效, 指定要拉取的 blog-client 版本.
+    --repo                        仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_PUBLIC.
+    --tencent                     仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_TENCENT.
+    --docker-hub                  仅对 --push-single 生效, 显式推送到 Docker Hub.
+    --image                       仅对 --run-single 生效, 指定运行镜像, 默认优先使用本地 blog:build.
+    --data-dir                    仅对 --run-single 生效, 指定单镜像数据目录, 默认 /data/blog.
+    --name                        仅对 --run-single 生效, 指定容器名称, 默认 blog.
+    --public-host                 仅对 --run-single 生效, 指定对外访问域名或 IP.
+    --https-cert                  仅对 --run-single 生效, 指定宿主机 HTTPS 证书路径.
+    --https-key                   仅对 --run-single 生效, 指定宿主机 HTTPS 私钥路径.
+    --https-port                  仅对 --run-single 生效, 指定宿主机与容器 HTTPS 端口, 默认 443.
   -h, --help                    查看帮助信息.
 
 说明:
-        1. --env-single 负责构建 blog:env, 供后续单镜像装配复用.
-        2. --build-single 负责装配 blog:build, 缺少版本号时会提示输入.
-    3. --push-single 需要显式指定至少一个远端仓库, 例如 --repo, --tencent, --docker-hub, 缺少版本号时会提示输入.
+    1. --env-single 负责构建 blog:env, 供后续单镜像装配复用.
+    2. --build-single 负责装配 blog:build, 必须显式传入 --server 与 --client, 构建时会直接拉取 jiaopengzi/blog-server 与 jiaopengzi/blog-client 对应版本, 再计算 single 版本.
+    3. --push-single 需要显式指定至少一个远端仓库, 例如 --repo, --tencent, --docker-hub; 推送版本默认使用最近一次构建自动计算出的 single 版本.
     4. 单镜像推送支持任意组合选择多个目标仓库, 会按 repo -> tencent -> docker-hub 顺序执行.
-        5. REGISTRY_REMOTE_SERVER_PUBLIC 与 REGISTRY_REMOTE_SERVER 共用用户名和密码.
-        6. 装配阶段优先复用 blog-client:build 和 blog-server:build; 未命中时优先按 blog-client 的 Dockerfile.dev 与 blog-server-dev 的 Dockerfile_dev 预热, 后端缺少签名私钥时再回退到 blog-client:env 和 blog-server:golang.
-        7. --run-single 会在宿主机侧预处理数据目录和自定义 HTTPS 证书, 适合直接使用宿主机证书路径启动单镜像.
+    5. REGISTRY_REMOTE_SERVER_PUBLIC 与 REGISTRY_REMOTE_SERVER 共用用户名和密码.
+    6. 装配阶段直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像, single/docker/build.Dockerfile 不再自行构建前后端产物.
+    7. --run-single 会在宿主机侧预处理数据目录和自定义 HTTPS 证书, 适合直接使用宿主机证书路径启动单镜像.
 EOF
 }
 
 # 解析 single 命令参数.
 # 参数: $1: 动作类型, env | build | push.
 # 参数: $@: 命令行参数.
-# 返回: 通过全局变量 SINGLE_PARSED_VERSION 暂存解析出的版本号.
 single_parse_cli_args() {
     local single_action="$1"
-    local single_version=""
 
     SINGLE_PUSH_REPO_ENABLED="false"
     SINGLE_PUSH_TENCENT_ENABLED="false"
     SINGLE_PUSH_DOCKER_HUB_ENABLED="false"
-    SINGLE_PARSED_VERSION=""
+    SINGLE_BUILD_SERVER_VERSION=""
+    SINGLE_BUILD_CLIENT_VERSION=""
     SINGLE_RUN_IMAGE_REF=""
     SINGLE_RUN_DATA_DIR="/data/blog"
     SINGLE_RUN_CONTAINER_NAME="blog"
@@ -182,19 +142,51 @@ single_parse_cli_args() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-        --version=*)
-            single_version="${1#*=}"
-            ;;
-        --single-version=*)
-            single_version="${1#*=}"
-            ;;
         --version|--single-version)
-            shift
-            if [[ $# -eq 0 ]]; then
-                log_error "参数 $1 缺少版本值"
+            log_error "single 版本由 server 和 client 的版本自动计算, 不支持手动指定 $1"
+            return 1
+            ;;
+        --version=*|--single-version=*)
+            log_error "single 版本由 server 和 client 的版本自动计算, 不支持手动指定 ${1%%=*}"
+            return 1
+            ;;
+        --server=*)
+            if [[ "$single_action" != "build" ]]; then
+                log_error "参数 --server 仅支持与 --build-single 一起使用"
                 return 1
             fi
-            single_version="$1"
+            SINGLE_BUILD_SERVER_VERSION="${1#*=}"
+            ;;
+        --server)
+            if [[ "$single_action" != "build" ]]; then
+                log_error "参数 --server 仅支持与 --build-single 一起使用"
+                return 1
+            fi
+            shift
+            if [[ $# -eq 0 ]]; then
+                log_error "参数 --server 缺少版本值"
+                return 1
+            fi
+            SINGLE_BUILD_SERVER_VERSION="$1"
+            ;;
+        --client=*)
+            if [[ "$single_action" != "build" ]]; then
+                log_error "参数 --client 仅支持与 --build-single 一起使用"
+                return 1
+            fi
+            SINGLE_BUILD_CLIENT_VERSION="${1#*=}"
+            ;;
+        --client)
+            if [[ "$single_action" != "build" ]]; then
+                log_error "参数 --client 仅支持与 --build-single 一起使用"
+                return 1
+            fi
+            shift
+            if [[ $# -eq 0 ]]; then
+                log_error "参数 --client 缺少版本值"
+                return 1
+            fi
+            SINGLE_BUILD_CLIENT_VERSION="$1"
             ;;
         --repo)
             if [[ "$single_action" != "push" ]]; then
@@ -371,7 +363,11 @@ single_parse_cli_args() {
         return 1
     fi
 
-    SINGLE_PARSED_VERSION="$single_version"
+    if [[ "$single_action" == "build" ]] \
+        && [[ -z "$SINGLE_BUILD_SERVER_VERSION" || -z "$SINGLE_BUILD_CLIENT_VERSION" ]]; then
+        log_error "参数 --build-single 必须同时指定 --server 和 --client 版本"
+        return 1
+    fi
 }
 
 # 仅检查 single 运行入口所需的基础环境.
@@ -643,14 +639,6 @@ single_is_tool_root() {
     [[ -f "$candidate_dir/blog-tool.code-workspace" ]] && [[ -d "$candidate_dir/single/docker" ]]
 }
 
-# 判断给定目录是否为 single 运行依赖的工作区根目录.
-# 参数: $1: 待判断目录.
-single_is_workspace_root() {
-    local candidate_dir="$1"
-
-    [[ -d "$candidate_dir/blog-client" ]] && [[ -d "$candidate_dir/blog-server-dev" ]]
-}
-
 # 判断当前发行版是否已经内嵌 single/docker 资产.
 single_has_embedded_docker_assets() {
     [[ -n "${SINGLE_DOCKER_BASE64:-}" ]]
@@ -688,105 +676,6 @@ single_find_tool_root() {
     return 1
 }
 
-# 定位 single 运行依赖的工作区根目录.
-# 返回: 打印同时包含 blog-client 和 blog-server-dev 的目录绝对路径.
-single_find_workspace_root() {
-    local search_dir="$ROOT_DIR"
-    local parent_dir=""
-    local depth=0
-
-    while [[ $depth -lt 6 ]]; do
-        if single_is_workspace_root "$search_dir"; then
-            echo "$search_dir"
-            return 0
-        fi
-
-        parent_dir="$(dirname "$search_dir")"
-        if [[ "$parent_dir" == "$search_dir" ]]; then
-            break
-        fi
-
-        search_dir="$parent_dir"
-        ((depth++)) || true
-    done
-
-    return 1
-}
-
-# 加载 single 自动拉取源码所需的 Git 前缀配置.
-# 说明: 这里仅加载 git_prefix_local, 避免为了 clone 源码额外要求 single 不需要的 dev 配置.
-single_load_git_clone_env() {
-    if [[ -n "${GIT_PREFIX_LOCAL:-}" ]]; then
-        GIT_LOCAL="$GIT_PREFIX_LOCAL:$GIT_USER"
-        return 0
-    fi
-
-    load_interactive_config \
-        GIT_PREFIX_LOCAL \
-        "$BLOG_TOOL_ENV/git_prefix_local" \
-        "请输入内网 Git 地址前缀如：git@10.0.0.100" \
-        "git@127.0.0.1"
-
-    GIT_LOCAL="$GIT_PREFIX_LOCAL:$GIT_USER"
-}
-
-# 检查仓库目录是否包含 single 构建所需的关键文件.
-# 参数: $1: 仓库目录.
-# 参数: $@: 需要存在的相对路径列表.
-single_repo_has_required_files() {
-    local repo_dir="$1"
-    shift
-    local required_file=""
-
-    if [[ ! -d "$repo_dir" ]]; then
-        return 1
-    fi
-
-    for required_file in "$@"; do
-        if [[ ! -f "$repo_dir/$required_file" ]]; then
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-# 在工作区中确保目标源码仓库存在, 缺失或残缺时自动重新拉取.
-# 参数: $1: 仓库目录名.
-# 参数: $@: 该仓库必须存在的关键文件.
-single_ensure_workspace_repo() {
-    local repo_name="$1"
-    shift
-    local repo_dir="$SINGLE_WORKSPACE_ROOT/$repo_name"
-    local current_dir="$PWD"
-
-    if single_repo_has_required_files "$repo_dir" "$@"; then
-        return 0
-    fi
-
-    if [[ -d "$repo_dir" ]]; then
-        log_warn "检测到 $repo_name 目录缺少 single 构建所需文件, 将删除后重新拉取: $repo_dir"
-        sudo rm -rf "$repo_dir"
-    else
-        log_info "未找到 $repo_name 源码目录, 开始自动拉取到: $repo_dir"
-    fi
-
-    single_load_git_clone_env || return 1
-
-    sudo mkdir -p "$SINGLE_WORKSPACE_ROOT"
-    cd "$SINGLE_WORKSPACE_ROOT" || return 1
-    git_clone "$repo_name" "$GIT_LOCAL" || {
-        cd "$current_dir" || return 1
-        return 1
-    }
-    cd "$current_dir" || return 1
-
-    if ! single_repo_has_required_files "$repo_dir" "$@"; then
-        log_error "$repo_name 拉取完成后仍缺少 single 构建所需文件: $repo_dir"
-        return 1
-    fi
-}
-
 # 判断源码模式下是否具备 single/docker 文件.
 single_has_source_docker_assets() {
     [[ -n "$SINGLE_TOOL_ROOT" ]] \
@@ -809,31 +698,15 @@ single_extract_embedded_docker_assets() {
     printf '%s' "$SINGLE_DOCKER_BASE64" | base64 -d | gzip -d | sudo tar -xf - -C "$target_dir"
 }
 
-# 初始化三个仓库路径.
-single_init_repo_paths() {
-    log_debug "run single_init_repo_paths"
+# 初始化 single 构建所需的 Docker 资产与缓存路径.
+single_init_build_assets() {
+    log_debug "run single_init_build_assets"
 
     SINGLE_TOOL_ROOT=""
+
     if SINGLE_TOOL_ROOT="$(single_find_tool_root)"; then
         :
     fi
-
-    if ! SINGLE_WORKSPACE_ROOT="$(single_find_workspace_root)"; then
-        if [[ -n "$SINGLE_TOOL_ROOT" ]]; then
-            SINGLE_WORKSPACE_ROOT="$(dirname "$SINGLE_TOOL_ROOT")"
-            log_warn "未检测到现成的 single 工作区, 将使用 blog-tool 同级目录作为源码拉取目录: $SINGLE_WORKSPACE_ROOT"
-        else
-            SINGLE_WORKSPACE_ROOT="$ROOT_DIR"
-            log_warn "未检测到现成的 single 工作区, 将使用当前脚本所在目录作为源码拉取目录: $SINGLE_WORKSPACE_ROOT"
-        fi
-    fi
-
-    SINGLE_CLIENT_ROOT="$SINGLE_WORKSPACE_ROOT/blog-client"
-    SINGLE_SERVER_ROOT="$SINGLE_WORKSPACE_ROOT/blog-server-dev"
-    SINGLE_DOWNLOAD_CACHE_DIR="$SINGLE_WORKSPACE_ROOT/blog-cache"
-
-    single_ensure_workspace_repo "blog-client" "Dockerfile.env" "Dockerfile.dev" "package.json" || return 1
-    single_ensure_workspace_repo "blog-server-dev" "Dockerfile_golang" "Dockerfile_dev" "go.mod" || return 1
 
     if single_has_embedded_docker_assets; then
         return 0
@@ -847,6 +720,23 @@ single_init_repo_paths() {
         fi
         return 1
     fi
+}
+
+# 重置 single 构建上下文目录, 仅保留本地下载缓存目录.
+single_reset_build_context() {
+    sudo rm -rf "$SINGLE_CONTEXT_PARENT_DIR"
+    setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$SINGLE_CONTEXT_PARENT_DIR" "$SINGLE_CONTEXT_DIR"
+}
+
+# 准备仅用于 single 装配阶段的构建上下文.
+single_prepare_image_build_context() {
+    log_debug "run single_prepare_image_build_context"
+
+    single_init_build_assets || return 1
+    single_reset_build_context
+    single_prepare_docker_assets "$SINGLE_CONTEXT_DIR" || return 1
+
+    log_info "single 装配上下文已准备完成: $SINGLE_CONTEXT_DIR"
 }
 
 # 使用 tar 复制目录, 并排除常见大体积目录.
@@ -864,7 +754,6 @@ single_copy_tree() {
     sudo mkdir -p "$dest_dir"
 
     sudo tar \
-        --exclude='.git' \
         --exclude='node_modules' \
         --exclude='dist' \
         --exclude='coverage' \
@@ -973,107 +862,17 @@ single_prepare_env_download_cache() {
     done
 }
 
-# 缺失时按 blog-client 原始 Dockerfile.env 构建前端环境镜像.
-single_ensure_client_env_image() {
-    local dockerfile_path="$SINGLE_CLIENT_ROOT/Dockerfile.env"
+# 准备 env-single 需要的构建上下文, 包含 env.Dockerfile 依赖归档缓存.
+single_prepare_env_build_context() {
+    log_debug "run single_prepare_env_build_context"
 
-    if single_has_local_image "blog-client:env"; then
-        return 0
-    fi
-
-    if [[ ! -f "$dockerfile_path" ]]; then
-        log_error "未找到 blog-client 环境 Dockerfile: $dockerfile_path"
-        return 1
-    fi
-
-    log_info "未找到前端环境镜像 blog-client:env, 开始基于 Dockerfile.env 首次构建"
-    sudo DOCKER_BUILDKIT=1 docker build -t blog-client:env -f "$dockerfile_path" "$SINGLE_CLIENT_ROOT" || return 1
-}
-
-# 缺失时按 blog-client 原始 Dockerfile.dev 构建前端构建产物镜像.
-single_ensure_client_build_image() {
-    local dockerfile_path="$SINGLE_CLIENT_ROOT/Dockerfile.dev"
-
-    if single_has_local_image "blog-client:build"; then
-        return 0
-    fi
-
-    if [[ ! -f "$dockerfile_path" ]]; then
-        log_error "未找到 blog-client 构建 Dockerfile: $dockerfile_path"
-        return 1
-    fi
-
-    single_ensure_client_env_image || return 1
-
-    log_info "未找到前端构建产物镜像 blog-client:build, 开始基于 Dockerfile.dev 首次构建"
-    sudo DOCKER_BUILDKIT=1 docker build -t blog-client:build -f "$dockerfile_path" "$SINGLE_CLIENT_ROOT" || return 1
-}
-
-# 缺失时按 blog-server-dev 原始 Dockerfile_golang 构建后端 Golang 环境镜像.
-single_ensure_server_golang_image() {
-    local dockerfile_path="$SINGLE_SERVER_ROOT/Dockerfile_golang"
-
-    if single_has_local_image "blog-server:golang"; then
-        return 0
-    fi
-
-    if [[ ! -f "$dockerfile_path" ]]; then
-        log_error "未找到 blog-server-dev 环境 Dockerfile: $dockerfile_path"
-        return 1
-    fi
-
-    log_info "未找到后端环境镜像 blog-server:golang, 开始基于 Dockerfile_golang 首次构建"
-    sudo DOCKER_BUILDKIT=1 docker build -t blog-server:golang -f "$dockerfile_path" "$SINGLE_SERVER_ROOT" || return 1
-}
-
-# 缺失时按 blog-server-dev 原始 Dockerfile_dev 构建后端构建产物镜像.
-single_ensure_server_build_image() {
-    local dockerfile_path="$SINGLE_SERVER_ROOT/Dockerfile_dev"
-    local sign_key=""
-
-    if single_has_local_image "blog-server:build"; then
-        return 0
-    fi
-
-    sign_key="$(single_resolve_server_sign_key)"
-    if [[ -z "$sign_key" ]]; then
-        log_warn "未检测到 SIGN_PRIVATE_KEY, 跳过基于 Dockerfile_dev 预热 blog-server:build"
-        return 1
-    fi
-
-    if [[ ! -f "$dockerfile_path" ]]; then
-        log_error "未找到 blog-server-dev 构建 Dockerfile: $dockerfile_path"
-        return 1
-    fi
-
-    single_ensure_server_golang_image || return 1
-
-    log_info "未找到后端构建产物镜像 blog-server:build, 开始基于 Dockerfile_dev 首次构建"
-    sudo DOCKER_BUILDKIT=1 docker build \
-        --secret id=sign_key,src="$sign_key" \
-        -t blog-server:build \
-        -f "$dockerfile_path" \
-        "$SINGLE_SERVER_ROOT" || return 1
-}
-
-# 准备单镜像构建上下文.
-single_prepare_build_context() {
-    log_debug "run single_prepare_build_context"
-
-    single_init_repo_paths || return 1
-
-    sudo rm -rf "$SINGLE_CONTEXT_PARENT_DIR"
-    setup_directory "$JPZ_UID" "$JPZ_GID" 755 "$SINGLE_CONTEXT_PARENT_DIR" "$SINGLE_CONTEXT_DIR"
-
-    single_copy_tree "$SINGLE_CLIENT_ROOT" "$SINGLE_CONTEXT_DIR/blog-client" || return 1
-    single_copy_tree "$SINGLE_SERVER_ROOT" "$SINGLE_CONTEXT_DIR/blog-server-dev" || return 1
-    single_prepare_docker_assets "$SINGLE_CONTEXT_DIR" || return 1
+    single_prepare_image_build_context || return 1
     single_prepare_env_download_cache || return 1
 
-    log_info "单镜像构建上下文已准备完成: $SINGLE_CONTEXT_DIR"
+    log_info "single env 构建上下文已准备完成: $SINGLE_CONTEXT_DIR"
 }
 
-# 获取最近一次本地构建记录的单镜像版本号.
+# 获取最近一次本地构建记录的 single 自动计算版本号.
 # 返回: 打印版本号, 不存在则不输出.
 single_get_last_build_version() {
     local version_file="$SINGLE_CONTEXT_PARENT_DIR/last-build-version"
@@ -1083,7 +882,7 @@ single_get_last_build_version() {
     fi
 }
 
-# 持久化最近一次本地构建记录的单镜像版本号.
+# 持久化最近一次本地构建记录的 single 自动计算版本号.
 # 参数: $1: 版本号.
 single_save_last_build_version() {
     local single_version="$1"
@@ -1093,30 +892,202 @@ single_save_last_build_version() {
     printf '%s' "$single_version" >"$version_file"
 }
 
-# 确保单镜像版本号存在.
-# 参数: $1: 版本号.
-# 参数: $2: 缺省版本号.
-# 返回: 打印最终版本号.
-single_resolve_version() {
-    local input_version="$1"
-    local default_version="${2:-}"
-    local final_version="$input_version"
+# 将版本字符串转换为可嵌入 semver metadata 的安全标识.
+# 参数: $1: 原始版本字符串.
+single_sanitize_semver_identifier() {
+    local raw_value="$1"
+    local sanitized_value=""
 
-    if [[ -z "$final_version" ]]; then
-        final_version=$(read_user_input "请输入单镜像版本号, 例如 v1.0.0: " "$default_version")
+    sanitized_value=$(printf '%s' "$raw_value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^0-9a-z-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')
+
+    if [[ -z "$sanitized_value" ]]; then
+        sanitized_value="unknown"
     fi
 
-    if [[ -z "$final_version" ]]; then
-        log_error "单镜像版本号不能为空"
+    echo "$sanitized_value"
+}
+
+# 从两个生产版本中选择较高的语义化版本.
+# 参数: $1: 左侧版本.
+# 参数: $2: 右侧版本.
+single_pick_higher_pro_version() {
+    local left_version="$1"
+    local right_version="$2"
+    local higher_version=""
+
+    higher_version=$(printf '%s\n%s\n' "${left_version#v}" "${right_version#v}" | sort -V | tail -n 1)
+    echo "v$higher_version"
+}
+
+# 根据镜像内的 server/client 版本计算 single 版本.
+# 参数: $1: server 版本.
+# 参数: $2: client 版本.
+single_compute_version_from_components() {
+    local server_version="$1"
+    local client_version="$2"
+    local server_meta=""
+    local client_meta=""
+    local base_version=""
+    local single_version=""
+
+    if [[ -z "$server_version" || -z "$client_version" ]]; then
+        log_error "计算 single 版本失败, server/client 版本不能为空"
         return 1
     fi
 
-    if [[ "$final_version" =~ [[:space:]] ]]; then
-        log_error "单镜像版本号不能包含空白字符: $final_version"
+    log_debug "计算 single 版本, server 版本: $server_version"
+    log_debug "计算 single 版本, client 版本: $client_version"
+
+    if [[ "$server_version" == "$client_version" ]] && version_is_pro "$server_version"; then
+        single_version="$server_version"
+        log_debug "single 版本计算结果: $single_version"
+        echo "$single_version"
+        return 0
+    fi
+
+    server_meta="$(single_sanitize_semver_identifier "$server_version")"
+    client_meta="$(single_sanitize_semver_identifier "$client_version")"
+
+    if version_is_pro "$server_version" && version_is_pro "$client_version"; then
+        base_version="$(single_pick_higher_pro_version "$server_version" "$client_version")"
+        single_version="$base_version+server.$server_meta.client.$client_meta"
+        log_debug "single 版本计算结果: $single_version"
+        echo "$single_version"
+        return 0
+    fi
+
+    if version_is_pro "$server_version"; then
+        base_version="$server_version"
+    elif version_is_pro "$client_version"; then
+        base_version="$client_version"
+    else
+        base_version="v0.0.0"
+    fi
+
+    single_version="$base_version-single.server.$server_meta.client.$client_meta"
+    log_debug "single 版本计算结果: $single_version"
+    echo "$single_version"
+}
+
+# 从本地镜像中读取指定文件内容.
+# 参数: $1: 镜像引用.
+# 参数: $2: 镜像内文件路径.
+single_read_file_from_local_image() {
+    local image_ref="$1"
+    local file_path="$2"
+    local container_name="temp_container_single_version_reader"
+    local temp_dir=""
+    local temp_file=""
+
+    sudo docker rm -f "$container_name" >/dev/null 2>&1 || true
+
+    if ! sudo docker create --name "$container_name" "$image_ref" >/dev/null 2>&1; then
+        log_error "从镜像读取文件失败, 无法创建临时容器: $image_ref"
         return 1
     fi
 
-    echo "$final_version"
+    temp_dir=$(mktemp -d) || {
+        sudo docker rm -f "$container_name" >/dev/null 2>&1 || true
+        log_error "从镜像读取文件失败, 无法创建临时目录"
+        return 1
+    }
+
+    if ! sudo docker cp "$container_name:$file_path" "$temp_dir/" >/dev/null 2>&1; then
+        rm -rf "$temp_dir"
+        sudo docker rm -f "$container_name" >/dev/null 2>&1 || true
+        log_error "从镜像读取文件失败, 未找到文件: $image_ref -> $file_path"
+        return 1
+    fi
+
+    temp_file="$temp_dir/$(basename "$file_path")"
+    cat "$temp_file"
+
+    rm -rf "$temp_dir"
+    sudo docker rm -f "$container_name" >/dev/null 2>&1 || true
+}
+
+# 从本地镜像中解析 server/client 版本.
+# 参数: $1: 镜像引用.
+single_collect_component_versions_from_local_image() {
+    local image_ref="$1"
+    local raw_server_version=""
+    local raw_client_version=""
+
+    raw_server_version=$(single_read_file_from_local_image "$image_ref" "/home/blog-server/VERSION") || return 1
+    raw_client_version=$(single_read_file_from_local_image "$image_ref" "/usr/share/nginx/html/VERSION") || return 1
+
+    raw_server_version=$(printf '%s' "$raw_server_version" | tr -d '\r\n')
+    raw_client_version=$(printf '%s' "$raw_client_version" | tr -d '\r\n')
+
+    read -r SINGLE_COMPONENT_SERVER_VERSION _ <<<"$(parsing_version "$raw_server_version")"
+    read -r SINGLE_COMPONENT_CLIENT_VERSION _ <<<"$(parsing_version "$raw_client_version")"
+
+    log_debug "single 镜像内 server 原始版本: $raw_server_version"
+    log_debug "single 镜像内 client 原始版本: $raw_client_version"
+    log_debug "single 镜像内 server 解析版本: $SINGLE_COMPONENT_SERVER_VERSION"
+    log_debug "single 镜像内 client 解析版本: $SINGLE_COMPONENT_CLIENT_VERSION"
+}
+
+# 根据本地 blog:build 镜像实际内容计算 single 版本.
+single_calculate_local_build_version() {
+    local calculated_version=""
+
+    single_collect_component_versions_from_local_image "$SINGLE_IMAGE_NAME:build" || return 1
+    calculated_version="$(single_compute_version_from_components "$SINGLE_COMPONENT_SERVER_VERSION" "$SINGLE_COMPONENT_CLIENT_VERSION")" || return 1
+
+    log_debug "single 自动计算版本结果: $calculated_version"
+    echo "$calculated_version"
+}
+
+# 解析 push 阶段应使用的 single 版本.
+single_resolve_push_version() {
+    local last_build_version=""
+
+    last_build_version="$(single_get_last_build_version)"
+    if [[ -n "$last_build_version" ]]; then
+        log_debug "使用最近一次 single 构建记录的版本: $last_build_version"
+        echo "$last_build_version"
+        return 0
+    fi
+
+    log_warn "未找到最近一次 single 构建记录的版本, 将根据本地 blog:build 重新计算"
+    single_calculate_local_build_version
+}
+
+# 清理本次构建临时拉取的前后端镜像.
+# 参数: $1: 后端镜像引用.
+# 参数: $2: 前端镜像引用.
+single_cleanup_build_component_images() {
+    local server_image_ref="$1"
+    local client_image_ref="$2"
+
+    if [[ -n "$server_image_ref" || -n "$client_image_ref" ]]; then
+        sudo docker image rm -f "$server_image_ref" "$client_image_ref" >/dev/null 2>&1 || true
+    fi
+}
+
+# 拉取本次构建需要的前后端发布镜像.
+# 参数: $1: 后端版本号.
+# 参数: $2: 前端版本号.
+single_pull_build_component_images() {
+    local server_version="$1"
+    local client_version="$2"
+    local server_docker_tag=""
+    local client_docker_tag=""
+
+    server_docker_tag="$(semver_to_docker_tag "$server_version")"
+    client_docker_tag="$(semver_to_docker_tag "$client_version")"
+
+    log_debug "single build server 输入版本: $server_version"
+    log_debug "single build server 拉取 tag: $server_docker_tag"
+    log_debug "single build client 输入版本: $client_version"
+    log_debug "single build client 拉取 tag: $client_docker_tag"
+
+    docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-server" "$server_docker_tag" || return 1
+    docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-client" "$client_docker_tag" || {
+        single_cleanup_build_component_images "$DOCKER_HUB_OWNER/blog-server:$server_docker_tag" ""
+        return 1
+    }
 }
 
 # 确保本地已存在可推送的单镜像.
@@ -1173,16 +1144,18 @@ single_build_env_image() {
 }
 
 # 构建单镜像本地 build 标签.
-# 参数: $1: 单镜像版本号.
 single_build_image() {
     log_debug "run single_build_image"
 
-    local single_version="$1"
     local dockerfile_path="$SINGLE_CONTEXT_DIR/$SINGLE_DOCKERFILE_BUILD_RELATIVE"
-    local client_build_image=""
-    local server_build_image=""
-    local server_golang_image=""
-    local server_sign_key=""
+    local server_version="$1"
+    local client_version="$2"
+    local single_version="$3"
+    local server_docker_tag=""
+    local client_docker_tag=""
+    local server_image_ref=""
+    local client_image_ref=""
+    local build_status=0
     local build_args=()
 
     if [[ ! -f "$dockerfile_path" ]]; then
@@ -1190,46 +1163,32 @@ single_build_image() {
         return 1
     fi
 
-    client_build_image="$(single_resolve_client_build_image)"
-    server_build_image="$(single_resolve_server_build_image)"
-    server_golang_image="$(single_resolve_server_golang_image)"
-    server_sign_key="$(single_resolve_server_sign_key)"
+    server_docker_tag="$(semver_to_docker_tag "$server_version")"
+    client_docker_tag="$(semver_to_docker_tag "$client_version")"
+    server_image_ref="$DOCKER_HUB_OWNER/blog-server:$server_docker_tag"
+    client_image_ref="$DOCKER_HUB_OWNER/blog-client:$client_docker_tag"
 
-    if [[ -z "$client_build_image" ]]; then
-        single_ensure_client_build_image || return 1
-        client_build_image="blog-client:build"
-        log_info "前端构建产物镜像首次构建完成: $client_build_image"
-    fi
-    log_info "复用前端构建产物镜像: $client_build_image"
-    build_args+=(--build-arg "CLIENT_BUILD_IMAGE=$client_build_image")
+    single_pull_build_component_images "$server_version" "$client_version" || return 1
 
-    if [[ -n "$server_build_image" ]]; then
-        log_info "复用后端构建产物镜像: $server_build_image"
-        build_args+=(--build-arg "SERVER_BUILD_IMAGE=$server_build_image")
-    elif [[ -n "$server_sign_key" ]]; then
-        single_ensure_server_build_image || return 1
-        server_build_image="blog-server:build"
-        log_info "后端构建产物镜像首次构建完成: $server_build_image"
-        build_args+=(--build-arg "SERVER_BUILD_IMAGE=$server_build_image")
-    elif [[ -n "$server_golang_image" ]]; then
-        log_info "复用后端环境镜像: $server_golang_image"
-        build_args+=(--build-arg "SERVER_GOLANG_IMAGE=$server_golang_image")
-    else
-        single_ensure_server_golang_image || return 1
-        server_golang_image="blog-server:golang"
-        log_info "后端环境镜像首次构建完成: $server_golang_image"
-        build_args+=(--build-arg "SERVER_GOLANG_IMAGE=$server_golang_image")
-    fi
+    build_args+=(--build-arg "SERVER_IMAGE=$server_image_ref")
+    build_args+=(--build-arg "CLIENT_IMAGE=$client_image_ref")
+    build_args+=(--build-arg "SERVER_VERSION=$server_version")
+    build_args+=(--build-arg "CLIENT_VERSION=$client_version")
+    build_args+=(--build-arg "SINGLE_VERSION=$single_version")
 
     build_args+=(--build-arg "BLOG_ENV_IMAGE=$SINGLE_ENV_IMAGE_NAME")
 
     sudo DOCKER_BUILDKIT=1 docker build \
-        --build-arg BLOG_VERSION="$single_version" \
-        --build-arg NODE_VERSION="$IMG_VERSION_NODE" \
         "${build_args[@]}" \
         -t "$SINGLE_IMAGE_NAME:build" \
         -f "$dockerfile_path" \
-        "$SINGLE_CONTEXT_DIR" || return 1
+        "$SINGLE_CONTEXT_DIR" || build_status=$?
+
+    single_cleanup_build_component_images "$server_image_ref" "$client_image_ref"
+
+    if [[ $build_status -ne 0 ]]; then
+        return "$build_status"
+    fi
 
     log_info "单镜像本地构建完成: $SINGLE_IMAGE_NAME:build"
 }
@@ -1480,46 +1439,53 @@ docker_build_single_env() {
 
     log_info "开始构建单镜像运行时环境镜像: $SINGLE_ENV_IMAGE_NAME"
 
-    single_prepare_build_context || return 1
+    single_prepare_env_build_context || return 1
     single_build_env_image "true" || return 1
 
     log_info "单镜像运行时环境镜像构建完成: $SINGLE_ENV_IMAGE_NAME"
 }
 
 # 仅构建单镜像.
-# 参数: $1: 单镜像版本号.
 docker_build_single() {
     log_debug "run docker_build_single"
 
-    local single_version="$1"
+    local single_version=""
+    local normalized_server_version=""
+    local normalized_client_version=""
 
     single_check_build_env || return 1
-    single_version="$(single_resolve_version "$single_version")" || return 1
 
-    log_info "开始构建单镜像, 镜像名: $SINGLE_IMAGE_NAME, 版本: $single_version"
+    normalized_server_version="$(printf '%s' "$SINGLE_BUILD_SERVER_VERSION" | tr -d '\r\n')"
+    normalized_client_version="$(printf '%s' "$SINGLE_BUILD_CLIENT_VERSION" | tr -d '\r\n')"
+    single_version="$(single_compute_version_from_components "$normalized_server_version" "$normalized_client_version")" || return 1
 
-    single_prepare_build_context || return 1
+    log_info "开始构建单镜像, 镜像名: $SINGLE_IMAGE_NAME"
+    log_debug "single build 指定 server 版本: $normalized_server_version"
+    log_debug "single build 指定 client 版本: $normalized_client_version"
+    log_debug "single build 计算版本结果: $single_version"
+
+    single_prepare_image_build_context || return 1
     single_require_env_image || return 1
-    single_build_image "$single_version" || return 1
+    single_build_image "$normalized_server_version" "$normalized_client_version" "$single_version" || return 1
     single_save_last_build_version "$single_version"
 
-    log_info "单镜像本地构建完成, 可直接使用 $SINGLE_IMAGE_NAME:build 做本地 docker run 验证"
+    log_info "单镜像本地构建完成, 自动计算版本: $single_version"
+    log_debug "single build 最终使用版本: $single_version"
+    log_info "可直接使用 $SINGLE_IMAGE_NAME:build 做本地 docker run 验证"
     single_print_run_hint "$SINGLE_IMAGE_NAME:build"
 }
 
 # 仅推送单镜像.
-# 参数: $1: 单镜像版本号.
 docker_push_single() {
     log_debug "run docker_push_single"
 
-    local single_version="$1"
-    local last_build_version=""
+    local single_version=""
 
     single_check_push_env || return 1
     single_require_local_build_image || return 1
 
-    last_build_version="$(single_get_last_build_version)"
-    single_version="$(single_resolve_version "$single_version" "$last_build_version")" || return 1
+    single_version="$(single_resolve_push_version)" || return 1
+    log_debug "single push 使用版本: $single_version"
 
     if [[ "$SINGLE_PUSH_REPO_ENABLED" == "true" ]]; then
         log_info "已显式启用默认公开私有仓库推送: $REGISTRY_REMOTE_SERVER_PUBLIC/$SINGLE_IMAGE_NAME"
@@ -1546,15 +1512,12 @@ docker_push_single() {
 }
 
 # 保留兼容的构建并推送入口.
-# 参数: $1: 单镜像版本号.
 docker_build_push_single() {
     log_debug "run docker_build_push_single"
 
-    local single_version="$1"
-
     docker_build_single_env || return 1
-    docker_build_single "$single_version" || return 1
-    docker_push_single "$single_version" || return 1
+    docker_build_single || return 1
+    docker_push_single || return 1
 
     log_info "单镜像构建与推送完成, 本地镜像保留为: $SINGLE_IMAGE_NAME:build"
 }
@@ -1585,10 +1548,10 @@ single_cli_main() {
         docker_build_single_env
         ;;
     build)
-        docker_build_single "$SINGLE_PARSED_VERSION"
+        docker_build_single
         ;;
     push)
-        docker_push_single "$SINGLE_PARSED_VERSION"
+        docker_push_single
         ;;
     run)
         docker_run_single

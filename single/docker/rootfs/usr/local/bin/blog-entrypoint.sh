@@ -848,7 +848,7 @@ ensure_es_index_defaults() {
 copy_server_defaults_if_needed() {
     if [[ ! -d "$BLOG_SERVER_DATA_DIR/config" ]]; then
         mkdir -p "$BLOG_SERVER_DATA_DIR"
-        cp -r /home/blog-server/config-default "$BLOG_SERVER_DATA_DIR/config"
+        cp -r /home/blog-server/config "$BLOG_SERVER_DATA_DIR/config"
     fi
 
     mkdir -p "$BLOG_SERVER_DATA_DIR/uploads" "$BLOG_SERVER_DATA_DIR/logs"
