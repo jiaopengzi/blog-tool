@@ -156,28 +156,29 @@ sudo bash blog-tool.sh --uninstall
 ```bash
 sudo bash blog-tool-dev.sh --env-single
 sudo bash blog-tool-dev.sh --build-single --version v1.0.0
-sudo bash blog-tool-dev.sh --push-single --version v1.0.0
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --repo
 ```
 
-单镜像的目标机部署只依赖 Docker, 不需要再安装 `blog-tool-dev.sh`。
+单独执行 `--build-single` 或 `--push-single`, 如果未传 `--version`, 脚本会提示输入单镜像版本号。
 
-也可以单独执行 `--build-single` 或 `--push-single`, 如果未传 `--version`, 脚本会提示输入单镜像版本号。
-
-默认 `--push-single` 只推送到 `REGISTRY_REMOTE_SERVER_PUBLIC/blog`。如果需要额外推送腾讯云或 Docker Hub, 需要显式加参数:
+`--push-single` 需要显式指定至少一个远端仓库, 支持按需组合 `--repo`、`--tencent`、`--docker-hub`:
 
 ```bash
-sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-tencent
-sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-docker-hub
-sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-tencent --push-docker-hub
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --repo
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --tencent
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --docker-hub
+sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --repo --tencent --docker-hub
 ```
 
 推送顺序如下:
 
-1. 默认推送到 `REGISTRY_REMOTE_SERVER_PUBLIC/blog`。
-2. 仅在显式传入 `--push-tencent` 时, 才尝试增量推送到 `REGISTRY_REMOTE_SERVER_TENCENT/blog`。
-3. 仅在显式传入 `--push-docker-hub` 时, 才尝试增量推送到 `docker.io/jiaopengzi/blog`。
+1. 仅在显式传入 `--repo` 时, 才推送到 `REGISTRY_REMOTE_SERVER_PUBLIC/blog`。
+2. 仅在显式传入 `--tencent` 时, 才推送到 `REGISTRY_REMOTE_SERVER_TENCENT/blog`。
+3. 仅在显式传入 `--docker-hub` 时, 才推送到 `docker.io/jiaopengzi/blog`。
 
-当腾讯云或 Docker Hub 凭据未配置时, 对应增量推送会自动跳过, 不影响默认公开仓库推送。
+脚本会在每个目标仓库推送前先比较远端版本标签对应的镜像内容与本地 `blog:build`; 只有内容一致时, 才会跳过该目标仓库的推送与签名。
+
+当目标仓库凭据未配置时, 对应仓库推送会自动跳过, 不影响其它已显式选择的仓库。
 
 ### 2. 运行独立镜像
 

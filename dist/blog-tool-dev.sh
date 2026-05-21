@@ -11887,8 +11887,9 @@ SINGLE_TOOL_ROOT=""                                             # blog-tool 根�
 SINGLE_WORKSPACE_ROOT=""                                        # 三仓库共同父目录
 SINGLE_CLIENT_ROOT=""                                           # blog-client 根目录
 SINGLE_SERVER_ROOT=""                                           # blog-server-dev 根目录
-SINGLE_PUSH_TENCENT_ENABLED="false"                             # 是否显式启用腾讯云增量推送
-SINGLE_PUSH_DOCKER_HUB_ENABLED="false"                          # 是否显式启用 Docker Hub 增量推送
+SINGLE_PUSH_REPO_ENABLED="false"                                # 是否显式启用默认公开私有仓库推送
+SINGLE_PUSH_TENCENT_ENABLED="false"                             # 是否显式启用腾讯云仓库推送
+SINGLE_PUSH_DOCKER_HUB_ENABLED="false"                          # 是否显式启用 Docker Hub 推送
 SINGLE_PARSED_VERSION=""                                        # single CLI 最近一次解析出的版本号
 SINGLE_RUN_IMAGE_REF=""                                         # single 运行镜像引用
 SINGLE_RUN_DATA_DIR="/data/blog"                               # single 运行数据目录
@@ -11996,13 +11997,14 @@ single_print_help() {
 用法:
     sudo bash blog-tool-dev.sh --env-single
   sudo bash blog-tool-dev.sh --build-single --version v1.0.0
-    sudo bash blog-tool-dev.sh --push-single --version v1.0.0
+        sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --repo
         sudo bash blog-tool-dev.sh --run-single [--image repo.example.com/blog:v1.0.0]
 
 参数:
   --version, --single-version   指定单镜像版本号, 例如 v1.0.0.
-    --push-tencent                仅对 --push-single 生效, 显式启用腾讯云增量推送.
-    --push-docker-hub             仅对 --push-single 生效, 显式启用 Docker Hub 增量推送.
+        --repo                        仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_PUBLIC.
+        --tencent                     仅对 --push-single 生效, 显式推送到 REGISTRY_REMOTE_SERVER_TENCENT.
+        --docker-hub                  仅对 --push-single 生效, 显式推送到 Docker Hub.
         --image                       仅对 --run-single 生效, 指定运行镜像, 默认优先使用本地 blog:build.
         --data-dir                    仅对 --run-single 生效, 指定单镜像数据目录, 默认 /data/blog.
         --name                        仅对 --run-single 生效, 指定容器名称, 默认 blog.
@@ -12015,8 +12017,8 @@ single_print_help() {
 说明:
         1. --env-single 负责构建 blog:env, 供后续单镜像装配复用.
         2. --build-single 负责装配 blog:build, 缺少版本号时会提示输入.
-        3. --push-single 默认仅推送本地 blog:build 到 REGISTRY_REMOTE_SERVER_PUBLIC, 缺少版本号时会提示输入.
-        4. 腾讯云与 docker.io 仅在显式传入 --push-tencent 或 --push-docker-hub 时才会执行增量推送.
+    3. --push-single 需要显式指定至少一个远端仓库, 例如 --repo, --tencent, --docker-hub, 缺少版本号时会提示输入.
+    4. 单镜像推送支持任意组合选择多个目标仓库, 会按 repo -> tencent -> docker-hub 顺序执行.
         5. REGISTRY_REMOTE_SERVER_PUBLIC 与 REGISTRY_REMOTE_SERVER 共用用户名和密码.
         6. 装配阶段优先复用 blog-client:build 和 blog-server:build; 未命中时优先按 blog-client 的 Dockerfile.dev 与 blog-server-dev 的 Dockerfile_dev 预热, 后端缺少签名私钥时再回退到 blog-client:env 和 blog-server:golang.
         7. --run-single 会在宿主机侧预处理数据目录和自定义 HTTPS 证书, 适合直接使用宿主机证书路径启动单镜像.
@@ -12031,6 +12033,7 @@ single_parse_cli_args() {
     local single_action="$1"
     local single_version=""
 
+    SINGLE_PUSH_REPO_ENABLED="false"
     SINGLE_PUSH_TENCENT_ENABLED="false"
     SINGLE_PUSH_DOCKER_HUB_ENABLED="false"
     SINGLE_PARSED_VERSION=""
@@ -12060,16 +12063,23 @@ single_parse_cli_args() {
             fi
             single_version="$1"
             ;;
-        --push-tencent)
+        --repo)
             if [[ "$single_action" != "push" ]]; then
-                log_error "参数 --push-tencent 仅支持与 --push-single 一起使用"
+                log_error "参数 --repo 仅支持与 --push-single 一起使用"
+                return 1
+            fi
+            SINGLE_PUSH_REPO_ENABLED="true"
+            ;;
+        --tencent)
+            if [[ "$single_action" != "push" ]]; then
+                log_error "参数 --tencent 仅支持与 --push-single 一起使用"
                 return 1
             fi
             SINGLE_PUSH_TENCENT_ENABLED="true"
             ;;
-        --push-docker-hub)
+        --docker-hub)
             if [[ "$single_action" != "push" ]]; then
-                log_error "参数 --push-docker-hub 仅支持与 --push-single 一起使用"
+                log_error "参数 --docker-hub 仅支持与 --push-single 一起使用"
                 return 1
             fi
             SINGLE_PUSH_DOCKER_HUB_ENABLED="true"
@@ -12219,6 +12229,14 @@ single_parse_cli_args() {
 
         shift
     done
+
+    if [[ "$single_action" == "push" ]] \
+        && [[ "$SINGLE_PUSH_REPO_ENABLED" != "true" ]] \
+        && [[ "$SINGLE_PUSH_TENCENT_ENABLED" != "true" ]] \
+        && [[ "$SINGLE_PUSH_DOCKER_HUB_ENABLED" != "true" ]]; then
+        log_error "参数 --push-single 至少需要显式指定一个远端仓库: --repo, --tencent, --docker-hub"
+        return 1
+    fi
 
     SINGLE_PARSED_VERSION="$single_version"
 }
@@ -13093,6 +13111,91 @@ single_cleanup_remote_tags() {
     sudo docker image rm "$image_name:$docker_tag_version" "$image_name:latest" >/dev/null 2>&1 || true
 }
 
+# 获取本地镜像 ID, 用作镜像内容摘要.
+# 参数: $1: 本地镜像引用, 例如 blog:build.
+single_get_local_image_id() {
+    local image_ref="$1"
+    local image_id=""
+
+    image_id=$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null) || {
+        log_error "获取本地镜像 ID 失败: $image_ref"
+        return 1
+    }
+
+    if [[ -z "$image_id" ]]; then
+        log_error "本地镜像 ID 为空: $image_ref"
+        return 1
+    fi
+
+    echo "$image_id"
+}
+
+# 获取远端 tag 对应镜像的 config digest.
+# 参数: $1: 完整镜像名, 例如 repo.example.com/public/blog.
+# 参数: $2: Docker tag 版本号.
+# 返回: 远端不存在时返回 2.
+single_get_remote_config_digest() {
+    local image_name="$1"
+    local docker_tag_version="$2"
+    local inspect_output=""
+    local config_digest=""
+
+    if ! inspect_output=$(sudo docker manifest inspect "$image_name:$docker_tag_version" 2>/dev/null); then
+        return 2
+    fi
+
+    config_digest=$(printf '%s\n' "$inspect_output" | awk '
+        /"config"[[:space:]]*:[[:space:]]*\{/ { in_config=1; next }
+        in_config && /"digest"[[:space:]]*:/ {
+            gsub(/[",]/, "", $2)
+            print $2
+            exit
+        }
+        in_config && /^  \}/ { in_config=0 }
+    ')
+
+    if [[ -z "$config_digest" ]]; then
+        log_error "解析远端镜像 config digest 失败: $image_name:$docker_tag_version"
+        return 1
+    fi
+
+    echo "$config_digest"
+}
+
+# 判断远端 tag 对应镜像内容是否与本地 build 镜像一致.
+# 参数: $1: 完整镜像名, 例如 repo.example.com/public/blog.
+# 参数: $2: Docker tag 版本号.
+# 参数: $3: 本地镜像引用, 例如 blog:build.
+# 返回: 一致返回 0, 不一致或远端不存在返回 1.
+single_remote_image_matches_local() {
+    local image_name="$1"
+    local docker_tag_version="$2"
+    local local_image_ref="$3"
+    local local_image_id=""
+    local remote_config_digest=""
+    local remote_status=0
+
+    local_image_id=$(single_get_local_image_id "$local_image_ref") || return 1
+    remote_config_digest=$(single_get_remote_config_digest "$image_name" "$docker_tag_version") || remote_status=$?
+
+    if [[ $remote_status -eq 2 ]]; then
+        return 1
+    fi
+
+    if [[ $remote_status -ne 0 ]]; then
+        return "$remote_status"
+    fi
+
+    if [[ "$local_image_id" == "$remote_config_digest" ]]; then
+        return 0
+    fi
+
+    log_info "目标版本标签已存在但内容不同, 将继续推送覆盖: $image_name:$docker_tag_version"
+    log_debug "本地镜像 ID: $local_image_id"
+    log_debug "远端 config digest: $remote_config_digest"
+    return 1
+}
+
 # 将本地单镜像推送到指定仓库.
 # 参数: $1: 目标仓库前缀, 例如 registry.example.com/jiaopengzi.
 # 参数: $2: 登录用户名.
@@ -13127,10 +13230,16 @@ single_tag_and_push_registry() {
 
     log_info "$stage_name 目标镜像: $image_name:$docker_tag_version"
 
+    docker_login_retry "$login_host" "$registry_user" "$registry_password" || return 1
+
+    if single_remote_image_matches_local "$image_name" "$docker_tag_version" "$SINGLE_IMAGE_NAME:build"; then
+        log_warn "$stage_name 目标镜像已存在且内容一致, 跳过推送与签名: $image_name:$docker_tag_version"
+        sudo docker logout "$login_host" >/dev/null 2>&1 || true
+        return 0
+    fi
+
     sudo docker tag "$SINGLE_IMAGE_NAME:build" "$image_name:$docker_tag_version" || return 1
     sudo docker tag "$SINGLE_IMAGE_NAME:build" "$image_name:latest" || return 1
-
-    docker_login_retry "$login_host" "$registry_user" "$registry_password" || return 1
 
     timeout_retry_docker_push "$registry_prefix" "$SINGLE_IMAGE_NAME" "$docker_tag_version" || return 1
     waiting 5 || return 1
@@ -13180,7 +13289,7 @@ single_push_tencent_registry() {
         "$REGISTRY_USER_NAME_TENCENT" \
         "$REGISTRY_PASSWORD_TENCENT" \
         "$single_version" \
-        "腾讯云增量推送"
+        "腾讯云推送"
 }
 
 # 推送到 Docker Hub.
@@ -13199,16 +13308,31 @@ single_push_docker_hub() {
 
     docker_tag_version=$(semver_to_docker_tag "$single_version")
 
-    log_info "Docker Hub 增量推送目标: $image_name:$docker_tag_version"
+    log_info "Docker Hub 推送目标: $image_name:$docker_tag_version"
+
+    docker_login_retry "$DOCKER_HUB_REGISTRY" "$DOCKER_HUB_OWNER" "$DOCKER_HUB_TOKEN" || return 1
+
+    if single_remote_image_matches_local "$image_name" "$docker_tag_version" "$SINGLE_IMAGE_NAME:build"; then
+        log_warn "Docker Hub 目标镜像已存在且内容一致, 跳过推送与签名: $image_name:$docker_tag_version"
+        sudo docker logout "$DOCKER_HUB_REGISTRY" >/dev/null 2>&1 || true
+        return 0
+    fi
 
     sudo docker tag "$SINGLE_IMAGE_NAME:build" "$image_name:$docker_tag_version" || return 1
     sudo docker tag "$SINGLE_IMAGE_NAME:build" "$image_name:latest" || return 1
 
-    docker_login_retry "$DOCKER_HUB_REGISTRY" "$DOCKER_HUB_OWNER" "$DOCKER_HUB_TOKEN" || return 1
-
     timeout_retry_docker_push "$DOCKER_HUB_OWNER" "$SINGLE_IMAGE_NAME" "$docker_tag_version" || return 1
     waiting 5 || return 1
     timeout_retry_docker_push "$DOCKER_HUB_OWNER" "$SINGLE_IMAGE_NAME" "latest" || return 1
+
+    if single_can_sign_image; then
+        docker_sign_pushed_image "$image_name" "$docker_tag_version" "$COSIGN_PRIVATE_KEY" || {
+            sudo docker logout "$DOCKER_HUB_REGISTRY" >/dev/null 2>&1 || true
+            return 1
+        }
+    else
+        log_warn "Docker Hub 未配置 cosign 私钥或密码, 跳过镜像签名"
+    fi
 
     sudo docker logout "$DOCKER_HUB_REGISTRY" >/dev/null 2>&1 || true
     single_cleanup_remote_tags "$image_name" "$docker_tag_version"
@@ -13264,21 +13388,25 @@ docker_push_single() {
     last_build_version="$(single_get_last_build_version)"
     single_version="$(single_resolve_version "$single_version" "$last_build_version")" || return 1
 
-    log_info "默认推送公开私有仓库: $REGISTRY_REMOTE_SERVER_PUBLIC/$SINGLE_IMAGE_NAME"
-    single_push_public_registry "$single_version" || return 1
+    if [[ "$SINGLE_PUSH_REPO_ENABLED" == "true" ]]; then
+        log_info "已显式启用默认公开私有仓库推送: $REGISTRY_REMOTE_SERVER_PUBLIC/$SINGLE_IMAGE_NAME"
+        single_push_public_registry "$single_version" || return 1
+    else
+        log_info "未显式指定 --repo, 跳过默认公开私有仓库推送"
+    fi
 
     if [[ "$SINGLE_PUSH_TENCENT_ENABLED" == "true" ]]; then
-        log_info "已显式启用腾讯云增量推送: ${REGISTRY_REMOTE_SERVER_TENCENT:-未配置}/$SINGLE_IMAGE_NAME"
+        log_info "已显式启用腾讯云推送: ${REGISTRY_REMOTE_SERVER_TENCENT:-未配置}/$SINGLE_IMAGE_NAME"
         single_push_tencent_registry "$single_version" || return 1
     else
-        log_info "未显式指定 --push-tencent, 跳过腾讯云增量推送"
+        log_info "未显式指定 --tencent, 跳过腾讯云推送"
     fi
 
     if [[ "$SINGLE_PUSH_DOCKER_HUB_ENABLED" == "true" ]]; then
-        log_info "已显式启用 Docker Hub 增量推送: $DOCKER_HUB_REMOTE_SERVER/$DOCKER_HUB_OWNER/$SINGLE_IMAGE_NAME"
+        log_info "已显式启用 Docker Hub 推送: $DOCKER_HUB_REMOTE_SERVER/$DOCKER_HUB_OWNER/$SINGLE_IMAGE_NAME"
         single_push_docker_hub "$single_version" || return 1
     else
-        log_info "未显式指定 --push-docker-hub, 跳过 Docker Hub 增量推送"
+        log_info "未显式指定 --docker-hub, 跳过 Docker Hub 推送"
     fi
 
     log_info "单镜像推送完成, 本地镜像保留为: $SINGLE_IMAGE_NAME:build"
