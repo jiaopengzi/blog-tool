@@ -226,6 +226,20 @@ sudo docker run -d \
   jiaopengzi/blog:latest
 ```
 
+启动收可以使用查看状态
+
+```bash
+sudo docker ps -a | grep blog
+
+sudo docker log blog
+```
+
+同时使用如下 curl 校验是否通畅
+
+在部署机执行 `curl -vk https://127.0.0.1:443`，先确认宿主机本地 HTTPS 是否通。
+
+在外部机器执行 `curl -vk https://blog.example.com/`，再看是 DNS、链路还是证书链问题。
+
 如果您更习惯先把证书整理到数据目录, 也可以预先放到
 `/data/blog/blog-client/nginx/ssl/cert.pem` 和
 `/data/blog/blog-client/nginx/ssl/cert.key`, 再只挂载 `-v /data/blog:/data` 启动。

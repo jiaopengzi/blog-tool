@@ -46,6 +46,7 @@
         "INITDB",
         "ipinfo",
         "jemalloc",
+        "jmods",
         "keyrings",
         "libc",
         "LISTCHANGES",
