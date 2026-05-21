@@ -179,24 +179,24 @@ sudo bash blog-tool-dev.sh --push-single --version v1.0.0 --push-tencent --push-
 
 当腾讯云或 Docker Hub 凭据未配置时, 对应增量推送会自动跳过, 不影响默认公开仓库推送。
 
-### 2. 运行单镜像
+### 2. 运行独立镜像
 
-单镜像约定只挂载一个总目录, 默认使用 HTTPS, 并在首次启动时自动生成 CA 证书与 HTTPS 证书。若第二次启动发现证书已存在, 则不会重复生成。
+独立镜像约定只挂载一个总目录, 默认使用 HTTPS, 并在首次启动时自动生成 CA 证书与 HTTPS 证书。若第二次启动发现证书已存在, 则不会重复生成。
 
-single 镜像会根据可见内存自动选择更保守的 ES、PostgreSQL、Nginx 参数。若是 4G 左右机器, 建议在启动容器前, 直接在部署宿主机执行一次如下命令。
+镜像会根据可见内存自动选择更保守的 ES、PostgreSQL、Nginx 参数。若是小内存机器, 建议在启动容器前, 直接在部署宿主机执行一次如下命令。
 
 ```bash
 sudo sysctl vm.overcommit_memory=1
 ```
 
-如需手动覆盖自动档位, 可在 `docker run` 时传入以下环境变量:
+如需手动覆盖配置, 可在 `docker run` 时传入以下环境变量:
 
 - `BLOG_MEMORY_PROFILE=small`
 - `BLOG_ES_JAVA_OPTS=-Xms384m -Xmx384m`
 - `BLOG_PG_SHARED_BUFFERS=64MB`
 - `BLOG_PG_MAX_CONNECTIONS=40`
 
-使用宿主机内网 IP 部署。
+#### 使用宿主机内网 IP 部署
 
 ```bash
 HOST_IP="$(hostname -I | awk '{print $1}')" && sudo docker run -d \
@@ -213,7 +213,7 @@ HOST_IP="$(hostname -I | awk '{print $1}')" && sudo docker run -d \
 /data/blog/certs/internal-ca/ca.crt
 ```
 
-使用自定义证书以及和域名
+#### 使用自定义证书和域名
 
 ```bash
 sudo docker run -d \
@@ -226,12 +226,12 @@ sudo docker run -d \
   jiaopengzi/blog:latest
 ```
 
-启动收可以使用查看状态
+#### 启动后状态校验
 
 ```bash
 sudo docker ps -a | grep blog
 
-sudo docker log blog
+sudo docker logs blog
 ```
 
 同时使用如下 curl 校验是否通畅
@@ -240,11 +240,9 @@ sudo docker log blog
 
 在外部机器执行 `curl -vk https://blog.example.com/`，再看是 DNS、链路还是证书链问题。
 
-如果您更习惯先把证书整理到数据目录, 也可以预先放到
-`/data/blog/blog-client/nginx/ssl/cert.pem` 和
-`/data/blog/blog-client/nginx/ssl/cert.key`, 再只挂载 `-v /data/blog:/data` 启动。
+如果您更习惯先把证书整理到数据目录, 也可以预先放到 `/data/blog/blog-client/nginx/ssl/cert.pem` 和 `/data/blog/blog-client/nginx/ssl/cert.key`, 再只挂载 `-v /data/blog:/data` 启动。
 
-常用运行时环境变量:
+#### 常用运行时环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -254,9 +252,9 @@ sudo docker log blog
 | `BLOG_REDIS_PORT` | `16379` | 容器内 Redis 监听端口 |
 | `BLOG_ES_PORT` | `19200` | 容器内 Elasticsearch HTTPS 监听端口 |
 
-说明:
+#### 说明
 
-- 仅执行 `sudo docker run -d blog:latest` 不会自动发布宿主机端口, 仍需显式添加 `-p 443:443`, 否则无法从宿主机或局域网访问; 启动摘要也会用 warning 明确提示这一点。
+- 仅执行 `sudo docker run -d blog:latest` 不会自动发布宿主机端口, 仍需显式添加 `-p 443:443`, 否则无法从宿主机或局域网访问。
 - 数据库默认不占用容器内常见端口, 如果需要对外连接数据库, 请自行增加端口映射, 例如 `-p 5432:15432`。
 - Elasticsearch 内置 IK 分词器, 默认保留空的 `my.dic`, 可在挂载目录中按需维护。
 
