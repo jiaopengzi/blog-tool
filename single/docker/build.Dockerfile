@@ -90,12 +90,12 @@ ENV BLOG_VERSION=${BLOG_VERSION}
 COPY --from=ffmpeg-binaries /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg-binaries /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 
-COPY --from=server-artifacts /home/blog-server/blog-server /home/blog-server/blog-server
-COPY --from=server-artifacts /home/blog-server/boot /home/blog-server/boot
-COPY --from=server-artifacts /home/blog-server/config /home/blog-server/config-default
-COPY --from=server-artifacts /home/blog-server/templates /home/blog-server/templates
-COPY --from=server-artifacts /home/blog-server/docs /home/blog-server/docs
-COPY --from=server-artifacts /home/blog-server/LICENSE /home/blog-server/LICENSE
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/blog-server /home/blog-server/blog-server
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/boot /home/blog-server/boot
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/config /home/blog-server/config-default
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/templates /home/blog-server/templates
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/docs /home/blog-server/docs
+COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server/LICENSE /home/blog-server/LICENSE
 
 COPY --from=client-artifacts /usr/share/nginx/html /usr/share/nginx/html
 COPY --from=client-artifacts /etc/nginx/nginx.conf /etc/nginx/nginx.conf
@@ -108,7 +108,7 @@ RUN mkdir -p /opt/blog-client \
     && cp -a /etc/nginx /opt/blog-client/nginx-template \
     && chmod +x /usr/local/bin/blog-entrypoint.sh /home/blog-server/blog-server /home/blog-server/boot \
     && printf '%s\n' "$BLOG_VERSION" >/home/blog-server/VERSION \
-    && chown -R blog-server:blog-server /home/blog-server
+    && chown blog-server:blog-server /home/blog-server/VERSION
 
 VOLUME ["/data"]
 

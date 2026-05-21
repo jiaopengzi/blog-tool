@@ -34,7 +34,7 @@ BLOG_ES_JAVA_OPTS="${BLOG_ES_JAVA_OPTS:-}"
 BLOG_PG_SHARED_BUFFERS="${BLOG_PG_SHARED_BUFFERS:-}"
 BLOG_PG_MAX_CONNECTIONS="${BLOG_PG_MAX_CONNECTIONS:-}"
 BLOG_NGINX_WORKER_PROCESSES="${BLOG_NGINX_WORKER_PROCESSES:-}"
-BLOG_CERT_DAYS="${BLOG_CERT_DAYS:-3650}"
+BLOG_CERT_DAYS="${BLOG_CERT_DAYS:-36525}"
 BLOG_HTTPS_CERT_FILE="${BLOG_HTTPS_CERT_FILE:-}"
 BLOG_HTTPS_KEY_FILE="${BLOG_HTTPS_KEY_FILE:-}"
 
@@ -232,7 +232,7 @@ ensure_client_nginx_config() {
     fi
 
     ensure_directory "$BLOG_CLIENT_NGINX_DIR" root 755 false
-    cp -an "$BLOG_CLIENT_NGINX_TEMPLATE_DIR/." "$BLOG_CLIENT_NGINX_DIR/"
+    cp -a --update=none "$BLOG_CLIENT_NGINX_TEMPLATE_DIR/." "$BLOG_CLIENT_NGINX_DIR/"
     patch_client_nginx_config
 
     rm -rf /etc/nginx
@@ -423,6 +423,8 @@ migrate_legacy_https_certificate_if_needed() {
 validate_https_certificate_pair() {
     local cert_file="$1"
     local key_file="$2"
+    local cert_pubkey_sha=""
+    local key_pubkey_sha=""
 
     if ! openssl x509 -in "$cert_file" -noout >/dev/null 2>&1; then
         log_error "自定义 HTTPS 证书内容无效, 请检查证书格式"
@@ -431,6 +433,14 @@ validate_https_certificate_pair() {
 
     if ! openssl pkey -in "$key_file" -noout >/dev/null 2>&1; then
         log_error "自定义 HTTPS 私钥内容无效, 请检查私钥格式"
+        exit 1
+    fi
+
+    cert_pubkey_sha="$(openssl x509 -in "$cert_file" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+    key_pubkey_sha="$(openssl pkey -in "$key_file" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+
+    if [[ -z "$cert_pubkey_sha" ]] || [[ -z "$key_pubkey_sha" ]] || [[ "$cert_pubkey_sha" != "$key_pubkey_sha" ]]; then
+        log_error "自定义 HTTPS 证书与私钥不匹配, 请检查 cert.pem 和 cert.key 是否为同一对"
         exit 1
     fi
 }
@@ -548,7 +558,7 @@ start_postgres() {
     init_postgres_data
 
     postgres_bin="$(require_postgres_binary postgres)"
-    su -s /bin/bash postgres -c "'$postgres_bin' -D '$BLOG_POSTGRES_CLUSTER_DIR' -c config_file='$BLOG_POSTGRES_CONF_DIR/postgresql.conf' -c hba_file='$BLOG_POSTGRES_CONF_DIR/pg_hba.conf'" &
+    su -s /bin/bash postgres -c "'$postgres_bin' -D '$BLOG_POSTGRES_CLUSTER_DIR' -c config_file='$BLOG_POSTGRES_CONF_DIR/postgresql.conf' -c hba_file='$BLOG_POSTGRES_CONF_DIR/pg_hba.conf' -c max_connections='$BLOG_PG_MAX_CONNECTIONS' -c shared_buffers='$BLOG_PG_SHARED_BUFFERS'" &
     POSTGRES_PID=$!
 }
 
@@ -781,7 +791,7 @@ wait_for_elasticsearch_http_ready() {
 print_recent_elasticsearch_logs() {
     local es_log_file=""
 
-    es_log_file="$(find "$BLOG_ES_DATA_DIR/logs" -maxdepth 1 -type f | sort | tail -n 1 2>/dev/null || true)"
+    es_log_file="$(find "$BLOG_ES_DATA_DIR/logs" -maxdepth 1 -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -n 1 | cut -d' ' -f2- || true)"
     if [[ -n "$es_log_file" ]] && [[ -f "$es_log_file" ]]; then
         log_warn "Elasticsearch 最近日志($es_log_file):"
         tail -n 80 "$es_log_file" >&2 || true
