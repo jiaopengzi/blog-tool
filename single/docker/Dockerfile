@@ -152,6 +152,8 @@ RUN set -eux; \
     '    <entry key="ext_stopwords"></entry>' \
     '</properties>' >/opt/elasticsearch/config/analysis-ik/IKAnalyzer.cfg.xml; \
     touch /opt/elasticsearch/config/analysis-ik/my.dic; \
+    rm -rf /opt/elasticsearch/jdk/jmods /opt/elasticsearch/jdk/include /opt/elasticsearch/jdk/man; \
+    rm -f /opt/elasticsearch/jdk/lib/ct.sym; \
     rm -f /tmp/analysis-ik.zip; \
     rm -rf ./blog-cache
 
@@ -274,6 +276,7 @@ RUN set -eux; \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime; \
     echo 'Asia/Shanghai' >/etc/timezone; \
     rm -f /usr/sbin/policy-rc.d; \
+    rm -rf /etc/apt/sources.list.d/pgdg.sources /etc/apt/sources.list.d/nginx.list /etc/apt/preferences.d/99nginx /usr/share/postgresql-common/pgdg /usr/share/keyrings/nginx-archive-keyring.gpg; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /usr/share/info/*
 
