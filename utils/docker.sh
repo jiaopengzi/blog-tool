@@ -660,41 +660,61 @@ docker_pull_image_via_cn_public_mirrors() {
     return 1
 }
 
-# 区域感知镜像拉取: 腾讯云优先走默认拉取, 失败后切到国内非腾讯云公共镜像; 国内非腾讯云优先走腾讯公共仓库, 失败后继续兜底.
-# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
-# 参数: $2 版本
-docker_pull_image_with_region() {
-    log_debug "run docker_pull_image_with_region"
+# 镜像拉取源会话缓存: 当前会话中用户选择的镜像拉取源.
+# 可选值: auto(默认, 统一 fallback 链) / tencent(腾讯公共仓库) / dockerhub(Docker Hub 直连) / mirror(公共镜像代理).
+DOCKER_PULL_SOURCE_CACHE=""
 
+# 选择镜像拉取源(交互模式弹出菜单, auto 模式自动使用 fallback 链).
+# 同一会话内仅首次调用时询问, 之后复用缓存.
+select_docker_pull_source() {
+    # --auto 模式直接使用统一 fallback 链
+    if [ "${AUTO_MODE:-false}" = "true" ]; then
+        DOCKER_PULL_SOURCE_CACHE="auto"
+        return 0
+    fi
+
+    # 同一会话已选择过, 复用缓存
+    if [ -n "$DOCKER_PULL_SOURCE_CACHE" ]; then
+        return 0
+    fi
+
+    local choice
+    echo ""
+    echo "请选择镜像拉取源:"
+    echo "  1) 自动尝试所有可用源 (推荐)"
+    echo "  2) 腾讯公共仓库 (ccr.ccs.tencentyun.com)"
+    echo "  3) Docker Hub 直连"
+    echo "  4) 公共镜像代理"
+    echo ""
+    choice=$(read_user_input "请输入序号 [1-4] (默认1): " "1")
+
+    case "$choice" in
+        1) DOCKER_PULL_SOURCE_CACHE="auto" ;;
+        2) DOCKER_PULL_SOURCE_CACHE="tencent" ;;
+        3) DOCKER_PULL_SOURCE_CACHE="dockerhub" ;;
+        4) DOCKER_PULL_SOURCE_CACHE="mirror" ;;
+        *) DOCKER_PULL_SOURCE_CACHE="auto" ;;
+    esac
+
+    log_info "镜像拉取源已设置为: $DOCKER_PULL_SOURCE_CACHE"
+}
+
+# 统一 fallback 链拉取镜像: 腾讯公共仓库 → Docker Hub 直连 → 公共镜像代理.
+# 不依赖区域探测, 按优先级依次尝试所有可用源.
+# 参数: $1 标准镜像名 (如 redis、postgres、$DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 版本
+docker_pull_image_fallback_chain() {
     local standard_image="$1"
     local version="$2"
-    local region=""
     local image_basename=""
     local tencent_image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
-        log_error "区域感知拉取失败, 镜像名和版本不能为空"
+        log_error "统一 fallback 链拉取失败, 镜像名和版本不能为空"
         return 1
     fi
 
-    region=$(detect_docker_region)
-
-    if [ "$region" = "overseas" ]; then
-        timeout_retry_docker_pull "$standard_image" "$version"
-        return $?
-    fi
-
-    if [ "$region" = "tencent_cn" ]; then
-        if timeout_retry_docker_pull "$standard_image" "$version"; then
-            return 0
-        fi
-
-        log_warn "腾讯云镜像加速拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
-        docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
-        return $?
-    fi
-
-    # 国内非腾讯云: 优先从腾讯公共仓库拉取(无需登录), 失败后切到国内非腾讯云公共镜像, 拉取后统一 tag 为标准名.
+    # 第1级: 腾讯公共仓库 (国内通常最快, 免登录)
     image_basename="${standard_image##*/}"
     tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
 
@@ -702,10 +722,72 @@ docker_pull_image_with_region() {
         if docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"; then
             return 0
         fi
+        log_warn "腾讯公共仓库拉取失败, 尝试 Docker Hub 直连..."
     fi
 
-    log_warn "腾讯公共仓库拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+    # 第2级: Docker Hub 直连 (可能被 daemon 层 registry-mirrors 加速)
+    if timeout_retry_docker_pull "$standard_image" "$version"; then
+        return 0
+    fi
+    log_warn "Docker Hub 直连拉取失败, 尝试公共镜像代理兜底..."
+
+    # 第3级: 公共镜像代理兜底
     docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+}
+
+# 区域感知镜像拉取(已重构为统一 fallback 链 + 手动源选择).
+# 参数: $1 标准镜像名 (如 redis、postgres、elasticsearch、$DOCKER_HUB_OWNER/blog-server)
+# 参数: $2 版本
+docker_pull_image_with_region() {
+    log_debug "run docker_pull_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "镜像拉取失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    # 确保拉取源已选择(首次调用时交互询问, 之后复用缓存)
+    select_docker_pull_source
+
+    case "${DOCKER_PULL_SOURCE_CACHE:-auto}" in
+        auto)
+            docker_pull_image_fallback_chain "$standard_image" "$version"
+            ;;
+        tencent)
+            docker_pull_from_tencent_public_registry "$standard_image" "$version"
+            ;;
+        dockerhub)
+            timeout_retry_docker_pull "$standard_image" "$version"
+            ;;
+        mirror)
+            docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+            ;;
+        *)
+            log_error "未知的镜像拉取源: $DOCKER_PULL_SOURCE_CACHE"
+            return 1
+            ;;
+    esac
+}
+
+# 从腾讯公共仓库拉取镜像(单一源, 无 fallback).
+# 参数: $1 标准镜像名.
+# 参数: $2 版本.
+# 返回: 0 表示成功, 非 0 表示失败.
+docker_pull_from_tencent_public_registry() {
+    local standard_image="$1"
+    local version="$2"
+    local image_basename="${standard_image##*/}"
+    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+
+    if [ -z "$REGISTRY_REMOTE_SERVER_TENCENT" ]; then
+        log_error "腾讯公共仓库地址未配置"
+        return 1
+    fi
+
+    docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"
 }
 
 # 校验本地是否已存在指定镜像.

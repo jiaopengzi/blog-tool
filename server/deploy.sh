@@ -315,7 +315,8 @@ docker_pull_server() {
         }
         docker_private_registry_login_logout run
     else
-        # 区域感知拉取: 腾讯云加速失败时自动切到国内非腾讯云公共镜像, 国内非腾讯云优先走腾讯公共仓库.
+        # 选择镜像拉取源(交互模式弹出菜单, auto 模式自动走 fallback 链)
+        select_docker_pull_source
         docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-server" "$version"
     fi
 }

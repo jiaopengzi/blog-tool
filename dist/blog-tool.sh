@@ -2455,35 +2455,48 @@ docker_pull_image_via_cn_public_mirrors() {
     return 1
 }
 
-docker_pull_image_with_region() {
-    log_debug "run docker_pull_image_with_region"
+DOCKER_PULL_SOURCE_CACHE=""
 
+select_docker_pull_source() {
+    if [ "${AUTO_MODE:-false}" = "true" ]; then
+        DOCKER_PULL_SOURCE_CACHE="auto"
+        return 0
+    fi
+
+    if [ -n "$DOCKER_PULL_SOURCE_CACHE" ]; then
+        return 0
+    fi
+
+    local choice
+    echo ""
+    echo "请选择镜像拉取源:"
+    echo "  1) 自动尝试所有可用源 (推荐)"
+    echo "  2) 腾讯公共仓库 (ccr.ccs.tencentyun.com)"
+    echo "  3) Docker Hub 直连"
+    echo "  4) 公共镜像代理"
+    echo ""
+    choice=$(read_user_input "请输入序号 [1-4] (默认1): " "1")
+
+    case "$choice" in
+        1) DOCKER_PULL_SOURCE_CACHE="auto" ;;
+        2) DOCKER_PULL_SOURCE_CACHE="tencent" ;;
+        3) DOCKER_PULL_SOURCE_CACHE="dockerhub" ;;
+        4) DOCKER_PULL_SOURCE_CACHE="mirror" ;;
+        *) DOCKER_PULL_SOURCE_CACHE="auto" ;;
+    esac
+
+    log_info "镜像拉取源已设置为: $DOCKER_PULL_SOURCE_CACHE"
+}
+
+docker_pull_image_fallback_chain() {
     local standard_image="$1"
     local version="$2"
-    local region=""
     local image_basename=""
     local tencent_image=""
 
     if [ -z "$standard_image" ] || [ -z "$version" ]; then
-        log_error "区域感知拉取失败, 镜像名和版本不能为空"
+        log_error "统一 fallback 链拉取失败, 镜像名和版本不能为空"
         return 1
-    fi
-
-    region=$(detect_docker_region)
-
-    if [ "$region" = "overseas" ]; then
-        timeout_retry_docker_pull "$standard_image" "$version"
-        return $?
-    fi
-
-    if [ "$region" = "tencent_cn" ]; then
-        if timeout_retry_docker_pull "$standard_image" "$version"; then
-            return 0
-        fi
-
-        log_warn "腾讯云镜像加速拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
-        docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
-        return $?
     fi
 
     image_basename="${standard_image##*/}"
@@ -2493,10 +2506,62 @@ docker_pull_image_with_region() {
         if docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"; then
             return 0
         fi
+        log_warn "腾讯公共仓库拉取失败, 尝试 Docker Hub 直连..."
     fi
 
-    log_warn "腾讯公共仓库拉取失败, 尝试国内非腾讯云公共镜像兜底: $standard_image:$version"
+    if timeout_retry_docker_pull "$standard_image" "$version"; then
+        return 0
+    fi
+    log_warn "Docker Hub 直连拉取失败, 尝试公共镜像代理兜底..."
+
     docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+}
+
+docker_pull_image_with_region() {
+    log_debug "run docker_pull_image_with_region"
+
+    local standard_image="$1"
+    local version="$2"
+
+    if [ -z "$standard_image" ] || [ -z "$version" ]; then
+        log_error "镜像拉取失败, 镜像名和版本不能为空"
+        return 1
+    fi
+
+    select_docker_pull_source
+
+    case "${DOCKER_PULL_SOURCE_CACHE:-auto}" in
+        auto)
+            docker_pull_image_fallback_chain "$standard_image" "$version"
+            ;;
+        tencent)
+            docker_pull_from_tencent_public_registry "$standard_image" "$version"
+            ;;
+        dockerhub)
+            timeout_retry_docker_pull "$standard_image" "$version"
+            ;;
+        mirror)
+            docker_pull_image_via_cn_public_mirrors "$standard_image" "$version"
+            ;;
+        *)
+            log_error "未知的镜像拉取源: $DOCKER_PULL_SOURCE_CACHE"
+            return 1
+            ;;
+    esac
+}
+
+docker_pull_from_tencent_public_registry() {
+    local standard_image="$1"
+    local version="$2"
+    local image_basename="${standard_image##*/}"
+    local tencent_image="$REGISTRY_REMOTE_SERVER_TENCENT/$image_basename"
+
+    if [ -z "$REGISTRY_REMOTE_SERVER_TENCENT" ]; then
+        log_error "腾讯公共仓库地址未配置"
+        return 1
+    fi
+
+    docker_pull_image_from_source_and_retag "$tencent_image" "$standard_image" "$version" "腾讯公共仓库"
 }
 
 docker_require_local_image() {
@@ -3834,7 +3899,7 @@ timeout_retry_docker_pull() {
 
     local image="$image_name:$version"
 
-    retryable_pull_pattern="TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero|failed to copy|httpReadSeeker|could not fetch content descriptor|manifest unknown|no such manifest|404 Not Found|not found|received unexpected HTTP status|error from registry: unknown error|unknown error"
+    retryable_pull_pattern="i/o timeout|TLS handshake timeout|tls: handshake|tls handshake|x509: certificate|certificate signed by unknown authority|connection reset by peer|connection refused|InvalidArgument: Target.Size must be greater than zero|Target.Size must be greater than zero|failed to copy|httpReadSeeker|could not fetch content descriptor|manifest unknown|no such manifest|404 Not Found|not found|received unexpected HTTP status|error from registry: unknown error|unknown error"
 
     log_info "开始拉取镜像: $image"
 
@@ -5491,6 +5556,8 @@ EOF
 pull_docker_image_pro_db() {
     log_debug "run pull_docker_image_pro_db"
 
+    select_docker_pull_source
+
     docker_pull_image_with_region "redis" "$IMG_VERSION_REDIS"
     docker_pull_image_with_region "postgres" "$IMG_VERSION_PGSQL"
     docker_pull_image_with_region "elasticsearch" "$IMG_VERSION_ES"
@@ -5500,6 +5567,8 @@ pull_docker_image_pro_db() {
 
 pull_docker_image_pro_all() {
     log_debug "run pull_docker_image_pro_all"
+
+    select_docker_pull_source
 
     local has_db
     if [ "${AUTO_MODE:-false}" = "true" ]; then
@@ -7610,6 +7679,7 @@ docker_pull_server() {
         }
         docker_private_registry_login_logout run
     else
+        select_docker_pull_source
         docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-server" "$version"
     fi
 }
@@ -7990,6 +8060,7 @@ docker_pull_client() {
         }
         docker_private_registry_login_logout run
     else
+        select_docker_pull_source
         docker_pull_image_with_region "$DOCKER_HUB_OWNER/blog-client" "$version"
     fi
 }

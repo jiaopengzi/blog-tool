@@ -6,6 +6,7 @@
 # Description : docker镜像拉取
 
 # 拉取开发环境镜像
+# 开发镜像始终从 docker.io 直连拉取, 不参与镜像源选择.
 pull_docker_image_dev() {
     log_debug "run pull_docker_image_dev"
 
@@ -14,9 +15,9 @@ pull_docker_image_dev() {
     timeout_retry_docker_pull "alpine" "$IMG_VERSION_ALPINE"
     timeout_retry_docker_pull "golang" "$IMG_VERSION_GOLANG"
     timeout_retry_docker_pull "node" "$IMG_VERSION_NODE"
-    docker_pull_image_with_region "redis" "$IMG_VERSION_REDIS"
-    docker_pull_image_with_region "postgres" "$IMG_VERSION_PGSQL"
-    docker_pull_image_with_region "elasticsearch" "$IMG_VERSION_ES"
+    timeout_retry_docker_pull "redis" "$IMG_VERSION_REDIS"
+    timeout_retry_docker_pull "postgres" "$IMG_VERSION_PGSQL"
+    timeout_retry_docker_pull "elasticsearch" "$IMG_VERSION_ES"
     timeout_retry_docker_pull "kibana" "$IMG_VERSION_KIBANA"
     timeout_retry_docker_pull "nginx" "$IMG_VERSION_NGINX"
     timeout_retry_docker_pull "registry" "$IMG_VERSION_REGISTRY"
@@ -29,6 +30,9 @@ pull_docker_image_dev() {
 pull_docker_image_pro_db() {
     log_debug "run pull_docker_image_pro_db"
 
+    # 选择镜像拉取源(交互模式弹出菜单, auto 模式自动走 fallback 链)
+    select_docker_pull_source
+
     # 拉取必要的docker镜像
 
     docker_pull_image_with_region "redis" "$IMG_VERSION_REDIS"
@@ -38,9 +42,12 @@ pull_docker_image_pro_db() {
     log_info "docker 生产环境数据库镜像拉取完成"
 }
 
-# 拉取生产环境db镜像
+# 拉取生产环境db镜像(计费中心)
 pull_docker_image_pro_db_billing_center() {
     log_debug "run pull_docker_image_pro_db_billing_center"
+
+    # 选择镜像拉取源(交互模式弹出菜单, auto 模式自动走 fallback 链)
+    select_docker_pull_source
 
     # 拉取必要的docker镜像
 
@@ -53,6 +60,9 @@ pull_docker_image_pro_db_billing_center() {
 # 拉取生产环境所有镜像
 pull_docker_image_pro_all() {
     log_debug "run pull_docker_image_pro_all"
+
+    # 选择镜像拉取源(交互模式弹出菜单, auto 模式自动走 fallback 链)
+    select_docker_pull_source
 
     local has_db
     if [ "${AUTO_MODE:-false}" = "true" ]; then
