@@ -74,7 +74,7 @@ OPTIONS_ALL=(
     "删除 es 和 kibana:delete_es_kibana"
 
     # 构建编译过程镜像
-    "构建 billing center 镜像:docker_build_billing_center_env"
+    "构建 billing center env 镜像:docker_build_billing_center_env"
     "构建 server env 镜像:docker_build_server_env"
     "构建 client env 镜像:docker_build_client_env"
 

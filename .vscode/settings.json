@@ -92,6 +92,7 @@
         "sadd",
         "saddr",
         "shellcheck",
+        "Sigstore",
         "stopwords",
         "sysv",
         "tencentyun",

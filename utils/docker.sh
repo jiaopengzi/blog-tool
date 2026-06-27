@@ -281,9 +281,29 @@ docker_sign_image() {
 
     log_info "开始签名镜像: $image_ref"
 
-    if ! COSIGN_PASSWORD="$private_key_pwd" cosign sign --yes --key "$private_key_file" "$image_ref"; then
+    # 定义 cosign sign 执行函数, 供 retry_with_backoff 调用
+    # shellcheck disable=SC2329
+    _cosign_sign_run() {
+        COSIGN_PASSWORD="$private_key_pwd" cosign sign --yes --key "$private_key_file" "$image_ref"
+    }
+
+    # 带重试的 cosign 签名: Sigstore 公共服务(TUF/时间戳服务器)在某些网络环境下偶发 TLS 握手超时,
+    # 通过指数退避重试提高成功率.
+    # 匹配以下可恢复的网络错误进行重试:
+    #   - TLS handshake timeout / i/o timeout / connection refused / connection reset
+    #   - TUF 元数据刷新失败 (tuf refresh failed / Could not fetch trusted_root)
+    #   - 时间戳服务器超时 (timestamp)
+    local sign_retryable_pattern
+    sign_retryable_pattern="TLS handshake timeout|i/o timeout|connection refused|connection reset by peer|no such host|dial tcp|tuf refresh failed|Could not fetch trusted_root|timestamp.*timeout"
+
+    if ! retry_with_backoff \
+        "_cosign_sign_run" \
+        5 \
+        3 \
+        "镜像签名成功: $image_ref" \
+        "镜像签名失败(非网络类错误): $image_ref" \
+        "$sign_retryable_pattern"; then
         [ "$private_key_file" != "$private_key" ] && rm -f "$private_key_file"
-        log_error "镜像签名失败: $image_ref"
         return 1
     fi
 
