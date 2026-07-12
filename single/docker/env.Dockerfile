@@ -4,10 +4,9 @@
 ARG UBUNTU_VERSION=24.04
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG REDIS_VERSION=8.6.3
-ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
-ARG ELASTICSEARCH_VERSION=9.4.1
-ARG NGINX_VERSION=1.31.1
+ARG REDIS_VERSION=8.6.4
+ARG ELASTICSEARCH_VERSION=9.4.2
+ARG NGINX_VERSION=1.31.2
 
 FROM scratch AS cached-assets
 
@@ -54,7 +53,7 @@ RUN set -eux; \
 
 FROM ubuntu-build-base AS elasticsearch-with-ik
 
-ARG ELASTICSEARCH_VERSION=9.4.1
+ARG ELASTICSEARCH_VERSION=9.4.2
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -82,8 +81,7 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
 
 FROM ubuntu-build-base AS redis-binaries
 
-ARG REDIS_VERSION=8.6.3
-ARG REDIS_DOWNLOAD_SHA=58d0d1eb49a1ea6c2179659707fec171b1e2e2b8d5157ed2ec59d1d66ad5a654
+ARG REDIS_VERSION=8.6.4
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -125,9 +123,9 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     esac; \
     rm -rf /var/lib/apt/lists/*; \
     if [ -f "/blog-cache/${redis_archive}" ]; then cp "/blog-cache/${redis_archive}" /tmp/redis.tar.gz; else curl -fsSL "$redis_download_url" -o /tmp/redis.tar.gz; fi; \
-    echo "${REDIS_DOWNLOAD_SHA} */tmp/redis.tar.gz" | sha256sum -c -; \
     mkdir -p /tmp/redis-src; \
     tar -xzf /tmp/redis.tar.gz -C /tmp/redis-src --strip-components=1; \
+    grep -F "#define REDIS_VERSION \"${REDIS_VERSION}\"" /tmp/redis-src/src/version.h; \
     grep -E '^ *createBoolConfig[(]"protected-mode",.*, *1 *,.*[)],$' /tmp/redis-src/src/config.c; \
     sed -ri 's!^( *createBoolConfig[(]"protected-mode",.*, *)1( *,.*[)],)$!\10\2!' /tmp/redis-src/src/config.c; \
     grep -E '^ *createBoolConfig[(]"protected-mode",.*, *0 *,.*[)],$' /tmp/redis-src/src/config.c; \
@@ -153,7 +151,7 @@ FROM ubuntu-runtime-base
 
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG NGINX_VERSION=1.31.1
+ARG NGINX_VERSION=1.31.2
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8

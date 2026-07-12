@@ -523,9 +523,12 @@ single_prepare_docker_assets() {
 # 参数: $1: 本地缓存文件名.
 # 参数: $2: 下载地址.
 # 参数: $3: 归档类型, 支持 tar.gz 或 zip.
+# 参数: $4: 期望的归档根目录, 为空表示不校验.
 single_validate_cached_asset() {
     local cache_file="$1"
     local archive_type="$2"
+    local expected_root_dir="${3:-}"
+    local first_entry=""
 
     if [[ ! -s "$cache_file" ]]; then
         return 1
@@ -533,7 +536,12 @@ single_validate_cached_asset() {
 
     case "$archive_type" in
     tar.gz)
-        sudo tar -tzf "$cache_file" >/dev/null 2>&1
+        sudo tar -tzf "$cache_file" >/dev/null 2>&1 || return 1
+
+        if [[ -n "$expected_root_dir" ]]; then
+            first_entry=$(sudo tar -tzf "$cache_file" 2>/dev/null | head -n 1)
+            [[ "$first_entry" == "$expected_root_dir" ]] || return 1
+        fi
         ;;
     zip)
         sudo unzip -tq "$cache_file" >/dev/null 2>&1
@@ -549,16 +557,18 @@ single_validate_cached_asset() {
 # 参数: $1: 本地缓存文件名.
 # 参数: $2: 下载地址.
 # 参数: $3: 归档类型, 支持 tar.gz 或 zip.
+# 参数: $4: 期望的归档根目录, 为空表示不校验.
 single_download_cached_asset() {
     local file_name="$1"
     local download_url="$2"
     local archive_type="$3"
+    local expected_root_dir="${4:-}"
     local cache_file="$SINGLE_DOWNLOAD_CACHE_DIR/$file_name"
     local temp_cache_file="$cache_file.part"
 
     sudo mkdir -p "$SINGLE_DOWNLOAD_CACHE_DIR"
 
-    if single_validate_cached_asset "$cache_file" "$archive_type"; then
+    if single_validate_cached_asset "$cache_file" "$archive_type" "$expected_root_dir"; then
         log_info "复用 single 依赖下载缓存: $file_name"
         return 0
     fi
@@ -569,7 +579,7 @@ single_download_cached_asset() {
     sudo rm -f "$temp_cache_file"
     sudo curl -fL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 1800 "$download_url" -o "$temp_cache_file" || return 1
 
-    if ! single_validate_cached_asset "$temp_cache_file" "$archive_type"; then
+    if ! single_validate_cached_asset "$temp_cache_file" "$archive_type" "$expected_root_dir"; then
         sudo rm -f "$temp_cache_file"
         log_error "single 依赖下载后的归档校验失败: $file_name"
         return 1
@@ -591,7 +601,7 @@ single_prepare_env_download_cache() {
     sudo rm -f "$SINGLE_CONTEXT_DOWNLOAD_CACHE_DIR"/* >/dev/null 2>&1 || true
 
     single_download_cached_asset "$elasticsearch_file" "https://artifacts.elastic.co/downloads/elasticsearch/${elasticsearch_file}" "tar.gz" || return 1
-    single_download_cached_asset "$redis_file" "https://github.com/redis/redis/archive/refs/tags/${IMG_VERSION_REDIS}.tar.gz" "tar.gz" || return 1
+    single_download_cached_asset "$redis_file" "https://github.com/redis/redis/archive/refs/tags/${IMG_VERSION_REDIS}.tar.gz" "tar.gz" "redis-${IMG_VERSION_REDIS}/" || return 1
     single_download_cached_asset "$ik_file" "https://release.infinilabs.com/analysis-ik/stable/${ik_file}" "zip" || return 1
 
     for cache_file in "$elasticsearch_file" "$redis_file" "$ik_file"; do
