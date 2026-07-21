@@ -105,6 +105,39 @@ apt_probe_url() {
     return 1
 }
 
+# 判断当前主机是否为阿里云 ECS, 或当前 apt 配置是否已使用阿里云镜像.
+# 返回: 命中阿里云环境或镜像时返回 0, 否则返回 1.
+is_aliyun_apt_environment() {
+    local dmi_file=""
+    local source_file=""
+    local -a dmi_files=(
+        "/sys/class/dmi/id/sys_vendor"
+        "/sys/class/dmi/id/product_name"
+        "/sys/class/dmi/id/board_vendor"
+    )
+    local -a source_files=(
+        "/etc/apt/sources.list"
+        /etc/apt/sources.list.d/*.list
+        /etc/apt/sources.list.d/*.sources
+    )
+
+    for dmi_file in "${dmi_files[@]}"; do
+        if [ -r "$dmi_file" ] && grep -Eiq "Alibaba Cloud|Aliyun" "$dmi_file"; then
+            return 0
+        fi
+    done
+
+    for source_file in "${source_files[@]}"; do
+        if [ -r "$source_file" ] && grep -Eiq \
+            "^[[:space:]]*(deb([[:space:]]|[[:space:]]+\[)|URIs:)[^#]*(mirrors\.(cloud\.)?aliyuncs\.com|mirrors\.aliyun\.com)" \
+            "$source_file"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # 探测当前系统下某个 apt 镜像是否覆盖主仓库、updates 与 backports.
 # 参数: $1: 镜像基础 URL.
 # 返回: 0 表示当前系统关键 suites 均可访问, 1 表示至少一个 suite 不可访问.
@@ -363,6 +396,11 @@ prepare_temporary_apt_source_for_install() {
     local region
     region=$(detect_docker_region)
     if [ "$region" != "cn_non_tencent" ]; then
+        return 0
+    fi
+
+    if is_aliyun_apt_environment; then
+        log_info "检测到阿里云 ECS 或当前已使用阿里云 apt 镜像, 保留现有软件源"
         return 0
     fi
 
