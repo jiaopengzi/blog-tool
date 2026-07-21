@@ -4554,6 +4554,37 @@ apt_probe_url() {
     return 1
 }
 
+is_aliyun_apt_environment() {
+    local dmi_file=""
+    local source_file=""
+    local -a dmi_files=(
+        "/sys/class/dmi/id/sys_vendor"
+        "/sys/class/dmi/id/product_name"
+        "/sys/class/dmi/id/board_vendor"
+    )
+    local -a source_files=(
+        "/etc/apt/sources.list"
+        /etc/apt/sources.list.d/*.list
+        /etc/apt/sources.list.d/*.sources
+    )
+
+    for dmi_file in "${dmi_files[@]}"; do
+        if [ -r "$dmi_file" ] && grep -Eiq "Alibaba Cloud|Aliyun" "$dmi_file"; then
+            return 0
+        fi
+    done
+
+    for source_file in "${source_files[@]}"; do
+        if [ -r "$source_file" ] && grep -Eiq \
+            "^[[:space:]]*(deb([[:space:]]|[[:space:]]+\[)|URIs:)[^#]*(mirrors\.(cloud\.)?aliyuncs\.com|mirrors\.aliyun\.com)" \
+            "$source_file"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 apt_probe_mirror_for_current_system() {
     local base_url=$1
     local suite_name=""
@@ -4786,6 +4817,11 @@ prepare_temporary_apt_source_for_install() {
     local region
     region=$(detect_docker_region)
     if [ "$region" != "cn_non_tencent" ]; then
+        return 0
+    fi
+
+    if is_aliyun_apt_environment; then
+        log_info "检测到阿里云 ECS 或当前已使用阿里云 apt 镜像, 保留现有软件源"
         return 0
     fi
 

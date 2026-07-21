@@ -340,7 +340,7 @@ wait_server_start() {
     local start_time
     start_time=$(date +%s)
 
-    until sudo curl -s "http://$HOST_INTRANET_IP:5426/api/v1/is-setup" | grep -q "request_id"; do
+    until sudo curl -s "http://localhost:5426/api/v1/is-setup" | grep -q "request_id"; do
         # 等待 10 秒, 并显示动画
         waiting 10
 
