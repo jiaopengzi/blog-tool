@@ -4,9 +4,9 @@
 ARG UBUNTU_VERSION=24.04
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG REDIS_VERSION=8.6.4
-ARG ELASTICSEARCH_VERSION=9.4.2
-ARG NGINX_VERSION=1.31.2
+ARG REDIS_VERSION=8.6.5
+ARG ELASTICSEARCH_VERSION=9.4.4
+ARG NGINX_VERSION=1.31.3
 
 FROM scratch AS cached-assets
 
@@ -53,7 +53,7 @@ RUN set -eux; \
 
 FROM ubuntu-build-base AS elasticsearch-with-ik
 
-ARG ELASTICSEARCH_VERSION=9.4.2
+ARG ELASTICSEARCH_VERSION=9.4.4
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -81,7 +81,7 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
 
 FROM ubuntu-build-base AS redis-binaries
 
-ARG REDIS_VERSION=8.6.4
+ARG REDIS_VERSION=8.6.5
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -151,7 +151,7 @@ FROM ubuntu-runtime-base
 
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG NGINX_VERSION=1.31.2
+ARG NGINX_VERSION=1.31.3
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8

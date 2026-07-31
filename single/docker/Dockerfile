@@ -2,13 +2,13 @@
 # blog 单镜像 Dockerfile
 # 1. 直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像.
 
-ARG NODE_VERSION=24.18.0
+ARG NODE_VERSION=24.18.1
 ARG UBUNTU_VERSION=24.04
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG REDIS_VERSION=8.6.4
-ARG ELASTICSEARCH_VERSION=9.4.2
-ARG NGINX_VERSION=1.31.2
+ARG REDIS_VERSION=8.6.5
+ARG ELASTICSEARCH_VERSION=9.4.4
+ARG NGINX_VERSION=1.31.3
 ARG CLIENT_IMAGE=jiaopengzi/blog-client:latest
 ARG SERVER_IMAGE=jiaopengzi/blog-server:latest
 ARG BLOG_ENV_IMAGE=blog-env-fallback
@@ -62,7 +62,7 @@ RUN set -eux; \
 
 FROM ubuntu-build-base AS elasticsearch-with-ik
 
-ARG ELASTICSEARCH_VERSION=9.4.2
+ARG ELASTICSEARCH_VERSION=9.4.4
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -90,7 +90,7 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
 
 FROM ubuntu-build-base AS redis-binaries
 
-ARG REDIS_VERSION=8.6.4
+ARG REDIS_VERSION=8.6.5
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -160,7 +160,7 @@ FROM ubuntu-runtime-base AS blog-env-fallback
 
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
-ARG NGINX_VERSION=1.31.2
+ARG NGINX_VERSION=1.31.3
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8
