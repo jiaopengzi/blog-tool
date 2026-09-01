@@ -69,6 +69,7 @@
         "nologin",
         "noninteractive",
         "noout",
+        "Nuxt",
         "obase",
         "oneshot",
         "openvswitch",

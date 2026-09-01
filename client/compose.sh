@@ -3,9 +3,11 @@
 # Author      : jiaopengzi
 # Blog        : https://jiaopengzi.com
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
-# Description : server docker compose 配置文件
+# Description : Nuxt client Docker Compose 配置, 通过环境变量注入 SSR 与 nginx 运行参数
 
-# 创建 client docker compose文件
+# create_docker_compose_client 生成 Nuxt client 的 Docker Compose 配置.
+# 参数: $1: 镜像版本号, 省略时使用 latest.
+# 返回: 写入配置成功返回 0, 文件创建失败时由调用命令返回非 0.
 create_docker_compose_client() {
   log_debug "run create_docker_compose_client"
 
@@ -37,6 +39,13 @@ services:
     # privileged: true # 拥有容器内命令执行的权限
     # depends_on: # 添加依赖关系
     #   - blog-server # client 依赖于 server
+    environment:
+      # client 与 server 使用独立 Docker 网络, 通过宿主机已映射端口访问后端.
+      NUXT_API_BASE: 'http://$HOST_INTRANET_IP:5426'
+      # SSR 的 canonical 与 Open Graph 地址需要使用实际部署域名.
+      NUXT_PUBLIC_BASE_URL: 'https://$DOMAIN_NAME'
+      # entrypoint 使用此值渲染 nginx.conf.template 的 server_name.
+      NGINX_SERVER_NAME: '$DOMAIN_NAME'
     volumes:
       - $DATA_VOLUME_DIR/blog-client/nginx:/etc/nginx
     ports:

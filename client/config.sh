@@ -3,9 +3,11 @@
 # Author      : jiaopengzi
 # Blog        : https://jiaopengzi.com
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
-# Description : client 配置
+# Description : client nginx 模板与 SSL 配置复制
 
-# 复制 blog_client 配置文件
+# copy_client_config 从镜像复制 nginx 模板和基础配置到宿主机 volume.
+# 参数: 无.
+# 返回: 复制成功返回 0, Docker 操作失败时由调用命令返回非 0.
 copy_client_config() {
 
     log_debug "run copy_client_config"
@@ -33,18 +35,8 @@ copy_client_config() {
         "$DATA_VOLUME_DIR/blog-client/nginx" \
         "$DATA_VOLUME_DIR/blog-client/nginx/ssl"
 
-    # 修改 nginx.conf 配置文件中的 blog-server 地址为宿主机内网 IP 地址
-    sudo sed -r -i \
-        "s/http:\/\/blog-server:5426/http:\/\/$HOST_INTRANET_IP:5426/g" \
-        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
-
-    # 修改 nginx.conf 配置文件中的访问域名, 仅匹配合法域名或 IPv4 的 server_name 指令
-    local server_name_pattern='^([[:space:]]*)server_name[[:space:]]+(([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}|([0-9]{1,3}\.){3}[0-9]{1,3});'
-    sudo sed -r -i \
-        "s/$server_name_pattern/\\1server_name $DOMAIN_NAME;/g" \
-        "$DATA_VOLUME_DIR/blog-client/nginx/nginx.conf"
-
-    log_info "client 复制配置文件到 volume success"
+    # Nuxt 镜像不再内置 nginx.conf; 容器入口根据 Compose 的环境变量渲染 nginx.conf.template.
+    log_info "client nginx 模板复制到 volume success"
 }
 
 # 复制 blog_client 配置文件
