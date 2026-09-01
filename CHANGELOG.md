@@ -5,6 +5,78 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.3.0] - 2026-07-31
+
+### ♻️ Refactor
+
+- 拆分日志核心并移除 run-single 入口
+- 优化独立镜像装配层与启动入口
+- 独立镜像构建资源嵌入
+- nginx 配置依赖 blog-client 不单独在入口文件中硬编码
+- Dockerfile 依赖 env 和 build 重构
+
+### ⚡️ Perf
+
+- 复用优化
+- 优化换源的逻辑
+
+### ✨ Feat
+
+- 增加阿里云服务器的识别
+- 增加独立镜像的环境构建和缓存，独立镜像构建和发布
+- 增加软件安装源
+- 增加一键卸载安装功能
+
+### 🐞 Fix
+
+- 换源安装软件和兜底
+- es 本地安装分词软件不去拉取远端
+- 镜像签名加入重试机制
+- 镜像拉取源选择重构, 用统一 fallback 链取代区域探测
+- blog-tool-dev 独立镜像构建自动来取 server 和 client
+- redis 安装验证码和 pgsql 使用版本
+- 优化镜像层数
+- 通用下载统一到 ubuntu-apt-base
+- 移除多余的 ARG
+- 移除在容器安装阶段的冗余拉取动作
+- 镜像拉取失败兜底
+- wsl 中 Ubuntu 安装 docker 卡死的情况
+- es 本地安装分词软件不去拉取远端
+- wsl 中内网无法识别的问题
+- 安装软件使用临时换源即安装后还原原来的源
+- 回滚到 0336434 并再次尝试修复02
+- 避免 Ubuntu WSL 在服务在安装 docker 阶段卡住，临时换源只涉及基础软件安装
+- 避免 Ubuntu WSL 在服务在安装 docker 阶段卡住，同时把 apt 安装日志放出来，能看到真实进度
+- 内网 ip 正确识别
+- es 本地安装分词软件不去拉取远端
+- 增加 docker_get_base_image_with_region
+- es 插件安装使用区域分流策略
+- 使用  apt-get 非交互模式执行安装
+- es 本地安装分词软件不去拉取远端
+- **auto-install:** 修复零交互安装的换源与依赖探测
+- **single:** 移除 Redis SHA 硬编码并改进源码包版本校验
+
+### 💥 Boom
+
+- 重构单镜像构建的逻辑直接复用 server 和 client 不单独用源码构建
+- 处理相同镜像重复推送和签名的问题，同时调整推送命令策略
+
+### 📝 Docs
+
+- 增加独立镜像运行校验
+- 入口文件路径说明
+- update agents
+
+### 📦 Build
+
+- 升级依赖，重点 nginx 修复 CVE-2026-9256
+- 延迟自建证书有效期到 100 年
+- 构建缓存利用
+- 裁剪单镜像底座中的无用运行时文件
+- pgsql 18.4
+- 优化 wsl 中的一些列问题后的 build
+- es update to 9.3.4
+
 ## [v1.2.0] - 2026-04-30
 
 ### ♻️ Refactor
