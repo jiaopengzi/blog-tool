@@ -73,10 +73,10 @@ docker_build_server_env() {
         git_clone_cd "blog-server-dev"
 
         # 运行 Dockerfile_golang
-        sudo docker build --no-cache -t blog-server:golang -f Dockerfile_golang .
+        sudo docker build --no-cache --progress=plain -t blog-server:golang -f Dockerfile_golang .
 
         # # 运行 Dockerfile_alpine
-        # sudo docker build --no-cache -t blog-server:alpine -f Dockerfile_alpine .
+        # sudo docker build --no-cache --progress=plain -t blog-server:alpine -f Dockerfile_alpine .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
@@ -105,7 +105,7 @@ docker_build_server() {
         git_clone_cd "blog-server-dev"
 
         # # 运行 Dockerfile
-        # sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/blog-server:build" -f Dockerfile_dev .
+        # sudo docker build --no-cache --progress=plain -t "$REGISTRY_REMOTE_SERVER/blog-server:build" -f Dockerfile_dev .
 
         # 查看私钥路径前16个字符, 确保环境变量传递正确
         log_info "sign_key 前16个字符: ${sign_key:0:16}"

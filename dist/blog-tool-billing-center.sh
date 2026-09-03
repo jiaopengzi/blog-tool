@@ -6691,7 +6691,7 @@ docker_build_billing_center() {
 
         git_clone_cd "billing-center"
 
-        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/billing-center:build" -f Dockerfile_dev .
+        sudo docker build --no-cache --progress=plain -t "$REGISTRY_REMOTE_SERVER/billing-center:build" -f Dockerfile_dev .
 
         cd "$ROOT_DIR" || exit
         log_debug "脚本所在目录 $(pwd)"

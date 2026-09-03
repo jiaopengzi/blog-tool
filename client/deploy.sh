@@ -71,7 +71,7 @@ docker_build_client_env() {
         git_clone_cd "blog-client"
 
         # 运行 Dockerfile.env
-        sudo docker build --no-cache -t blog-client:env -f Dockerfile.env .
+        sudo docker build --no-cache --progress=plain -t blog-client:env -f Dockerfile.env .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
@@ -113,7 +113,7 @@ docker_build_client() {
         if [ "${GITHUB_ACTIONS}" = "true" ]; then
             img_tag="blog-client:build"
         fi
-        sudo docker build --no-cache -t "$img_tag" -f "$dockerfile" .
+        sudo docker build --no-cache --progress=plain -t "$img_tag" -f "$dockerfile" .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit

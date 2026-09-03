@@ -248,8 +248,9 @@ should_skip_file() {
     return 1
 }
 
-# 追加单个脚本文件内容到目标文件(去除头部注释和 source 行)
+# 追加单个脚本文件内容到目标文件(去除头部注释和实际 source 命令行).
 # 参数: $1: 源文件路径, $2: 目标文件路径
+# 返回: 源文件不存在时返回 0, 否则将处理后的内容追加到目标文件.
 append_script_content() {
     local file="$1"
     local target_file="$2"
@@ -258,8 +259,8 @@ append_script_content() {
 
     {
         printf "### content from %s\n" "$file"
-        # 去除头部注释(从第一行到第一个空行)和 source 开头的行, 追加到目标文件
-        sed '1,/^$/d' "$file" | grep -vE '^\s*source'
+        # 仅去除 source 命令, 保留 source_repo 等以 source 开头的变量名.
+        sed '1,/^$/d' "$file" | grep -vE '^[[:space:]]*source[[:space:]]+'
         printf "\n" # 添加空行以分隔各文件内容
     } >>"$target_file"
 }

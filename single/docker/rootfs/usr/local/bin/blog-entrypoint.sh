@@ -52,6 +52,7 @@ BLOG_CLIENT_NGINX_DIR="$BLOG_DATA_DIR/blog-client/nginx"
 BLOG_CLIENT_NGINX_TEMPLATE_FILE="/opt/blog-client/nginx.conf.template"
 BLOG_CLIENT_REDIRECTS_MAP_FILE="/opt/blog-client/redirects.map"
 BLOG_CLIENT_MIME_TYPES_FILE="/opt/blog-client/mime.types"
+BLOG_CLIENT_RUNTIME_FILE="/opt/blog-client/runtime"
 BLOG_HTTPS_CERT_DIR="$BLOG_CLIENT_NGINX_DIR/ssl"
 BLOG_LEGACY_HTTPS_CERT_DIR="$BLOG_DATA_DIR/certs/https"
 BLOG_SERVER_DATA_DIR="$BLOG_DATA_DIR/blog-server"
@@ -197,7 +198,22 @@ normalize_public_host() {
     fi
 }
 
-# patch_client_nginx_config 调整已从 Nuxt 模板渲染的 nginx 配置以适配 single 端口.
+# client_runtime_is_nuxt 判断当前 single 镜像是否包含 Nuxt Nitro 服务端产物.
+# 参数: 无.
+# 返回: 当前客户端为 Nuxt SSR 时返回 0, SPA 或未检测到 Nitro 产物时返回非 0.
+client_runtime_is_nuxt() {
+    local client_runtime=""
+
+    if [[ -r "$BLOG_CLIENT_RUNTIME_FILE" ]]; then
+        client_runtime="$(tr -d '\r\n' <"$BLOG_CLIENT_RUNTIME_FILE")"
+        [[ "$client_runtime" == "nuxt" ]]
+        return
+    fi
+
+    [[ -f "/app/.output/server/index.mjs" ]]
+}
+
+# patch_client_nginx_config 调整客户端 nginx 配置以适配 single 端口.
 # 参数: 无.
 # 返回: 修改成功返回 0, sed 执行失败时返回非 0.
 patch_client_nginx_config() {
@@ -220,9 +236,9 @@ patch_client_nginx_config() {
     sed -ri "s|^([[:space:]]*listen[[:space:]]+\[::\]:)[0-9]+([[:space:]]+ssl;)|\\1${BLOG_HTTPS_PORT}\\2|" "$nginx_conf_file"
     sed -ri "0,/^[[:space:]]*return 301 https:\/\/\\\$host.*\\\$request_uri;$/s||            return 301 ${https_redirect_target};|" "$nginx_conf_file"
     sed -ri "s|^([[:space:]]*server_name[[:space:]]+)[^;]+;|\\1${BLOG_PUBLIC_HOST};|" "$nginx_conf_file"
-    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(/api/v1/sitemap;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
-    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(/api/;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
-    sed -ri "/^[[:space:]]*location[[:space:]]+~\\*.*uploads.*\\{/,/^[[:space:]]*\\}/ s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(/api/v1/sitemap;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(/api/;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "/^[[:space:]]*location[[:space:]]+~\\*.*uploads.*\\{/,/^[[:space:]]*\\}/ s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
     sed -ri "/^[[:space:]]*location[[:space:]]+\/[[:space:]]*\\{/,/^[[:space:]]*\\}/ s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(;)|\\1${nitro_proxy_url}\\2|" "$nginx_conf_file"
 }
 
@@ -237,28 +253,28 @@ prepare_nitro_runtime() {
     export NODE_ENV="${NODE_ENV:-production}"
 }
 
-# client_nginx_config_is_spa 判断持久化 nginx.conf 是否仍使用 SPA 根路由入口.
+# client_nginx_config_is_nuxt 判断持久化 nginx.conf 是否已使用 Nuxt Nitro 根路由代理.
 # 参数: $1: nginx.conf 文件路径.
-# 返回: 根路由包含 try_files 和 /index.html 时返回 0, 否则返回非 0.
-client_nginx_config_is_spa() {
+# 返回: 根路由包含本机 Nitro proxy_pass 时返回 0, 否则返回非 0.
+client_nginx_config_is_nuxt() {
     local nginx_conf_file="$1"
 
     awk '
         /^[[:space:]]*location[[:space:]]+\/[[:space:]]*\{/ { in_root_location=1; next }
         in_root_location && /^[[:space:]]*\}/ { exit }
-        in_root_location && /^[[:space:]]*try_files[[:space:]].*\/index\.html;/ { is_spa=1; exit }
-        END { exit(is_spa ? 0 : 1) }
+        in_root_location && /^[[:space:]]*proxy_pass[[:space:]]+http:\/\/127\.0\.0\.1:[0-9]+;[[:space:]]*$/ { is_nuxt=1; exit }
+        END { exit(is_nuxt ? 0 : 1) }
     ' "$nginx_conf_file"
 }
 
-# migrate_legacy_client_nginx_config 备份 SPA nginx.conf, 让首次 Nuxt 启动重新渲染 SSR 配置.
+# migrate_legacy_client_nginx_config 备份非 Nuxt nginx.conf, 让首次 Nuxt 启动重新渲染 SSR 配置.
 # 参数: $1: nginx.conf 文件路径.
-# 返回: 不是 SPA 配置或迁移成功时返回 0, 文件备份或删除失败时返回非 0.
+# 返回: 已是 Nuxt 配置或迁移成功时返回 0, 文件备份或删除失败时返回非 0.
 migrate_legacy_client_nginx_config() {
     local nginx_conf_file="$1"
     local backup_file="${nginx_conf_file}.pre-nuxt"
 
-    if [[ ! -f "$nginx_conf_file" ]] || ! client_nginx_config_is_spa "$nginx_conf_file"; then
+    if [[ ! -f "$nginx_conf_file" ]] || client_nginx_config_is_nuxt "$nginx_conf_file"; then
         return 0
     fi
 
@@ -272,10 +288,10 @@ migrate_legacy_client_nginx_config() {
         return 1
     fi
 
-    log_warn "检测到旧 SPA nginx 配置, 已备份为: $backup_file"
+    log_warn "检测到未使用 Nuxt Nitro 根路由代理的历史 nginx 配置, 已备份为: $backup_file"
 }
 
-# ensure_client_nginx_config 通过 Nuxt nginx 模板生成 single 运行时配置.
+# ensure_client_nginx_config 通过客户端 nginx 模板生成 single 运行时配置.
 # 参数: 无.
 # 返回: 生成成功返回 0, 模板或渲染工具缺失时退出容器.
 ensure_client_nginx_config() {
@@ -296,10 +312,12 @@ ensure_client_nginx_config() {
         cp -a --update=none "$BLOG_CLIENT_REDIRECTS_MAP_FILE" "$BLOG_CLIENT_NGINX_DIR/redirects.map"
     fi
     cp -a --update=none "$BLOG_CLIENT_MIME_TYPES_FILE" "$BLOG_CLIENT_NGINX_DIR/mime.types"
-    migrate_legacy_client_nginx_config "$nginx_conf_file" || exit 1
 
     # Nuxt 模板中的后端代理和 Nitro 运行时均直连 single 内的 blog-server.
-    prepare_nitro_runtime || exit 1
+    if client_runtime_is_nuxt; then
+        migrate_legacy_client_nginx_config "$nginx_conf_file" || exit 1
+        prepare_nitro_runtime || exit 1
+    fi
     export NGINX_SERVER_NAME="$BLOG_PUBLIC_HOST"
 
     if [[ ! -f "$nginx_conf_file" ]]; then
@@ -1042,6 +1060,11 @@ wait_for_blog_server() {
 # 参数: 无.
 # 返回: 成功后记录 NITRO_PID, 启动失败由后续就绪检查终止容器.
 start_nitro() {
+    if ! client_runtime_is_nuxt; then
+        log_info "检测到 SPA 客户端产物, 跳过 Nuxt Nitro 启动"
+        return 0
+    fi
+
     prepare_nitro_runtime || exit 1
     node /app/.output/server/index.mjs &
     NITRO_PID=$!
@@ -1052,6 +1075,10 @@ start_nitro() {
 # 返回: 服务就绪返回 0, 进程退出或超时则退出容器.
 wait_for_nitro() {
     local retries=30
+
+    if ! client_runtime_is_nuxt; then
+        return 0
+    fi
 
     until (echo >/dev/tcp/127.0.0.1/"$BLOG_NITRO_PORT") >/dev/null 2>&1; do
         if ! kill -0 "$NITRO_PID" >/dev/null 2>&1; then
@@ -1068,13 +1095,13 @@ wait_for_nitro() {
     done
 }
 
-# start_nginx 渲染 Nuxt nginx 模板后启动 nginx 前台进程.
+# start_nginx 渲染客户端 nginx 模板后启动 nginx 前台进程.
 # 参数: 无.
 # 返回: 成功后记录 NGINX_PID, 配置渲染、校验或 nginx 启动失败时退出容器.
 start_nginx() {
     ensure_client_nginx_config
     if ! nginx -t; then
-        log_error "Nuxt nginx 配置校验失败"
+        log_error "客户端 nginx 配置校验失败"
         exit 1
     fi
     nginx -g 'daemon off;' &
@@ -1150,6 +1177,8 @@ show_boot_summary() {
 }
 
 main() {
+    local -a service_pids=()
+
     trap handle_signal INT TERM
 
     normalize_public_host
@@ -1180,7 +1209,12 @@ main() {
     record_pids
     show_boot_summary
 
-    if ! wait -n "$POSTGRES_PID" "$REDIS_PID" "$ES_PID" "$SERVER_PID" "$NITRO_PID" "$NGINX_PID"; then
+    service_pids=("$POSTGRES_PID" "$REDIS_PID" "$ES_PID" "$SERVER_PID" "$NGINX_PID")
+    if client_runtime_is_nuxt; then
+        service_pids+=("$NITRO_PID")
+    fi
+
+    if ! wait -n "${service_pids[@]}"; then
         local exit_code=$?
         log_error "检测到关键服务退出, 容器即将停止"
         stop_services

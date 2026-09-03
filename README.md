@@ -193,7 +193,35 @@ sudo bash blog-tool-dev.sh --build-single --server v1.0.0 --client v1.0.0
 sudo bash blog-tool-dev.sh --push-single --repo
 ```
 
-`--build-single` 需要显式传入 `--server` 与 `--client`。脚本会直接拉取 `jiaopengzi/blog-server:<version>` 和 `jiaopengzi/blog-client:<version>` 参与装配, 然后基于这两个版本自动计算 single 版本, 并保存给后续 `--push-single` 使用。构建结束后会自动清理本地临时拉取的这两个前后端镜像 tag。
+`--build-single` 需要显式传入 `--server` 与 `--client`。脚本会直接拉取
+`jiaopengzi/blog-server:<version>` 和 `jiaopengzi/blog-client:<version>` 参与装配, 然后基于这两个版本自动计算
+single 版本, 并保存给后续 `--push-single` 使用。构建结束后会自动清理本地临时拉取的这两个前后端镜像 tag。
+
+### 2. 从源码全量构建单镜像
+
+需要验证指定前后端源码或重新编译既有版本时, 在 `--build-single` 后增加 `--source-code`。该模式会在
+single 构建上下文中创建隔离浅克隆, 不会切换或修改现有的 `blog-client`、`blog-server-dev` 开发工作区。
+
+后端完整 `Dockerfile` 使用 BuildKit `sign_key` secret 对二进制签名, 因此必须传入可读取的
+blog-server 产物签名私钥 `SIGN_PRIVATE_KEY`, 与 GitLab CI 的构建命令保持一致. 此私钥不同于
+用于镜像签名的 `COSIGN_PRIVATE_KEY`, 不可传入加密 cosign 密钥文件:
+
+```bash
+sudo SIGN_PRIVATE_KEY=/absolute/path/to/sign_key.pem \
+  bash blog-tool-dev.sh --build-single --source-code --server v1.0.1 --client v1.0.1
+```
+
+`vX.Y.Z` 会精确检出同名 Git tag; `latest` 会检出默认分支的最新提交:
+
+```bash
+sudo SIGN_PRIVATE_KEY=/absolute/path/to/sign_key.pem \
+  bash blog-tool-dev.sh --build-single --source-code --server latest --client latest
+```
+
+源码模式对前后端均使用仓库根目录的完整 `Dockerfile` 和 `--no-cache` 全量构建。源码临时目录及前后端临时
+输入镜像会在 single 装配结束后清理; `v1.0.1` 的 SPA 与 Nuxt SSR 客户端产物都可装配为同一个 single 镜像。
+
+**注意 blog-server 1.0.1 使用的是 go 1.26.5 最新的已经升级到了 1.27.1 编译上会有不兼容**
 
 `--push-single` 需要显式指定至少一个远端仓库, 支持按需组合 `--repo`、`--tencent`、`--docker-hub`:
 
@@ -212,7 +240,7 @@ sudo bash blog-tool-dev.sh --push-single --repo --tencent --docker-hub
 
 当目标仓库凭据未配置时, 对应仓库推送会自动跳过, 不影响其它已显式选择的仓库。
 
-### 2. 运行独立镜像
+### 3. 运行独立镜像
 
 独立镜像约定只挂载一个总目录, 默认使用 HTTPS, 并在首次启动时自动生成 CA 证书与 HTTPS 证书。若第二次启动发现证书已存在, 则不会重复生成。
 

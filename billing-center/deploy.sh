@@ -71,10 +71,10 @@ docker_build_billing_center_env() {
         git_clone_cd "billing-center"
 
         # 运行 Dockerfile_golang
-        sudo docker build --no-cache -t billing-center:golang -f Dockerfile_golang .
+        sudo docker build --no-cache --progress=plain -t billing-center:golang -f Dockerfile_golang .
 
         # 运行 Dockerfile_pnpm
-        sudo docker build --no-cache -t billing-center:pnpm -f Dockerfile_pnpm .
+        sudo docker build --no-cache --progress=plain -t billing-center:pnpm -f Dockerfile_pnpm .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
@@ -98,7 +98,7 @@ docker_build_billing_center() {
         git_clone_cd "billing-center"
 
         # 运行 Dockerfile
-        sudo docker build --no-cache -t "$REGISTRY_REMOTE_SERVER/billing-center:build" -f Dockerfile_dev .
+        sudo docker build --no-cache --progress=plain -t "$REGISTRY_REMOTE_SERVER/billing-center:build" -f Dockerfile_dev .
 
         # 回到脚本所在目录
         cd "$ROOT_DIR" || exit
