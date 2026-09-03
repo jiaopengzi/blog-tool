@@ -413,9 +413,12 @@ show_panel() {
     ssl_msg "$GREEN"
 }
 
-# 启动 client 容器
+# docker_client_start 在启动前迁移 nginx 配置并启动 client 容器.
+# 参数: 无.
+# 返回: 配置迁移和 Docker Compose 启动成功时返回 0, 失败时返回非 0.
 docker_client_start() {
     log_debug "run docker_client_start"
+    client_migrate_runtime_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_CLIENT" -p "$DOCKER_COMPOSE_PROJECT_NAME_CLIENT" up -d
 
     # 修改证书目录权限

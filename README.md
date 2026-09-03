@@ -145,6 +145,40 @@ sudo bash blog-tool.sh --uninstall
 | 计费中心版 | `blog-tool-billing-center.sh` | 计费中心部署 |
 | 开发版 | `blog-tool-dev.sh` | 含全部功能，面向开发者 |
 
+## 指定 tag 重建后端镜像
+
+开发版提供 `docker_build_push_server_by_tag`，用于恢复或重建已发布的后端版本。GitLab tag pipeline 中，
+该命令优先复用 `$CI_PROJECT_DIR` 的精确 checkout；本地执行时才将指定的 `blog-server-dev` Git tag 浅克隆到
+独立的临时构建目录。它直接使用标准 `Dockerfile` 做全量构建，然后强制覆盖私有仓库、Docker Hub 和腾讯云仓库
+中的同名版本 tag。它不会构建 `blog-server:golang` 环境镜像，也不会更新三个仓库的 `latest` tag。
+
+在 GitLab tag pipeline 中可使用如下命令，其中 `SIGN_PRIVATE_KEY`、`COSIGN_PRIVATE_KEY` 是 GitLab 的
+File 类型变量，其他密钥和凭据应配置为受保护的 CI/CD 变量：
+
+```bash
+sudo SIGN_PRIVATE_KEY="$SIGN_PRIVATE_KEY" \
+  COSIGN_PRIVATE_KEY="$COSIGN_PRIVATE_KEY" \
+  COSIGN_PRIVATE_KEY_PWD="$COSIGN_PRIVATE_KEY_PWD" \
+  SERVER_TAG_BUILD_SOURCE_DIR="$CI_PROJECT_DIR" \
+  REGISTRY_REMOTE_SERVER="$REGISTRY_REMOTE_SERVER" \
+  REGISTRY_USER_NAME="$REGISTRY_USER_NAME" \
+  REGISTRY_PASSWORD="$REGISTRY_PASSWORD" \
+  DOCKER_HUB_TOKEN="$DOCKER_HUB_TOKEN" \
+  REGISTRY_USER_NAME_TENCENT="$REGISTRY_USER_NAME_TENCENT" \
+  REGISTRY_PASSWORD_TENCENT="$REGISTRY_PASSWORD_TENCENT" \
+  bash /home/jiaopengzi/blog-tool-dev.sh docker_build_push_server_by_tag "$CI_COMMIT_TAG"
+```
+
+本地或手动流水线也可显式传入版本，例如：
+
+```bash
+sudo bash blog-tool-dev.sh docker_build_push_server_by_tag v1.0.1
+```
+
+`SERVER_TAG_BUILD_SOURCE_DIR` 应在 GitLab 命令中显式传入，因为 `sudo` 默认不会保留 `CI_PROJECT_DIR`。GitLab
+tag pipeline 无需 `GIT_LOCAL`；本地或非 tag pipeline 执行时才需要它来克隆指定源码。`DOCKER_HUB_OWNER` 和
+`REGISTRY_REMOTE_SERVER_TENCENT` 已有工具默认值，但可按部署环境覆盖。
+
 ## 单镜像构建
 
 开发版 `--build-single` 命令, 用于将 `blog-client`、`blog-server-dev`、PostgreSQL、Redis、Elasticsearch 打包为一个独立镜像 `blog`。

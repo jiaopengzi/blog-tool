@@ -399,6 +399,67 @@ docker_remove_local_tagged_images() {
     log_info "删除本地 tag 镜像成功: $image_name:$image_tag, $image_name:latest"
 }
 
+# docker_tag_push_image_version_force 强制推送单个版本 tag, 不更新 latest.
+# 参数: $1: 本地源镜像引用. $2: 远端镜像前缀. $3: 登录主机. $4: 用户名.
+# 参数: $5: 密码. $6: 项目名. $7: 版本号. $8: 推送阶段说明.
+# 返回: 打标签、推送和签名全部成功时返回 0, 任一步骤失败时返回非 0.
+docker_tag_push_image_version_force() {
+    log_debug "run docker_tag_push_image_version_force"
+
+    local source_image="$1"
+    local registry_prefix="$2"
+    local login_host="$3"
+    local registry_user="$4"
+    local registry_password="$5"
+    local project="$6"
+    local version="$7"
+    local stage_name="$8"
+    local docker_tag_version=""
+    local remote_image=""
+    local push_status=0
+
+    if [[ -z "$source_image" || -z "$registry_prefix" || -z "$login_host" ]] \
+        || [[ -z "$registry_user" || -z "$registry_password" ]] \
+        || [[ -z "$project" || -z "$version" || -z "$stage_name" ]]; then
+        log_error "${stage_name:-镜像}推送失败, 参数不能为空"
+        return 1
+    fi
+
+    docker_tag_version="$(semver_to_docker_tag "$version")" || return 1
+    remote_image="$registry_prefix/$project"
+
+    if ! sudo docker image inspect "$source_image" >/dev/null 2>&1; then
+        log_error "$stage_name 推送失败, 本地源镜像不存在: $source_image"
+        return 1
+    fi
+
+    if ! sudo docker tag "$source_image" "$remote_image:$docker_tag_version"; then
+        log_error "$stage_name 推送失败, 无法打标签: $remote_image:$docker_tag_version"
+        return 1
+    fi
+
+    if ! docker_login_retry "$login_host" "$registry_user" "$registry_password"; then
+        sudo docker image rm "$remote_image:$docker_tag_version" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    if ! timeout_retry_docker_push "$registry_prefix" "$project" "$docker_tag_version"; then
+        push_status=1
+    elif ! docker_sign_pushed_image "$remote_image" "$docker_tag_version" "${COSIGN_PRIVATE_KEY:-}"; then
+        push_status=1
+    fi
+
+    sudo docker logout "$login_host" >/dev/null 2>&1 || true
+
+    if [[ $push_status -ne 0 ]]; then
+        log_error "$stage_name 推送或签名失败: $remote_image:$docker_tag_version"
+        return "$push_status"
+    fi
+
+    sudo docker image rm "$remote_image:$docker_tag_version" >/dev/null 2>&1 || true
+    log_info "$stage_name 已强制推送指定版本 tag: $remote_image:$docker_tag_version"
+}
+
 # 镜像打标签并推送到 docker hub
 docker_tag_push_docker_hub() {
     log_debug "run docker_tag_push_docker_hub"

@@ -2,7 +2,7 @@
 # blog 单镜像 Dockerfile
 # 1. 直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像.
 
-ARG NODE_VERSION=24.18.1
+ARG NODE_VERSION=24.20.0
 ARG UBUNTU_VERSION=24.04
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
@@ -12,6 +12,9 @@ ARG NGINX_VERSION=1.31.3
 ARG CLIENT_IMAGE=jiaopengzi/blog-client:latest
 ARG SERVER_IMAGE=jiaopengzi/blog-server:latest
 ARG BLOG_ENV_IMAGE=blog-env-fallback
+
+# Nuxt 构建产物来自 Alpine 客户端镜像, Node 和原生依赖必须保持 musl ABI 一致.
+FROM node:${NODE_VERSION}-alpine AS node-runtime
 
 FROM scratch AS cached-assets
 
@@ -46,6 +49,7 @@ RUN set -eux; \
     bash \
     ca-certificates \
     curl \
+    gettext-base \
     openssl \
     tzdata; \
     apt-get clean; \
@@ -212,6 +216,10 @@ RUN set -eux; \
 COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-cli /usr/local/bin/
 COPY --from=redis-binaries /usr/local/lib/redis /usr/local/lib/redis
 COPY --chown=elasticsearch:elasticsearch --from=elasticsearch-with-ik /opt/elasticsearch /opt/elasticsearch
+# 复制 Alpine Node 的最小 musl 运行时, 使 Nitro 产物中的 sharp 等 musl 原生模块可加载.
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1 /lib/
+COPY --from=node-runtime /usr/lib/libgcc_s.so.1 /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6.0.34 /usr/lib/
 
 VOLUME ["/data"]
 
@@ -223,14 +231,18 @@ COPY --chown=blog-server:blog-server --from=server-artifacts /usr/local/bin/ffpr
 COPY --chown=blog-server:blog-server --from=server-artifacts /home/blog-server /home/blog-server
 
 COPY --chown=blog-server:blog-server --from=client-artifacts /usr/share/nginx/html /usr/share/nginx/html
-COPY --chown=blog-server:blog-server --from=client-artifacts /etc/nginx /etc/nginx
+# Nuxt SSR 必须保留 Nitro 服务端产物; .output/public 是指向 html 的 symlink, 两端共用静态资源.
+COPY --chown=blog-server:blog-server --from=client-artifacts /app/.output /app/.output
+# 新版客户端只提供 nginx 模板, single 在运行时按本机端口和域名渲染最终配置.
+COPY --from=client-artifacts /etc/nginx/nginx.conf.template /opt/blog-client/nginx.conf.template
+COPY --from=client-artifacts /etc/nginx/redirects.map /opt/blog-client/redirects.map
+# nginx.conf.template 通过相对路径引用 mime.types, 初始化持久化配置目录时必须一并带入.
+COPY --from=client-artifacts /etc/nginx/mime.types /opt/blog-client/mime.types
 
 # rootfs 按容器绝对路径组织, 这里直接复制到 / 后, rootfs/usr/local/bin/blog-entrypoint.sh 会落到镜像内 /usr/local/bin/blog-entrypoint.sh.
 COPY single/docker/rootfs/ /
 
-RUN mkdir -p /opt/blog-client \
-    && cp -a /etc/nginx /opt/blog-client/nginx-template \
-    && chmod +x /usr/local/bin/blog-entrypoint.sh /home/blog-server/blog-server /home/blog-server/boot \
+RUN chmod +x /usr/local/bin/blog-entrypoint.sh /home/blog-server/blog-server /home/blog-server/boot \
     && chown -R blog-server:blog-server /home/blog-server
 
 VOLUME ["/data"]

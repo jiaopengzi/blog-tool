@@ -86,6 +86,7 @@ OPTIONS_ALL=(
     "仅推送单镜像:docker_push_single"
     "server 产物复制到本地:server_artifacts_copy_to_local"
     "构建并推送 server:docker_build_push_server"
+    "按指定 tag 全量构建并推送 server:docker_build_push_server_by_tag"
     "仅构建 server:docker_build_server"
     "仅推送 server:docker_push_server"
     "client 产物复制到本地:client_artifacts_copy_to_local"

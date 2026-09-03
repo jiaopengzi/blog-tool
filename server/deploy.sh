@@ -129,6 +129,239 @@ docker_build_server() {
     log_timer "构建 blog-server 镜像" run
 }
 
+# server_ci_project_matches_tag 判断指定 GitLab 工作目录是否为目标 tag 的后端源码.
+# 参数: $1: 后端发行版本 tag.
+# 返回: 当前 CI 工作目录或 SERVER_TAG_BUILD_SOURCE_DIR 可安全作为构建上下文时返回 0, 否则返回非 0.
+server_ci_project_matches_tag() {
+    local version="$1"
+    local ci_project_dir="${SERVER_TAG_BUILD_SOURCE_DIR:-${CI_PROJECT_DIR:-}}"
+    local actual_tag=""
+
+    if [[ -z "$ci_project_dir" ]] \
+        || ! git -C "$ci_project_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+        || [[ ! -f "$ci_project_dir/Dockerfile" ]] \
+        || [[ ! -f "$ci_project_dir/Makefile" ]] \
+        || [[ ! -d "$ci_project_dir/config" ]]; then
+        return 1
+    fi
+
+    if [[ "${CI_COMMIT_TAG:-}" == "$version" ]]; then
+        return 0
+    fi
+
+    actual_tag="$(git -C "$ci_project_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    [[ "$actual_tag" == "$version" ]]
+}
+
+# server_require_tag_publish_environment 校验指定 tag 全量构建及三仓库推送所需环境变量.
+# 参数: $1: 后端发行版本 tag.
+# 返回: 所有变量和签名工具可用时返回 0, 缺少配置时返回非 0.
+server_require_tag_publish_environment() {
+    local version="$1"
+    local required_var=""
+    local -a required_vars=(
+        "SIGN_PRIVATE_KEY"
+        "COSIGN_PRIVATE_KEY"
+        "COSIGN_PRIVATE_KEY_PWD"
+        "REGISTRY_REMOTE_SERVER"
+        "REGISTRY_USER_NAME"
+        "REGISTRY_PASSWORD"
+        "DOCKER_HUB_REGISTRY"
+        "DOCKER_HUB_OWNER"
+        "DOCKER_HUB_TOKEN"
+        "REGISTRY_REMOTE_SERVER_TENCENT"
+        "REGISTRY_USER_NAME_TENCENT"
+        "REGISTRY_PASSWORD_TENCENT"
+    )
+
+    if ! server_ci_project_matches_tag "$version" \
+        && [[ -z "${GIT_LOCAL:-}" || "${GIT_LOCAL:-}" == ":${GIT_USER:-}" ]]; then
+        log_error "当前不是目标 GitLab tag 工作目录, 请配置 GIT_LOCAL 以克隆 blog-server-dev:$version"
+        return 1
+    fi
+
+    for required_var in "${required_vars[@]}"; do
+        if [[ -z "${!required_var:-}" ]]; then
+            log_error "指定 tag 发布缺少必需环境变量: $required_var"
+            return 1
+        fi
+    done
+
+    if [[ ! -r "$SIGN_PRIVATE_KEY" ]]; then
+        log_error "指定 tag 发布缺少可读取的 SIGN_PRIVATE_KEY 文件"
+        return 1
+    fi
+
+    docker_check_cosign || return 1
+}
+
+# server_create_tag_build_context 将指定 Git tag 浅克隆到独立构建目录.
+# 参数: $1: 后端发行版本 tag.
+# 返回: 成功时输出构建目录路径, tag 不存在或校验失败时返回非 0.
+server_create_tag_build_context() {
+    local version="$1"
+    local context_parent_dir="$BLOG_TOOL_ENV/server-tag-build"
+    local context_dir=""
+    local actual_tag=""
+
+    if ! sudo mkdir -p "$context_parent_dir"; then
+        log_error "创建指定 tag 构建目录失败: $context_parent_dir"
+        return 1
+    fi
+
+    context_dir="$(sudo mktemp -d "$context_parent_dir/blog-server-dev.${version}.XXXXXX")" || {
+        log_error "创建指定 tag 临时构建目录失败: $context_parent_dir"
+        return 1
+    }
+
+    if ! sudo git clone --depth 1 --branch "$version" "$GIT_LOCAL/blog-server-dev.git" "$context_dir"; then
+        sudo rm -rf "$context_dir"
+        log_error "克隆 blog-server-dev 指定 tag 失败: $version"
+        return 1
+    fi
+
+    actual_tag="$(sudo git -C "$context_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    if [[ "$actual_tag" != "$version" ]]; then
+        sudo rm -rf "$context_dir"
+        log_error "指定构建目录未检出目标 tag, 期望: $version, 实际: ${actual_tag:-未知}"
+        return 1
+    fi
+
+    printf '%s\n' "$context_dir"
+}
+
+# server_remove_tag_build_context 删除指定 tag 的临时源码构建目录.
+# 参数: $1: 临时源码构建目录.
+# 返回: 目录删除成功或目录不存在时返回 0, 删除失败时返回非 0.
+server_remove_tag_build_context() {
+    local context_dir="$1"
+
+    if [[ -z "$context_dir" || ! -e "$context_dir" ]]; then
+        return 0
+    fi
+
+    if ! sudo rm -rf "$context_dir"; then
+        log_warn "删除指定 tag 构建目录失败, 请手动清理: $context_dir"
+        return 1
+    fi
+}
+
+# server_build_full_image_by_tag 使用标准 Dockerfile 全量构建指定 tag 的后端镜像.
+# 参数: $1: 后端发行版本 tag. $2: 签名私钥文件路径, 省略时使用 SIGN_PRIVATE_KEY.
+# 返回: 构建成功时输出本地镜像引用, 构建或源码校验失败时返回非 0.
+server_build_full_image_by_tag() {
+    local version="$1"
+    local sign_key="${2:-$SIGN_PRIVATE_KEY}"
+    local docker_tag_version=""
+    local local_image=""
+    local context_dir=""
+    local should_remove_context="false"
+    local build_status=0
+
+    docker_tag_version="$(semver_to_docker_tag "$version")" || return 1
+    local_image="blog-server:tag-build-$docker_tag_version"
+
+    if server_ci_project_matches_tag "$version"; then
+        context_dir="${SERVER_TAG_BUILD_SOURCE_DIR:-$CI_PROJECT_DIR}"
+        log_info "复用 GitLab 指定 tag 工作目录构建: $context_dir"
+    else
+        context_dir="$(server_create_tag_build_context "$version")" || return 1
+        should_remove_context="true"
+    fi
+
+    log_info "开始使用标准 Dockerfile 全量构建 blog-server: $version"
+
+    if ! (
+        cd "$context_dir" || exit 1
+        sudo DOCKER_BUILDKIT=1 docker build --no-cache \
+            --secret id=sign_key,src="$sign_key" \
+            -t "$local_image" \
+            -f Dockerfile .
+    ); then
+        build_status=1
+    fi
+
+    if [[ "$should_remove_context" == "true" ]]; then
+        server_remove_tag_build_context "$context_dir" || true
+    fi
+
+    if [[ $build_status -ne 0 ]]; then
+        log_error "指定 tag 全量构建失败: $version"
+        return "$build_status"
+    fi
+
+    docker_clear_cache
+    printf '%s\n' "$local_image"
+}
+
+# server_push_tagged_image_to_registries 将指定版本镜像强制推送到私有仓库、Docker Hub 和腾讯云.
+# 参数: $1: 本地镜像引用. $2: 后端发行版本 tag.
+# 返回: 三个仓库均完成版本 tag 推送和签名时返回 0, 任一失败时返回非 0.
+server_push_tagged_image_to_registries() {
+    local local_image="$1"
+    local version="$2"
+    local private_login_host="${REGISTRY_REMOTE_SERVER%%/*}"
+    local tencent_login_host="${REGISTRY_REMOTE_SERVER_TENCENT%%/*}"
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$REGISTRY_REMOTE_SERVER" \
+        "$private_login_host" \
+        "$REGISTRY_USER_NAME" \
+        "$REGISTRY_PASSWORD" \
+        "blog-server" \
+        "$version" \
+        "私有仓库" || return 1
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$DOCKER_HUB_OWNER" \
+        "$DOCKER_HUB_REGISTRY" \
+        "$DOCKER_HUB_OWNER" \
+        "$DOCKER_HUB_TOKEN" \
+        "blog-server" \
+        "$version" \
+        "Docker Hub" || return 1
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$REGISTRY_REMOTE_SERVER_TENCENT" \
+        "$tencent_login_host" \
+        "$REGISTRY_USER_NAME_TENCENT" \
+        "$REGISTRY_PASSWORD_TENCENT" \
+        "blog-server" \
+        "$version" \
+        "腾讯云仓库" || return 1
+}
+
+# docker_build_push_server_by_tag 全量构建指定发行 tag 并强制推送其版本镜像到三个仓库.
+# 参数: $1: 后端发行版本 tag, 省略时使用 CI_COMMIT_TAG.
+# 返回: 构建、三个仓库推送和签名均成功时返回 0, 参数或任一步骤失败时返回非 0.
+docker_build_push_server_by_tag() {
+    log_debug "run docker_build_push_server_by_tag"
+
+    local version="${1:-${CI_COMMIT_TAG:-}}"
+    local local_image=""
+
+    if [[ $# -gt 1 ]]; then
+        log_error "指定 tag 发布仅支持一个版本参数"
+        return 1
+    fi
+
+    version="$(printf '%s' "$version" | tr -d '\r\n')"
+    if ! version_is_pro "$version"; then
+        log_error "指定 tag 必须为 vX.Y.Z 格式, 当前值: ${version:-未提供}"
+        return 1
+    fi
+
+    server_require_tag_publish_environment "$version" || return 1
+    local_image="$(server_build_full_image_by_tag "$version")" || return 1
+    server_push_tagged_image_to_registries "$local_image" "$version" || return 1
+
+    log_info "指定 tag 全量构建和三仓库发布完成: $version"
+    log_info "本地镜像保留为: $local_image"
+}
+
 # 创建 server 的临时容器并执行传入的函数
 docker_create_server_temp_container() {
     log_debug "run docker_create_server_temp_container"
@@ -364,9 +597,12 @@ wait_server_start() {
     log_info "blog-server 启动完成"
 }
 
-# 启动 server 容器
+# docker_server_start 在启动前迁移旧版持久化配置并启动 server 容器.
+# 参数: 无.
+# 返回: 配置迁移和 Docker Compose 启动成功时返回 0, 失败时返回非 0.
 docker_server_start() {
     log_debug "run docker_server_install"
+    server_migrate_legacy_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_SERVER" -p "$DOCKER_COMPOSE_PROJECT_NAME_SERVER" up -d
 
     # 修改配置目录权限

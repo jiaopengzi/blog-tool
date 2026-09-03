@@ -2244,6 +2244,63 @@ docker_remove_local_tagged_images() {
     log_info "删除本地 tag 镜像成功: $image_name:$image_tag, $image_name:latest"
 }
 
+docker_tag_push_image_version_force() {
+    log_debug "run docker_tag_push_image_version_force"
+
+    local source_image="$1"
+    local registry_prefix="$2"
+    local login_host="$3"
+    local registry_user="$4"
+    local registry_password="$5"
+    local project="$6"
+    local version="$7"
+    local stage_name="$8"
+    local docker_tag_version=""
+    local remote_image=""
+    local push_status=0
+
+    if [[ -z "$source_image" || -z "$registry_prefix" || -z "$login_host" ]] \
+        || [[ -z "$registry_user" || -z "$registry_password" ]] \
+        || [[ -z "$project" || -z "$version" || -z "$stage_name" ]]; then
+        log_error "${stage_name:-镜像}推送失败, 参数不能为空"
+        return 1
+    fi
+
+    docker_tag_version="$(semver_to_docker_tag "$version")" || return 1
+    remote_image="$registry_prefix/$project"
+
+    if ! sudo docker image inspect "$source_image" >/dev/null 2>&1; then
+        log_error "$stage_name 推送失败, 本地源镜像不存在: $source_image"
+        return 1
+    fi
+
+    if ! sudo docker tag "$source_image" "$remote_image:$docker_tag_version"; then
+        log_error "$stage_name 推送失败, 无法打标签: $remote_image:$docker_tag_version"
+        return 1
+    fi
+
+    if ! docker_login_retry "$login_host" "$registry_user" "$registry_password"; then
+        sudo docker image rm "$remote_image:$docker_tag_version" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    if ! timeout_retry_docker_push "$registry_prefix" "$project" "$docker_tag_version"; then
+        push_status=1
+    elif ! docker_sign_pushed_image "$remote_image" "$docker_tag_version" "${COSIGN_PRIVATE_KEY:-}"; then
+        push_status=1
+    fi
+
+    sudo docker logout "$login_host" >/dev/null 2>&1 || true
+
+    if [[ $push_status -ne 0 ]]; then
+        log_error "$stage_name 推送或签名失败: $remote_image:$docker_tag_version"
+        return "$push_status"
+    fi
+
+    sudo docker image rm "$remote_image:$docker_tag_version" >/dev/null 2>&1 || true
+    log_info "$stage_name 已强制推送指定版本 tag: $remote_image:$docker_tag_version"
+}
+
 docker_tag_push_docker_hub() {
     log_debug "run docker_tag_push_docker_hub"
     local project=$1
@@ -7567,6 +7624,76 @@ server_set_project_name() {
     log_info "server 设置 project name=$project_name success"
 }
 
+server_append_missing_config_entry() {
+    local config_file="$1"
+    local config_key="$2"
+    local config_entry="$3"
+
+    if [[ ! -f "$config_file" ]]; then
+        log_error "配置迁移失败, 未找到配置文件: $config_file"
+        return 1
+    fi
+
+    if grep -Eq "^[[:space:]]*${config_key}:" "$config_file"; then
+        return 0
+    fi
+
+    printf '\n%s\n' "$config_entry" | sudo tee -a "$config_file" >/dev/null || {
+        log_error "配置迁移失败, 无法追加 $config_key 到 $config_file"
+        return 1
+    }
+
+    log_info "server 配置已补齐缺失键: $config_key"
+}
+
+server_migrate_legacy_config() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+    local app_config_file="$config_dir/app.yaml"
+    local redis_config_file="$config_dir/redis.yaml"
+    local config_entry=""
+    local -a app_entries=(
+        'trusted_proxies: ["172.16.0.0/12", "127.0.0.1/8"]'
+        'visit_cookie_max_age: 31536000'
+        'cron_task_visit_stats: "0 7 * * * *"'
+        'cron_task_post_visit_stats: "0 12 * * * *"'
+    )
+    local -a redis_entries=(
+        'visit_pv_expire: 172800'
+        'visit_uv_expire: 604800'
+        'post_visit_pv_expire: 172800'
+        'ip_limit_visit_report: 3600'
+        'ip_limit_expire_visit_report: 3600'
+        'id_limit_visit_report: 600'
+        'id_limit_expire_visit_report: 3600'
+    )
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
+        return 0
+    fi
+
+    if [[ ! -f "$app_config_file" || ! -f "$redis_config_file" ]]; then
+        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
+        return 0
+    fi
+
+    for config_entry in "${app_entries[@]}"; do
+        server_append_missing_config_entry \
+            "$app_config_file" \
+            "${config_entry%%:*}" \
+            "$config_entry" || return 1
+    done
+
+    for config_entry in "${redis_entries[@]}"; do
+        server_append_missing_config_entry \
+            "$redis_config_file" \
+            "${config_entry%%:*}" \
+            "$config_entry" || return 1
+    done
+
+    log_info "server 旧版配置迁移完成"
+}
+
 copy_server_config() {
     log_debug "run copy_server_config"
     local web_set_db="${1-n}"
@@ -7650,6 +7777,193 @@ remove_server_volume() {
         sudo rm -rf "$DATA_VOLUME_DIR/blog-server"
         log_info "删除 $DATA_VOLUME_DIR/blog-server 目录成功"
     fi
+}
+
+server_ci_project_matches_tag() {
+    local version="$1"
+    local ci_project_dir="${SERVER_TAG_BUILD_SOURCE_DIR:-${CI_PROJECT_DIR:-}}"
+    local actual_tag=""
+
+    if [[ -z "$ci_project_dir" ]] \
+        || ! git -C "$ci_project_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+        || [[ ! -f "$ci_project_dir/Dockerfile" ]] \
+        || [[ ! -f "$ci_project_dir/Makefile" ]] \
+        || [[ ! -d "$ci_project_dir/config" ]]; then
+        return 1
+    fi
+
+    if [[ "${CI_COMMIT_TAG:-}" == "$version" ]]; then
+        return 0
+    fi
+
+    actual_tag="$(git -C "$ci_project_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    [[ "$actual_tag" == "$version" ]]
+}
+
+server_require_tag_publish_environment() {
+    local version="$1"
+    local required_var=""
+    local -a required_vars=(
+        "SIGN_PRIVATE_KEY"
+        "COSIGN_PRIVATE_KEY"
+        "COSIGN_PRIVATE_KEY_PWD"
+        "REGISTRY_REMOTE_SERVER"
+        "REGISTRY_USER_NAME"
+        "REGISTRY_PASSWORD"
+        "DOCKER_HUB_REGISTRY"
+        "DOCKER_HUB_OWNER"
+        "DOCKER_HUB_TOKEN"
+        "REGISTRY_REMOTE_SERVER_TENCENT"
+        "REGISTRY_USER_NAME_TENCENT"
+        "REGISTRY_PASSWORD_TENCENT"
+    )
+
+    if ! server_ci_project_matches_tag "$version" \
+        && [[ -z "${GIT_LOCAL:-}" || "${GIT_LOCAL:-}" == ":${GIT_USER:-}" ]]; then
+        log_error "当前不是目标 GitLab tag 工作目录, 请配置 GIT_LOCAL 以克隆 blog-server-dev:$version"
+        return 1
+    fi
+
+    for required_var in "${required_vars[@]}"; do
+        if [[ -z "${!required_var:-}" ]]; then
+            log_error "指定 tag 发布缺少必需环境变量: $required_var"
+            return 1
+        fi
+    done
+
+    if [[ ! -r "$SIGN_PRIVATE_KEY" ]]; then
+        log_error "指定 tag 发布缺少可读取的 SIGN_PRIVATE_KEY 文件"
+        return 1
+    fi
+
+    docker_check_cosign || return 1
+}
+
+server_create_tag_build_context() {
+    local version="$1"
+    local context_parent_dir="$BLOG_TOOL_ENV/server-tag-build"
+    local context_dir=""
+    local actual_tag=""
+
+    if ! sudo mkdir -p "$context_parent_dir"; then
+        log_error "创建指定 tag 构建目录失败: $context_parent_dir"
+        return 1
+    fi
+
+    context_dir="$(sudo mktemp -d "$context_parent_dir/blog-server-dev.${version}.XXXXXX")" || {
+        log_error "创建指定 tag 临时构建目录失败: $context_parent_dir"
+        return 1
+    }
+
+    if ! sudo git clone --depth 1 --branch "$version" "$GIT_LOCAL/blog-server-dev.git" "$context_dir"; then
+        sudo rm -rf "$context_dir"
+        log_error "克隆 blog-server-dev 指定 tag 失败: $version"
+        return 1
+    fi
+
+    actual_tag="$(sudo git -C "$context_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    if [[ "$actual_tag" != "$version" ]]; then
+        sudo rm -rf "$context_dir"
+        log_error "指定构建目录未检出目标 tag, 期望: $version, 实际: ${actual_tag:-未知}"
+        return 1
+    fi
+
+    printf '%s\n' "$context_dir"
+}
+
+server_remove_tag_build_context() {
+    local context_dir="$1"
+
+    if [[ -z "$context_dir" || ! -e "$context_dir" ]]; then
+        return 0
+    fi
+
+    if ! sudo rm -rf "$context_dir"; then
+        log_warn "删除指定 tag 构建目录失败, 请手动清理: $context_dir"
+        return 1
+    fi
+}
+
+server_build_full_image_by_tag() {
+    local version="$1"
+    local sign_key="${2:-$SIGN_PRIVATE_KEY}"
+    local docker_tag_version=""
+    local local_image=""
+    local context_dir=""
+    local should_remove_context="false"
+    local build_status=0
+
+    docker_tag_version="$(semver_to_docker_tag "$version")" || return 1
+    local_image="blog-server:tag-build-$docker_tag_version"
+
+    if server_ci_project_matches_tag "$version"; then
+        context_dir="${SERVER_TAG_BUILD_SOURCE_DIR:-$CI_PROJECT_DIR}"
+        log_info "复用 GitLab 指定 tag 工作目录构建: $context_dir"
+    else
+        context_dir="$(server_create_tag_build_context "$version")" || return 1
+        should_remove_context="true"
+    fi
+
+    log_info "开始使用标准 Dockerfile 全量构建 blog-server: $version"
+
+    if ! (
+        cd "$context_dir" || exit 1
+        sudo DOCKER_BUILDKIT=1 docker build --no-cache \
+            --secret id=sign_key,src="$sign_key" \
+            -t "$local_image" \
+            -f Dockerfile .
+    ); then
+        build_status=1
+    fi
+
+    if [[ "$should_remove_context" == "true" ]]; then
+        server_remove_tag_build_context "$context_dir" || true
+    fi
+
+    if [[ $build_status -ne 0 ]]; then
+        log_error "指定 tag 全量构建失败: $version"
+        return "$build_status"
+    fi
+
+    docker_clear_cache
+    printf '%s\n' "$local_image"
+}
+
+server_push_tagged_image_to_registries() {
+    local local_image="$1"
+    local version="$2"
+    local private_login_host="${REGISTRY_REMOTE_SERVER%%/*}"
+    local tencent_login_host="${REGISTRY_REMOTE_SERVER_TENCENT%%/*}"
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$REGISTRY_REMOTE_SERVER" \
+        "$private_login_host" \
+        "$REGISTRY_USER_NAME" \
+        "$REGISTRY_PASSWORD" \
+        "blog-server" \
+        "$version" \
+        "私有仓库" || return 1
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$DOCKER_HUB_OWNER" \
+        "$DOCKER_HUB_REGISTRY" \
+        "$DOCKER_HUB_OWNER" \
+        "$DOCKER_HUB_TOKEN" \
+        "blog-server" \
+        "$version" \
+        "Docker Hub" || return 1
+
+    docker_tag_push_image_version_force \
+        "$local_image" \
+        "$REGISTRY_REMOTE_SERVER_TENCENT" \
+        "$tencent_login_host" \
+        "$REGISTRY_USER_NAME_TENCENT" \
+        "$REGISTRY_PASSWORD_TENCENT" \
+        "blog-server" \
+        "$version" \
+        "腾讯云仓库" || return 1
 }
 
 docker_create_server_temp_container() {
@@ -7763,6 +8077,7 @@ wait_server_start() {
 
 docker_server_start() {
     log_debug "run docker_server_install"
+    server_migrate_legacy_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_SERVER" -p "$DOCKER_COMPOSE_PROJECT_NAME_SERVER" up -d
 
     setup_directory "$SERVER_UID" "$SERVER_GID" 700 "$DATA_VOLUME_DIR/blog-server"
@@ -7887,6 +8202,125 @@ networks: # 网络配置
 EOM
 
   log_info "$docker_compose_file 创建成功"
+}
+
+client_get_compose_image() {
+    local client_image=""
+
+    if [[ ! -f "$DOCKER_COMPOSE_FILE_CLIENT" ]]; then
+        log_error "未找到 client Compose 文件: $DOCKER_COMPOSE_FILE_CLIENT"
+        return 1
+    fi
+
+    client_image="$(awk '
+        /^[[:space:]]*image:[[:space:]]*/ {
+            sub(/^[[:space:]]*image:[[:space:]]*/, "")
+            print
+            exit
+        }
+    ' "$DOCKER_COMPOSE_FILE_CLIENT")"
+
+    if [[ -z "$client_image" ]]; then
+        log_error "未从 client Compose 文件读取到镜像: $DOCKER_COMPOSE_FILE_CLIENT"
+        return 1
+    fi
+
+    printf '%s\n' "$client_image"
+}
+
+client_image_has_nuxt_runtime_config() {
+    local client_image="$1"
+
+    sudo docker run --rm --entrypoint /bin/sh "$client_image" \
+        -c 'test -f /etc/nginx/nginx.conf.template' >/dev/null 2>&1
+}
+
+client_copy_nuxt_runtime_assets() {
+    local client_image="$1"
+    local nginx_dir="$2"
+    local temp_container="temp_container_blog_client_config_migration"
+    local copy_status=0
+
+    if ! sudo mkdir -p "$nginx_dir"; then
+        log_error "创建 client nginx 配置目录失败: $nginx_dir"
+        return 1
+    fi
+
+    sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
+    if ! sudo docker create --name "$temp_container" "$client_image" >/dev/null; then
+        log_error "创建 client 配置迁移临时容器失败: $client_image"
+        return 1
+    fi
+
+    if [[ ! -f "$nginx_dir/nginx.conf.template" ]] \
+        && ! sudo docker cp "$temp_container:/etc/nginx/nginx.conf.template" "$nginx_dir/nginx.conf.template"; then
+        log_error "复制 Nuxt nginx 模板失败: $client_image"
+        copy_status=1
+    fi
+
+    if [[ $copy_status -eq 0 && ! -f "$nginx_dir/mime.types" ]] \
+        && ! sudo docker cp "$temp_container:/etc/nginx/mime.types" "$nginx_dir/mime.types"; then
+        log_error "复制 Nuxt mime.types 失败: $client_image"
+        copy_status=1
+    fi
+
+    if [[ $copy_status -eq 0 && ! -f "$nginx_dir/redirects.map" ]]; then
+        if ! sudo docker cp "$temp_container:/etc/nginx/redirects.map" "$nginx_dir/redirects.map"; then
+            log_warn "Nuxt 镜像未提供 redirects.map, 跳过复制: $client_image"
+        fi
+    fi
+
+    sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
+    return "$copy_status"
+}
+
+client_migrate_runtime_config() {
+    local nginx_dir="$DATA_VOLUME_DIR/blog-client/nginx"
+    local nginx_conf_file="$nginx_dir/nginx.conf"
+    local nuxt_template_file="$nginx_dir/nginx.conf.template"
+    local spa_backup_file="${nginx_conf_file}.pre-nuxt"
+    local client_image=""
+
+    if [[ ! -d "$nginx_dir" ]]; then
+        log_debug "未发现持久化 client nginx 配置目录, 跳过迁移: $nginx_dir"
+        return 0
+    fi
+
+    client_image="$(client_get_compose_image)" || return 1
+    if ! sudo docker image inspect "$client_image" >/dev/null 2>&1; then
+        log_error "未找到 client 目标镜像, 无法迁移 nginx 配置: $client_image"
+        return 1
+    fi
+
+    if client_image_has_nuxt_runtime_config "$client_image"; then
+        if [[ ! -f "$nuxt_template_file" ]]; then
+            if [[ -f "$nginx_conf_file" && ! -f "$spa_backup_file" ]]; then
+                if ! sudo cp -a "$nginx_conf_file" "$spa_backup_file"; then
+                    log_error "备份旧 client nginx 配置失败: $nginx_conf_file"
+                    return 1
+                fi
+            fi
+
+            client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+            log_info "client nginx 配置已迁移为 Nuxt 模板运行模式"
+        elif [[ ! -f "$nginx_dir/mime.types" ]]; then
+            client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+        fi
+
+        setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 \
+            "$DATA_VOLUME_DIR/blog-client" \
+            "$nginx_dir" \
+            "$nginx_dir/ssl"
+        return 0
+    fi
+
+    if [[ -f "$spa_backup_file" ]]; then
+        if ! sudo cp -a "$spa_backup_file" "$nginx_conf_file"; then
+            log_error "恢复 SPA client nginx 配置失败: $spa_backup_file"
+            return 1
+        fi
+        log_info "client 已切回 SPA 镜像, 已恢复旧 nginx 配置"
+    fi
 }
 
 copy_client_config() {
@@ -8168,6 +8602,7 @@ show_panel() {
 
 docker_client_start() {
     log_debug "run docker_client_start"
+    client_migrate_runtime_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_CLIENT" -p "$DOCKER_COMPOSE_PROJECT_NAME_CLIENT" up -d
 
     setup_directory "$CLIENT_UID" "$CLIENT_GID" 700 \

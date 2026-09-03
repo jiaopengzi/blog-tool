@@ -3,7 +3,7 @@
 # Author      : jiaopengzi
 # Blog        : https://jiaopengzi.com
 # Copyright   : Copyright (c) 2025 by jiaopengzi, All Rights Reserved.
-# Description : blog 单镜像运行入口, 负责初始化并拉起 nginx、blog-server、PostgreSQL、Redis、Elasticsearch.
+# Description : blog 单镜像运行入口, 负责初始化并拉起 Nuxt Nitro、nginx、blog-server、PostgreSQL、Redis、Elasticsearch.
 # Note        : 此文件保留在 single/docker/rootfs/usr/local/bin, 是为了与容器内 /usr/local/bin/blog-entrypoint.sh 的落点保持一致.
 # Note        : single/docker/rootfs 目录按容器根文件系统布局组织, 构建时通过 COPY single/docker/rootfs/ / 直接还原到镜像内, 因此这里的目录层级来自容器路径映射, 不是源码层级设计过深.
 
@@ -31,6 +31,7 @@ BLOG_PUBLIC_HOST="${BLOG_PUBLIC_HOST:-${DOMAIN_NAME:-${HOST_INTRANET_IP:-localho
 BLOG_PROJECT_NAME="${BLOG_PROJECT_NAME:-blog}"
 BLOG_HTTPS_PORT="${BLOG_HTTPS_PORT:-443}"
 BLOG_SERVER_PORT="${BLOG_SERVER_PORT:-5426}"
+BLOG_NITRO_PORT="${BLOG_NITRO_PORT:-7364}"
 BLOG_PG_PORT="${BLOG_PG_PORT:-15432}"
 BLOG_REDIS_PORT="${BLOG_REDIS_PORT:-16379}"
 BLOG_ES_PORT="${BLOG_ES_PORT:-19200}"
@@ -48,7 +49,9 @@ BLOG_HTTPS_KEY_FILE="${BLOG_HTTPS_KEY_FILE:-}"
 
 BLOG_INTERNAL_CERT_DIR="$BLOG_DATA_DIR/certs/internal-ca"
 BLOG_CLIENT_NGINX_DIR="$BLOG_DATA_DIR/blog-client/nginx"
-BLOG_CLIENT_NGINX_TEMPLATE_DIR="/opt/blog-client/nginx-template"
+BLOG_CLIENT_NGINX_TEMPLATE_FILE="/opt/blog-client/nginx.conf.template"
+BLOG_CLIENT_REDIRECTS_MAP_FILE="/opt/blog-client/redirects.map"
+BLOG_CLIENT_MIME_TYPES_FILE="/opt/blog-client/mime.types"
 BLOG_HTTPS_CERT_DIR="$BLOG_CLIENT_NGINX_DIR/ssl"
 BLOG_LEGACY_HTTPS_CERT_DIR="$BLOG_DATA_DIR/certs/https"
 BLOG_SERVER_DATA_DIR="$BLOG_DATA_DIR/blog-server"
@@ -64,6 +67,7 @@ POSTGRES_PID=""
 REDIS_PID=""
 ES_PID=""
 SERVER_PID=""
+NITRO_PID=""
 NGINX_PID=""
 BLOG_HOST_MEM_MB="0"
 
@@ -193,12 +197,14 @@ normalize_public_host() {
     fi
 }
 
-# 将 blog-client 构建产物中的 nginx.conf 调整为 single 运行时配置.
-# 说明: 这里保留 blog-client 的原始结构, 仅替换 single 与 --auto 之间确实不同的参数.
+# patch_client_nginx_config 调整已从 Nuxt 模板渲染的 nginx 配置以适配 single 端口.
+# 参数: 无.
+# 返回: 修改成功返回 0, sed 执行失败时返回非 0.
 patch_client_nginx_config() {
     local nginx_conf_file="$BLOG_CLIENT_NGINX_DIR/nginx.conf"
-    local server_name_pattern='^([[:space:]]*)server_name[[:space:]]+(([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}|([0-9]{1,3}\.){3}[0-9]{1,3});'
-    local https_redirect_target='https://$host$request_uri'
+    local https_redirect_target="https://\$host\$request_uri"
+    local server_proxy_url="http://127.0.0.1:${BLOG_SERVER_PORT}"
+    local nitro_proxy_url="http://127.0.0.1:${BLOG_NITRO_PORT}"
 
     if [[ ! -f "$nginx_conf_file" ]]; then
         log_error "未找到 blog-client nginx.conf: $nginx_conf_file"
@@ -206,29 +212,102 @@ patch_client_nginx_config() {
     fi
 
     if [[ "$BLOG_HTTPS_PORT" != "443" ]]; then
-        https_redirect_target='https://$host:'"${BLOG_HTTPS_PORT}"'$request_uri'
+        https_redirect_target="https://\$host:${BLOG_HTTPS_PORT}\$request_uri"
     fi
 
     sed -ri "s|^([[:space:]]*)worker_processes[[:space:]]+[^;]+;|\\1worker_processes ${BLOG_NGINX_WORKER_PROCESSES};|" "$nginx_conf_file"
     sed -ri "s|^([[:space:]]*listen[[:space:]]+)[0-9]+([[:space:]]+ssl;)|\\1${BLOG_HTTPS_PORT}\\2|" "$nginx_conf_file"
     sed -ri "s|^([[:space:]]*listen[[:space:]]+\[::\]:)[0-9]+([[:space:]]+ssl;)|\\1${BLOG_HTTPS_PORT}\\2|" "$nginx_conf_file"
     sed -ri "0,/^[[:space:]]*return 301 https:\/\/\\\$host.*\\\$request_uri;$/s||            return 301 ${https_redirect_target};|" "$nginx_conf_file"
-    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(/api/v1/sitemap;)|\\1http://127.0.0.1:${BLOG_SERVER_PORT}\\2|" "$nginx_conf_file"
-    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(;)|\\1http://127.0.0.1:${BLOG_SERVER_PORT}\\2|" "$nginx_conf_file"
-    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://[^/;]+:[0-9]+(/api/;)|\\1http://127.0.0.1:${BLOG_SERVER_PORT}\\2|" "$nginx_conf_file"
-    sed -ri "s/$server_name_pattern/\\1server_name $BLOG_PUBLIC_HOST;/g" "$nginx_conf_file"
+    sed -ri "s|^([[:space:]]*server_name[[:space:]]+)[^;]+;|\\1${BLOG_PUBLIC_HOST};|" "$nginx_conf_file"
+    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(/api/v1/sitemap;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(/api/;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "/^[[:space:]]*location[[:space:]]+~\\*.*uploads.*\\{/,/^[[:space:]]*\\}/ s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(;)|\\1${server_proxy_url}\\2|" "$nginx_conf_file"
+    sed -ri "/^[[:space:]]*location[[:space:]]+\/[[:space:]]*\\{/,/^[[:space:]]*\\}/ s|^([[:space:]]*proxy_pass[[:space:]]+)http://127\.0\.0\.1:[0-9]+(;)|\\1${nitro_proxy_url}\\2|" "$nginx_conf_file"
 }
 
-# 初始化 single 使用的 nginx 目录, 与 --auto 的 client 配置复制语义保持一致.
-# 说明: 首次启动从镜像内模板复制 /etc/nginx, 后续仅补齐缺失文件并保留用户自定义修改.
+# prepare_nitro_runtime 初始化 Nuxt Nitro 和 nginx 模板共用的运行时环境变量.
+# 参数: 无.
+# 返回: 环境变量设置成功时返回 0, 计算公开地址失败时返回非 0.
+prepare_nitro_runtime() {
+    export NITRO_PORT="$BLOG_NITRO_PORT"
+    export NUXT_API_BASE="http://127.0.0.1:${BLOG_SERVER_PORT}"
+    NUXT_PUBLIC_BASE_URL="$(server_public_url)" || return 1
+    export NUXT_PUBLIC_BASE_URL
+    export NODE_ENV="${NODE_ENV:-production}"
+}
+
+# client_nginx_config_is_spa 判断持久化 nginx.conf 是否仍使用 SPA 根路由入口.
+# 参数: $1: nginx.conf 文件路径.
+# 返回: 根路由包含 try_files 和 /index.html 时返回 0, 否则返回非 0.
+client_nginx_config_is_spa() {
+    local nginx_conf_file="$1"
+
+    awk '
+        /^[[:space:]]*location[[:space:]]+\/[[:space:]]*\{/ { in_root_location=1; next }
+        in_root_location && /^[[:space:]]*\}/ { exit }
+        in_root_location && /^[[:space:]]*try_files[[:space:]].*\/index\.html;/ { is_spa=1; exit }
+        END { exit(is_spa ? 0 : 1) }
+    ' "$nginx_conf_file"
+}
+
+# migrate_legacy_client_nginx_config 备份 SPA nginx.conf, 让首次 Nuxt 启动重新渲染 SSR 配置.
+# 参数: $1: nginx.conf 文件路径.
+# 返回: 不是 SPA 配置或迁移成功时返回 0, 文件备份或删除失败时返回非 0.
+migrate_legacy_client_nginx_config() {
+    local nginx_conf_file="$1"
+    local backup_file="${nginx_conf_file}.pre-nuxt"
+
+    if [[ ! -f "$nginx_conf_file" ]] || ! client_nginx_config_is_spa "$nginx_conf_file"; then
+        return 0
+    fi
+
+    if ! cp -a --update=none "$nginx_conf_file" "$backup_file"; then
+        log_error "备份旧 SPA nginx 配置失败: $nginx_conf_file"
+        return 1
+    fi
+
+    if ! rm -f "$nginx_conf_file"; then
+        log_error "删除旧 SPA nginx 配置失败: $nginx_conf_file"
+        return 1
+    fi
+
+    log_warn "检测到旧 SPA nginx 配置, 已备份为: $backup_file"
+}
+
+# ensure_client_nginx_config 通过 Nuxt nginx 模板生成 single 运行时配置.
+# 参数: 无.
+# 返回: 生成成功返回 0, 模板或渲染工具缺失时退出容器.
 ensure_client_nginx_config() {
-    if [[ ! -d "$BLOG_CLIENT_NGINX_TEMPLATE_DIR" ]] || [[ ! -f "$BLOG_CLIENT_NGINX_TEMPLATE_DIR/nginx.conf" ]]; then
-        log_error "未找到 blog-client nginx 模板目录: $BLOG_CLIENT_NGINX_TEMPLATE_DIR"
+    local nginx_conf_file="$BLOG_CLIENT_NGINX_DIR/nginx.conf"
+
+    if [[ ! -f "$BLOG_CLIENT_NGINX_TEMPLATE_FILE" ]]; then
+        log_error "未找到 blog-client nginx 模板: $BLOG_CLIENT_NGINX_TEMPLATE_FILE"
+        exit 1
+    fi
+
+    if [[ ! -f "$BLOG_CLIENT_MIME_TYPES_FILE" ]]; then
+        log_error "未找到 blog-client mime.types: $BLOG_CLIENT_MIME_TYPES_FILE"
         exit 1
     fi
 
     ensure_directory "$BLOG_CLIENT_NGINX_DIR" root 755 false
-    cp -a --update=none "$BLOG_CLIENT_NGINX_TEMPLATE_DIR/." "$BLOG_CLIENT_NGINX_DIR/"
+    if [[ -f "$BLOG_CLIENT_REDIRECTS_MAP_FILE" ]]; then
+        cp -a --update=none "$BLOG_CLIENT_REDIRECTS_MAP_FILE" "$BLOG_CLIENT_NGINX_DIR/redirects.map"
+    fi
+    cp -a --update=none "$BLOG_CLIENT_MIME_TYPES_FILE" "$BLOG_CLIENT_NGINX_DIR/mime.types"
+    migrate_legacy_client_nginx_config "$nginx_conf_file" || exit 1
+
+    # Nuxt 模板中的后端代理和 Nitro 运行时均直连 single 内的 blog-server.
+    prepare_nitro_runtime || exit 1
+    export NGINX_SERVER_NAME="$BLOG_PUBLIC_HOST"
+
+    if [[ ! -f "$nginx_conf_file" ]]; then
+        envsubst "\${NGINX_SERVER_NAME} \${NUXT_API_BASE}" \
+            <"$BLOG_CLIENT_NGINX_TEMPLATE_FILE" \
+            >"$nginx_conf_file"
+    fi
+
     patch_client_nginx_config
 
     rm -rf /etc/nginx
@@ -959,22 +1038,66 @@ wait_for_blog_server() {
     done
 }
 
+# start_nitro 启动 Nuxt Nitro SSR 服务.
+# 参数: 无.
+# 返回: 成功后记录 NITRO_PID, 启动失败由后续就绪检查终止容器.
+start_nitro() {
+    prepare_nitro_runtime || exit 1
+    node /app/.output/server/index.mjs &
+    NITRO_PID=$!
+}
+
+# wait_for_nitro 等待 Nuxt Nitro 监听本机端口.
+# 参数: 无.
+# 返回: 服务就绪返回 0, 进程退出或超时则退出容器.
+wait_for_nitro() {
+    local retries=30
+
+    until (echo >/dev/tcp/127.0.0.1/"$BLOG_NITRO_PORT") >/dev/null 2>&1; do
+        if ! kill -0 "$NITRO_PID" >/dev/null 2>&1; then
+            log_error "Nuxt Nitro 启动期间退出"
+            exit 1
+        fi
+
+        retries=$((retries - 1))
+        if [[ $retries -le 0 ]]; then
+            log_error "Nuxt Nitro 启动超时"
+            exit 1
+        fi
+        sleep 1
+    done
+}
+
+# start_nginx 渲染 Nuxt nginx 模板后启动 nginx 前台进程.
+# 参数: 无.
+# 返回: 成功后记录 NGINX_PID, 配置渲染、校验或 nginx 启动失败时退出容器.
 start_nginx() {
     ensure_client_nginx_config
+    if ! nginx -t; then
+        log_error "Nuxt nginx 配置校验失败"
+        exit 1
+    fi
     nginx -g 'daemon off;' &
     NGINX_PID=$!
 }
 
+# record_pids 将关键服务 PID 写入持久化目录供外部诊断.
+# 参数: 无.
+# 返回: 写入成功返回 0, 文件系统失败时返回非 0.
 record_pids() {
     cat >"$BLOG_PIDS_FILE" <<EOF
 POSTGRES_PID=$POSTGRES_PID
 REDIS_PID=$REDIS_PID
 ES_PID=$ES_PID
 SERVER_PID=$SERVER_PID
+NITRO_PID=$NITRO_PID
 NGINX_PID=$NGINX_PID
 EOF
 }
 
+# stop_services 以依赖反向顺序停止 single 内的全部关键服务.
+# 参数: 无.
+# 返回: 始终返回 0, 单个服务停止失败会继续清理其余服务.
 stop_services() {
     local pg_ctl_bin=""
 
@@ -986,6 +1109,10 @@ stop_services() {
 
     if [[ -n "$SERVER_PID" ]]; then
         kill "$SERVER_PID" >/dev/null 2>&1 || true
+    fi
+
+    if [[ -n "$NITRO_PID" ]]; then
+        kill "$NITRO_PID" >/dev/null 2>&1 || true
     fi
 
     if [[ -n "$ES_PID" ]]; then
@@ -1046,11 +1173,14 @@ main() {
     start_blog_server
     wait_for_blog_server
 
+    start_nitro
+    wait_for_nitro
+
     start_nginx
     record_pids
     show_boot_summary
 
-    if ! wait -n "$POSTGRES_PID" "$REDIS_PID" "$ES_PID" "$SERVER_PID" "$NGINX_PID"; then
+    if ! wait -n "$POSTGRES_PID" "$REDIS_PID" "$ES_PID" "$SERVER_PID" "$NITRO_PID" "$NGINX_PID"; then
         local exit_code=$?
         log_error "检测到关键服务退出, 容器即将停止"
         stop_services

@@ -7,6 +7,10 @@ ARG POSTGRES_MAJOR=18
 ARG REDIS_VERSION=8.6.5
 ARG ELASTICSEARCH_VERSION=9.4.4
 ARG NGINX_VERSION=1.31.3
+ARG NODE_VERSION=24.20.0
+
+# Nuxt 构建产物来自 Alpine 客户端镜像, Node 和原生依赖必须保持 musl ABI 一致.
+FROM node:${NODE_VERSION}-alpine AS node-runtime
 
 FROM scratch AS cached-assets
 
@@ -37,6 +41,7 @@ RUN set -eux; \
     bash \
     ca-certificates \
     curl \
+    gettext-base \
     openssl \
     tzdata; \
     apt-get clean; \
@@ -203,5 +208,9 @@ RUN set -eux; \
 COPY --from=redis-binaries /usr/local/bin/redis-server /usr/local/bin/redis-cli /usr/local/bin/
 COPY --from=redis-binaries /usr/local/lib/redis /usr/local/lib/redis
 COPY --chown=elasticsearch:elasticsearch --from=elasticsearch-with-ik /opt/elasticsearch /opt/elasticsearch
+# 复制 Alpine Node 的最小 musl 运行时, 使 Nitro 产物中的 sharp 等 musl 原生模块可加载.
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1 /lib/
+COPY --from=node-runtime /usr/lib/libgcc_s.so.1 /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6.0.34 /usr/lib/
 
 VOLUME ["/data"]

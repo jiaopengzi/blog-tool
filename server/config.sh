@@ -108,6 +108,82 @@ server_set_project_name() {
     log_info "server 设置 project name=$project_name success"
 }
 
+# server_append_missing_config_entry 仅在配置文件缺少顶级键时追加默认配置.
+# 参数: $1: 配置文件路径. $2: 顶级配置键. $3: 要追加的完整 YAML 配置行.
+# 返回: 配置已存在或追加成功时返回 0, 配置文件不存在或写入失败时返回非 0.
+server_append_missing_config_entry() {
+    local config_file="$1"
+    local config_key="$2"
+    local config_entry="$3"
+
+    if [[ ! -f "$config_file" ]]; then
+        log_error "配置迁移失败, 未找到配置文件: $config_file"
+        return 1
+    fi
+
+    if grep -Eq "^[[:space:]]*${config_key}:" "$config_file"; then
+        return 0
+    fi
+
+    printf '\n%s\n' "$config_entry" | sudo tee -a "$config_file" >/dev/null || {
+        log_error "配置迁移失败, 无法追加 $config_key 到 $config_file"
+        return 1
+    }
+
+    log_info "server 配置已补齐缺失键: $config_key"
+}
+
+# server_migrate_legacy_config 为旧版持久化配置补齐当前后端所需的默认键.
+# 参数: 无.
+# 返回: 无持久化配置时返回 0, 全部键已存在或补齐成功时返回 0, 写入失败时返回非 0.
+server_migrate_legacy_config() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+    local app_config_file="$config_dir/app.yaml"
+    local redis_config_file="$config_dir/redis.yaml"
+    local config_entry=""
+    local -a app_entries=(
+        'trusted_proxies: ["172.16.0.0/12", "127.0.0.1/8"]'
+        'visit_cookie_max_age: 31536000'
+        'cron_task_visit_stats: "0 7 * * * *"'
+        'cron_task_post_visit_stats: "0 12 * * * *"'
+    )
+    local -a redis_entries=(
+        'visit_pv_expire: 172800'
+        'visit_uv_expire: 604800'
+        'post_visit_pv_expire: 172800'
+        'ip_limit_visit_report: 3600'
+        'ip_limit_expire_visit_report: 3600'
+        'id_limit_visit_report: 600'
+        'id_limit_expire_visit_report: 3600'
+    )
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
+        return 0
+    fi
+
+    if [[ ! -f "$app_config_file" || ! -f "$redis_config_file" ]]; then
+        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
+        return 0
+    fi
+
+    for config_entry in "${app_entries[@]}"; do
+        server_append_missing_config_entry \
+            "$app_config_file" \
+            "${config_entry%%:*}" \
+            "$config_entry" || return 1
+    done
+
+    for config_entry in "${redis_entries[@]}"; do
+        server_append_missing_config_entry \
+            "$redis_config_file" \
+            "${config_entry%%:*}" \
+            "$config_entry" || return 1
+    done
+
+    log_info "server 旧版配置迁移完成"
+}
+
 # 复制 blog_server 配置文件
 copy_server_config() {
     log_debug "run copy_server_config"
