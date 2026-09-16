@@ -2,7 +2,7 @@
 # blog 单镜像 Dockerfile
 # 1. 直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像.
 
-ARG NODE_VERSION=24.20.0
+ARG NODE_VERSION=24.21.0
 ARG UBUNTU_VERSION=24.04
 ARG POSTGRES_VERSION=18.4
 ARG POSTGRES_MAJOR=18
