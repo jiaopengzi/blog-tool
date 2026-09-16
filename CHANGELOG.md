@@ -5,6 +5,24 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.4.0] - 2026-09-16
+
+### ♻️ Refactor
+
+- 前后端部署调整
+
+### ✨ Feat
+
+- 独立 blog 镜像支持源码编译
+
+### 💥 Boom
+
+- blog-client 从 spa 迁移到 nuxt4
+
+### 📦 Build
+
+- 更新依赖 node go
+
 ## [v1.3.0] - 2026-07-31
 
 ### ♻️ Refactor
