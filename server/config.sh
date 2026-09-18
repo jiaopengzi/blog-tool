@@ -133,55 +133,160 @@ server_append_missing_config_entry() {
     log_info "server 配置已补齐缺失键: $config_key"
 }
 
-# server_migrate_legacy_config 为旧版持久化配置补齐当前后端所需的默认键.
+# 旧版访问统计配置迁移所需的默认项.
+# 新增迁移时, 请在对应检查和执行函数中使用独立的配置项数组.
+SERVER_LEGACY_VISIT_STATS_APP_ENTRIES=(
+    'trusted_proxies: ["178.18.16.0/24", "178.18.18.0/24", "127.0.0.1/8"]'
+    'visit_cookie_max_age: 31536000'
+    'cron_task_visit_stats: "0 7 * * * *"'
+    'cron_task_post_visit_stats: "0 12 * * * *"'
+)
+SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES=(
+    'visit_pv_expire: 172800'
+    'visit_uv_expire: 604800'
+    'post_visit_pv_expire: 172800'
+    'ip_limit_visit_report: 3600'
+    'ip_limit_expire_visit_report: 3600'
+    'id_limit_visit_report: 600'
+    'id_limit_expire_visit_report: 3600'
+)
+
+# 旧版配置迁移注册表, 三个数组下标必须一一对应.
+SERVER_LEGACY_CONFIG_MIGRATION_NAMES=(
+    "访问统计配置"
+)
+SERVER_LEGACY_CONFIG_MIGRATION_CHECKS=(
+    "server_legacy_visit_stats_config_needs_migration"
+)
+SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS=(
+    "server_migrate_legacy_visit_stats_config"
+)
+
+# server_config_entries_complete 判断配置文件是否已包含全部指定顶级键.
+# 参数: $1: 配置文件路径. $2...: 包含顶级键的完整 YAML 配置行.
+# 返回: 全部键存在时返回 0, 配置文件或任一键缺失时返回 1.
+server_config_entries_complete() {
+    local config_file="$1"
+    local config_entry=""
+    local config_key=""
+
+    if [[ ! -f "$config_file" ]]; then
+        return 1
+    fi
+
+    shift
+    for config_entry in "$@"; do
+        config_key="${config_entry%%:*}"
+        if ! grep -Eq "^[[:space:]]*${config_key}:" "$config_file"; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# server_legacy_visit_stats_config_needs_migration 判断旧版访问统计配置是否需要迁移.
 # 参数: 无.
-# 返回: 无持久化配置时返回 0, 全部键已存在或补齐成功时返回 0, 写入失败时返回非 0.
-server_migrate_legacy_config() {
+# 返回: 需要迁移时返回 0, 已迁移时返回 1.
+server_legacy_visit_stats_config_needs_migration() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+    local app_config_file="$config_dir/app.yaml"
+    local redis_config_file="$config_dir/redis.yaml"
+
+    if ! server_config_entries_complete "$app_config_file" "${SERVER_LEGACY_VISIT_STATS_APP_ENTRIES[@]}"; then
+        return 0
+    fi
+
+    if ! server_config_entries_complete "$redis_config_file" "${SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES[@]}"; then
+        return 0
+    fi
+
+    return 1
+}
+
+# server_migrate_legacy_visit_stats_config 为旧版持久化配置补齐访问统计相关默认键.
+# 参数: 无.
+# 返回: 全部缺失键补齐成功时返回 0, 配置文件不存在或写入失败时返回非 0.
+server_migrate_legacy_visit_stats_config() {
     local config_dir="$DATA_VOLUME_DIR/blog-server/config"
     local app_config_file="$config_dir/app.yaml"
     local redis_config_file="$config_dir/redis.yaml"
     local config_entry=""
-    local -a app_entries=(
-        'trusted_proxies: ["172.16.0.0/12", "127.0.0.1/8"]'
-        'visit_cookie_max_age: 31536000'
-        'cron_task_visit_stats: "0 7 * * * *"'
-        'cron_task_post_visit_stats: "0 12 * * * *"'
-    )
-    local -a redis_entries=(
-        'visit_pv_expire: 172800'
-        'visit_uv_expire: 604800'
-        'post_visit_pv_expire: 172800'
-        'ip_limit_visit_report: 3600'
-        'ip_limit_expire_visit_report: 3600'
-        'id_limit_visit_report: 600'
-        'id_limit_expire_visit_report: 3600'
-    )
 
-    if [[ ! -d "$config_dir" ]]; then
-        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
-        return 0
-    fi
-
-    if [[ ! -f "$app_config_file" || ! -f "$redis_config_file" ]]; then
-        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
-        return 0
-    fi
-
-    for config_entry in "${app_entries[@]}"; do
+    for config_entry in "${SERVER_LEGACY_VISIT_STATS_APP_ENTRIES[@]}"; do
         server_append_missing_config_entry \
             "$app_config_file" \
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
 
-    for config_entry in "${redis_entries[@]}"; do
+    for config_entry in "${SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES[@]}"; do
         server_append_missing_config_entry \
             "$redis_config_file" \
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
+}
 
-    log_info "server 旧版配置迁移完成"
+# server_run_legacy_config_migrations 按注册表执行仍需处理的旧版配置迁移.
+# 参数: 无.
+# 返回: 无需迁移或全部迁移成功时返回 0, 注册表异常或迁移失败时返回非 0.
+server_run_legacy_config_migrations() {
+    local migration_index=0
+    local migration_status=0
+    local migration_name=""
+    local migration_check=""
+    local migration_executor=""
+
+    if [[ ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]} -ne ${#SERVER_LEGACY_CONFIG_MIGRATION_CHECKS[@]} ]]; then
+        log_error "server 旧版配置迁移注册表不完整"
+        return 1
+    fi
+
+    if [[ ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]} -ne ${#SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS[@]} ]]; then
+        log_error "server 旧版配置迁移注册表不完整"
+        return 1
+    fi
+
+    for ((migration_index = 0; migration_index < ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]}; migration_index++)); do
+        migration_name="${SERVER_LEGACY_CONFIG_MIGRATION_NAMES[$migration_index]}"
+        migration_check="${SERVER_LEGACY_CONFIG_MIGRATION_CHECKS[$migration_index]}"
+        migration_executor="${SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS[$migration_index]}"
+
+        if "$migration_check"; then
+            "$migration_executor" || return 1
+            log_info "server 旧版配置迁移完成: $migration_name"
+            continue
+
+        else
+            migration_status=$?
+            if [[ "$migration_status" -ne 1 ]]; then
+                log_error "server 旧版配置迁移检查失败: $migration_name"
+                return "$migration_status"
+            fi
+        fi
+    done
+
+    return 0
+}
+
+# server_migrate_legacy_config 检查旧版持久化配置并执行已注册的迁移.
+# 参数: 无.
+# 返回: 无持久化配置或无需迁移时返回 0, 全部迁移成功时返回 0, 执行失败时返回非 0.
+server_migrate_legacy_config() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
+        return 0
+    fi
+
+    if [[ ! -f "$config_dir/app.yaml" || ! -f "$config_dir/redis.yaml" ]]; then
+        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
+        return 0
+    fi
+
+    server_run_legacy_config_migrations
 }
 
 # 复制 blog_server 配置文件

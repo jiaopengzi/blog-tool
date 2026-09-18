@@ -274,7 +274,7 @@ EOL
     echo -e "${GREEN}${msg}${NC}" >&2
 }
 
-PY_BASE64_MAIN='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'
+PY_BASE64_MAIN='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'
 # shellcheck disable=SC2034
 
 RUN_MODE="pro"
@@ -7646,52 +7646,142 @@ server_append_missing_config_entry() {
     log_info "server 配置已补齐缺失键: $config_key"
 }
 
-server_migrate_legacy_config() {
+SERVER_LEGACY_VISIT_STATS_APP_ENTRIES=(
+    'trusted_proxies: ["178.18.16.0/24", "178.18.18.0/24", "127.0.0.1/8"]'
+    'visit_cookie_max_age: 31536000'
+    'cron_task_visit_stats: "0 7 * * * *"'
+    'cron_task_post_visit_stats: "0 12 * * * *"'
+)
+SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES=(
+    'visit_pv_expire: 172800'
+    'visit_uv_expire: 604800'
+    'post_visit_pv_expire: 172800'
+    'ip_limit_visit_report: 3600'
+    'ip_limit_expire_visit_report: 3600'
+    'id_limit_visit_report: 600'
+    'id_limit_expire_visit_report: 3600'
+)
+
+SERVER_LEGACY_CONFIG_MIGRATION_NAMES=(
+    "访问统计配置"
+)
+SERVER_LEGACY_CONFIG_MIGRATION_CHECKS=(
+    "server_legacy_visit_stats_config_needs_migration"
+)
+SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS=(
+    "server_migrate_legacy_visit_stats_config"
+)
+
+server_config_entries_complete() {
+    local config_file="$1"
+    local config_entry=""
+    local config_key=""
+
+    if [[ ! -f "$config_file" ]]; then
+        return 1
+    fi
+
+    shift
+    for config_entry in "$@"; do
+        config_key="${config_entry%%:*}"
+        if ! grep -Eq "^[[:space:]]*${config_key}:" "$config_file"; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+server_legacy_visit_stats_config_needs_migration() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+    local app_config_file="$config_dir/app.yaml"
+    local redis_config_file="$config_dir/redis.yaml"
+
+    if ! server_config_entries_complete "$app_config_file" "${SERVER_LEGACY_VISIT_STATS_APP_ENTRIES[@]}"; then
+        return 0
+    fi
+
+    if ! server_config_entries_complete "$redis_config_file" "${SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES[@]}"; then
+        return 0
+    fi
+
+    return 1
+}
+
+server_migrate_legacy_visit_stats_config() {
     local config_dir="$DATA_VOLUME_DIR/blog-server/config"
     local app_config_file="$config_dir/app.yaml"
     local redis_config_file="$config_dir/redis.yaml"
     local config_entry=""
-    local -a app_entries=(
-        'trusted_proxies: ["172.16.0.0/12", "127.0.0.1/8"]'
-        'visit_cookie_max_age: 31536000'
-        'cron_task_visit_stats: "0 7 * * * *"'
-        'cron_task_post_visit_stats: "0 12 * * * *"'
-    )
-    local -a redis_entries=(
-        'visit_pv_expire: 172800'
-        'visit_uv_expire: 604800'
-        'post_visit_pv_expire: 172800'
-        'ip_limit_visit_report: 3600'
-        'ip_limit_expire_visit_report: 3600'
-        'id_limit_visit_report: 600'
-        'id_limit_expire_visit_report: 3600'
-    )
 
-    if [[ ! -d "$config_dir" ]]; then
-        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
-        return 0
-    fi
-
-    if [[ ! -f "$app_config_file" || ! -f "$redis_config_file" ]]; then
-        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
-        return 0
-    fi
-
-    for config_entry in "${app_entries[@]}"; do
+    for config_entry in "${SERVER_LEGACY_VISIT_STATS_APP_ENTRIES[@]}"; do
         server_append_missing_config_entry \
             "$app_config_file" \
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
 
-    for config_entry in "${redis_entries[@]}"; do
+    for config_entry in "${SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES[@]}"; do
         server_append_missing_config_entry \
             "$redis_config_file" \
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
+}
 
-    log_info "server 旧版配置迁移完成"
+server_run_legacy_config_migrations() {
+    local migration_index=0
+    local migration_status=0
+    local migration_name=""
+    local migration_check=""
+    local migration_executor=""
+
+    if [[ ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]} -ne ${#SERVER_LEGACY_CONFIG_MIGRATION_CHECKS[@]} ]]; then
+        log_error "server 旧版配置迁移注册表不完整"
+        return 1
+    fi
+
+    if [[ ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]} -ne ${#SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS[@]} ]]; then
+        log_error "server 旧版配置迁移注册表不完整"
+        return 1
+    fi
+
+    for ((migration_index = 0; migration_index < ${#SERVER_LEGACY_CONFIG_MIGRATION_NAMES[@]}; migration_index++)); do
+        migration_name="${SERVER_LEGACY_CONFIG_MIGRATION_NAMES[$migration_index]}"
+        migration_check="${SERVER_LEGACY_CONFIG_MIGRATION_CHECKS[$migration_index]}"
+        migration_executor="${SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS[$migration_index]}"
+
+        if "$migration_check"; then
+            "$migration_executor" || return 1
+            log_info "server 旧版配置迁移完成: $migration_name"
+            continue
+
+        else
+            migration_status=$?
+            if [[ "$migration_status" -ne 1 ]]; then
+                log_error "server 旧版配置迁移检查失败: $migration_name"
+                return "$migration_status"
+            fi
+        fi
+    done
+
+    return 0
+}
+
+server_migrate_legacy_config() {
+    local config_dir="$DATA_VOLUME_DIR/blog-server/config"
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_debug "未发现旧版 server 配置目录, 跳过配置迁移: $config_dir"
+        return 0
+    fi
+
+    if [[ ! -f "$config_dir/app.yaml" || ! -f "$config_dir/redis.yaml" ]]; then
+        log_warn "server 配置目录不完整, 跳过旧版配置迁移: $config_dir"
+        return 0
+    fi
+
+    server_run_legacy_config_migrations
 }
 
 copy_server_config() {
