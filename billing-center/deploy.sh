@@ -360,6 +360,7 @@ wait_billing_center_start() {
 # 启动 billing_center 容器
 docker_billing_center_start() {
     log_debug "run docker_billing_center_install"
+    billing_center_migrate_runtime_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_BILLING_CENTER" up -d
 
     # 修改配置目录权限

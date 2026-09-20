@@ -6542,6 +6542,99 @@ EOM
   log_info "$docker_compose_file create success"
 }
 
+billing_center_get_compose_image() {
+    local billing_center_image=""
+
+    if [[ ! -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" ]]; then
+        log_error "未找到 billing-center Compose 文件: $DOCKER_COMPOSE_FILE_BILLING_CENTER"
+        return 1
+    fi
+
+    billing_center_image="$(awk '
+        /^[[:space:]]*image:[[:space:]]*/ {
+            sub(/^[[:space:]]*image:[[:space:]]*/, "")
+            print
+            exit
+        }
+    ' "$DOCKER_COMPOSE_FILE_BILLING_CENTER")"
+
+    if [[ -z "$billing_center_image" ]]; then
+        log_error "未从 billing-center Compose 文件读取到镜像: $DOCKER_COMPOSE_FILE_BILLING_CENTER"
+        return 1
+    fi
+
+    printf '%s\n' "$billing_center_image"
+}
+
+billing_center_migrate_runtime_config() {
+    local nginx_dir="$DATA_VOLUME_DIR/billing-center/nginx"
+    local billing_center_image=""
+    local temp_container="temp_container_blog_billing_center_config_migration"
+    local temp_root=""
+    local temp_nginx_dir=""
+
+    if [[ ! -d "$nginx_dir" ]]; then
+        log_debug "未发现持久化 billing-center nginx 配置目录, 跳过迁移: $nginx_dir"
+        return 0
+    fi
+
+    billing_center_image="$(billing_center_get_compose_image)" || return 1
+
+    if ! sudo docker image inspect "$billing_center_image" >/dev/null 2>&1; then
+        log_error "未找到 billing-center 目标镜像, 无法迁移 nginx 配置: $billing_center_image"
+        return 1
+    fi
+
+    temp_root="$(mktemp -d "${TMPDIR:-/tmp}/billing-center-nginx.XXXXXX")" || {
+        log_error "创建 billing-center nginx 迁移临时目录失败"
+        return 1
+    }
+    temp_nginx_dir="$temp_root/nginx"
+
+    sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
+    if ! sudo docker create --name "$temp_container" "$billing_center_image" >/dev/null; then
+        sudo rm -rf "$temp_root"
+        log_error "创建 billing-center 配置迁移临时容器失败: $billing_center_image"
+        return 1
+    fi
+
+    if ! sudo docker cp "$temp_container:/etc/nginx" "$temp_root"; then
+        sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
+        sudo rm -rf "$temp_root"
+        log_error "复制 billing-center nginx 配置失败: $billing_center_image"
+        return 1
+    fi
+
+    sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
+
+    if [[ ! -d "$temp_nginx_dir" ]]; then
+        sudo rm -rf "$temp_root"
+        log_error "billing-center 目标镜像未提供 /etc/nginx 目录: $billing_center_image"
+        return 1
+    fi
+
+    if ! find "$nginx_dir" -mindepth 1 -maxdepth 1 ! -name ssl -exec sudo rm -rf {} +; then
+        sudo rm -rf "$temp_root"
+        log_error "清理旧 billing-center nginx 配置失败: $nginx_dir"
+        return 1
+    fi
+
+    if ! sudo cp -a "$temp_nginx_dir"/. "$nginx_dir"/; then
+        sudo rm -rf "$temp_root"
+        log_error "写入 billing-center 新 nginx 配置失败: $nginx_dir"
+        return 1
+    fi
+
+    sudo rm -rf "$temp_root"
+
+    setup_directory "$JPZ_UID" "$JPZ_GID" 755 \
+        "$DATA_VOLUME_DIR/billing-center" \
+        "$nginx_dir" \
+        "$nginx_dir/ssl"
+
+    log_info "billing-center nginx 配置已同步到目标镜像: $billing_center_image"
+}
+
 copy_billing_center_nginx_config() {
 
     log_debug "run copy_billing_center_nginx_config"
@@ -6853,6 +6946,7 @@ wait_billing_center_start() {
 
 docker_billing_center_start() {
     log_debug "run docker_billing_center_install"
+    billing_center_migrate_runtime_config || return 1
     sudo docker compose -f "$DOCKER_COMPOSE_FILE_BILLING_CENTER" -p "$DOCKER_COMPOSE_PROJECT_NAME_BILLING_CENTER" up -d
 
     setup_directory "$JPZ_UID" "$JPZ_GID" 700 "$DATA_VOLUME_DIR/billing-center/config/"

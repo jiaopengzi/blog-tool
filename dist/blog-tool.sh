@@ -8342,8 +8342,7 @@ client_copy_nuxt_runtime_assets() {
         return 1
     fi
 
-    if [[ ! -f "$nginx_dir/nginx.conf.template" ]] \
-        && ! sudo docker cp "$temp_container:/etc/nginx/nginx.conf.template" "$nginx_dir/nginx.conf.template"; then
+    if ! sudo docker cp "$temp_container:/etc/nginx/nginx.conf.template" "$nginx_dir/nginx.conf.template"; then
         log_error "复制 Nuxt nginx 模板失败: $client_image"
         copy_status=1
     fi
@@ -8352,12 +8351,6 @@ client_copy_nuxt_runtime_assets() {
         && ! sudo docker cp "$temp_container:/etc/nginx/mime.types" "$nginx_dir/mime.types"; then
         log_error "复制 Nuxt mime.types 失败: $client_image"
         copy_status=1
-    fi
-
-    if [[ $copy_status -eq 0 && ! -f "$nginx_dir/redirects.map" ]]; then
-        if ! sudo docker cp "$temp_container:/etc/nginx/redirects.map" "$nginx_dir/redirects.map"; then
-            log_warn "Nuxt 镜像未提供 redirects.map, 跳过复制: $client_image"
-        fi
     fi
 
     sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
@@ -8395,6 +8388,13 @@ client_migrate_runtime_config() {
             log_info "client nginx 配置已迁移为 Nuxt 模板运行模式"
         elif [[ ! -f "$nginx_dir/mime.types" ]]; then
             client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+        else
+            client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+        fi
+
+        if [[ -f "$nginx_conf_file" ]] && ! sudo rm -f "$nginx_conf_file"; then
+            log_error "删除旧 client nginx.conf 失败: $nginx_conf_file"
+            return 1
         fi
 
         setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 \

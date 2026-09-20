@@ -42,7 +42,7 @@ client_image_has_nuxt_runtime_config() {
         -c 'test -f /etc/nginx/nginx.conf.template' >/dev/null 2>&1
 }
 
-# client_copy_nuxt_runtime_assets 按需从 Nuxt 镜像复制 nginx 模板运行资产到持久化目录.
+# client_copy_nuxt_runtime_assets 从 Nuxt 镜像同步 nginx 模板运行资产到持久化目录.
 # 参数: $1: client 镜像引用. $2: 持久化 nginx 配置目录.
 # 返回: 必需模板资产复制成功时返回 0, 容器或文件复制失败时返回非 0.
 client_copy_nuxt_runtime_assets() {
@@ -62,8 +62,7 @@ client_copy_nuxt_runtime_assets() {
         return 1
     fi
 
-    if [[ ! -f "$nginx_dir/nginx.conf.template" ]] \
-        && ! sudo docker cp "$temp_container:/etc/nginx/nginx.conf.template" "$nginx_dir/nginx.conf.template"; then
+    if ! sudo docker cp "$temp_container:/etc/nginx/nginx.conf.template" "$nginx_dir/nginx.conf.template"; then
         log_error "复制 Nuxt nginx 模板失败: $client_image"
         copy_status=1
     fi
@@ -72,12 +71,6 @@ client_copy_nuxt_runtime_assets() {
         && ! sudo docker cp "$temp_container:/etc/nginx/mime.types" "$nginx_dir/mime.types"; then
         log_error "复制 Nuxt mime.types 失败: $client_image"
         copy_status=1
-    fi
-
-    if [[ $copy_status -eq 0 && ! -f "$nginx_dir/redirects.map" ]]; then
-        if ! sudo docker cp "$temp_container:/etc/nginx/redirects.map" "$nginx_dir/redirects.map"; then
-            log_warn "Nuxt 镜像未提供 redirects.map, 跳过复制: $client_image"
-        fi
     fi
 
     sudo docker rm -f "$temp_container" >/dev/null 2>&1 || true
@@ -118,6 +111,14 @@ client_migrate_runtime_config() {
             log_info "client nginx 配置已迁移为 Nuxt 模板运行模式"
         elif [[ ! -f "$nginx_dir/mime.types" ]]; then
             client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+        else
+            client_copy_nuxt_runtime_assets "$client_image" "$nginx_dir" || return 1
+        fi
+
+        # Nuxt 模式下 nginx.conf 由容器入口根据 nginx.conf.template 和环境变量动态生成.
+        if [[ -f "$nginx_conf_file" ]] && ! sudo rm -f "$nginx_conf_file"; then
+            log_error "删除旧 client nginx.conf 失败: $nginx_conf_file"
+            return 1
         fi
 
         setup_directory "$CLIENT_UID" "$CLIENT_GID" 755 \
