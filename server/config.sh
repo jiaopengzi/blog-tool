@@ -151,15 +151,26 @@ SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES=(
     'id_limit_expire_visit_report: 3600'
 )
 
+# upload.yaml 视频档位 level 的新旧默认值, 格式: 档位名称|旧版默认值|新版默认值.
+# blog-server v1.2.0 起按 H.264 标准修正了 8k/2k/480p 的默认 level.
+SERVER_UPLOAD_VIDEO_LEVEL_ENTRIES=(
+    "8k|5.1|6.0"
+    "2k|4.1|5.0"
+    "480p|2.2|3.1"
+)
+
 # 旧版配置迁移注册表, 三个数组下标必须一一对应.
 SERVER_LEGACY_CONFIG_MIGRATION_NAMES=(
     "访问统计配置"
+    "upload.yaml 视频档位 level"
 )
 SERVER_LEGACY_CONFIG_MIGRATION_CHECKS=(
     "server_legacy_visit_stats_config_needs_migration"
+    "server_upload_video_level_config_needs_migration"
 )
 SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS=(
     "server_migrate_legacy_visit_stats_config"
+    "server_migrate_upload_video_level_config"
 )
 
 # server_config_entries_complete 判断配置文件是否已包含全部指定顶级键.
@@ -226,6 +237,241 @@ server_migrate_legacy_visit_stats_config() {
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
+}
+
+# server_get_compose_image 从 server Compose 文件读取目标镜像引用.
+# 参数: 无.
+# 返回: 成功时输出镜像引用, Compose 文件或 image 字段缺失时返回非 0.
+server_get_compose_image() {
+    local server_image=""
+
+    if [[ ! -f "$DOCKER_COMPOSE_FILE_SERVER" ]]; then
+        return 1
+    fi
+
+    server_image="$(awk '
+        /^[[:space:]]*image:[[:space:]]*/ {
+            sub(/^[[:space:]]*image:[[:space:]]*/, "")
+            print
+            exit
+        }
+    ' "$DOCKER_COMPOSE_FILE_SERVER")"
+
+    [[ -n "$server_image" ]] || return 1
+    printf '%s\n' "$server_image"
+}
+
+# server_read_image_upload_sample 输出 server 镜像内置的 config/sample/upload.yaml 内容.
+# 参数: $1: server 镜像引用.
+# 返回: 读取成功时返回 0, 本地镜像不存在或文件复制失败时返回非 0.
+server_read_image_upload_sample() {
+    local server_image="$1"
+    local sample_file="/home/blog-server/config/sample/upload.yaml"
+    local temp_container="temp_container_blog_server_config_migration"
+    local read_status=0
+
+    if ! sudo docker image inspect "$server_image" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    # -v 同时删除镜像 VOLUME 声明产生的匿名卷.
+    sudo docker rm -f -v "$temp_container" >/dev/null 2>&1 || true
+    if ! sudo docker create --name "$temp_container" "$server_image" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    (
+        set -o pipefail
+        sudo docker cp "$temp_container:$sample_file" - 2>/dev/null | tar -xOf - 2>/dev/null
+    ) || read_status=1
+
+    sudo docker rm -f -v "$temp_container" >/dev/null 2>&1 || true
+    return "$read_status"
+}
+
+# server_upload_video_levels 从标准输入读取 upload.yaml, 解析 ffmpeg.video_quality 各档位的 level.
+# 参数: 无.
+# 返回: 每个档位输出一行 "档位名称|level|level 所在行号", 缺少 level 时行号为 0.
+server_upload_video_levels() {
+    awk '
+        function yaml_value(text,    quote, end_pos) {
+            sub(/^[ \t]+/, "", text)
+            quote = substr(text, 1, 1)
+            if (quote == "\"" || quote == "\047") {
+                end_pos = index(substr(text, 2), quote)
+                return end_pos ? substr(text, 2, end_pos - 1) : substr(text, 2)
+            }
+            sub(/[ \t]+#.*$/, "", text)
+            sub(/[ \t]+$/, "", text)
+            return text
+        }
+        function flush_item() {
+            if (item_name != "") {
+                print item_name "|" item_level "|" (item_line + 0)
+            }
+            item_name = ""
+            item_level = ""
+            item_line = 0
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+        }
+        line ~ /^[ \t]*(#.*)?$/ {
+            next
+        }
+        {
+            match(line, /^ */)
+            indent = RLENGTH
+        }
+        in_video && (indent < video_indent || (indent == video_indent && line !~ /^ *-([ \t]|$)/)) {
+            flush_item()
+            in_video = 0
+        }
+        indent == 0 {
+            in_ffmpeg = (line ~ /^ffmpeg:[ \t]*(#.*)?$/)
+            next
+        }
+        !in_ffmpeg {
+            next
+        }
+        !in_video {
+            if (line ~ /^ *video_quality:[ \t]*(#.*)?$/) {
+                in_video = 1
+                video_indent = indent
+            }
+            next
+        }
+        {
+            key_text = line
+            if (key_text ~ /^ *-([ \t]|$)/) {
+                flush_item()
+                sub(/^ *-[ \t]*/, "", key_text)
+            } else {
+                sub(/^ +/, "", key_text)
+            }
+            if (key_text ~ /^name:/) {
+                item_name = yaml_value(substr(key_text, 6))
+            } else if (key_text ~ /^level:/) {
+                item_level = yaml_value(substr(key_text, 7))
+                item_line = NR
+            }
+        }
+        END {
+            flush_item()
+        }
+    '
+}
+
+# server_upload_video_level_updates 对比持久化 upload.yaml 与目标镜像默认值, 输出需要调整的视频档位 level.
+# 参数: 无.
+# 返回: 每项输出一行 "行号|当前 level|目标 level|档位名称", 无需调整时无输出; 无法读取目标镜像默认配置时返回 1.
+server_upload_video_level_updates() {
+    local upload_config_file="$DATA_VOLUME_DIR/blog-server/config/upload.yaml"
+    local server_image=""
+    local target_sample=""
+    local level_entry=""
+    local profile_name=""
+    local legacy_level=""
+    local current_level=""
+    local level_value=""
+    local level_line=""
+    local target_level=""
+    local -a candidate_entries=()
+    local -A persisted_levels=()
+    local -A persisted_lines=()
+    local -A target_levels=()
+
+    if [[ ! -f "$upload_config_file" ]]; then
+        return 0
+    fi
+
+    while IFS='|' read -r profile_name level_value level_line; do
+        if [[ -n "$profile_name" && -z "${persisted_levels[$profile_name]+set}" ]]; then
+            persisted_levels["$profile_name"]="$level_value"
+            persisted_lines["$profile_name"]="$level_line"
+        fi
+    done < <(server_upload_video_levels <"$upload_config_file")
+
+    # 用户自定义过的 level 不在新旧默认值内, 保持不变.
+    for level_entry in "${SERVER_UPLOAD_VIDEO_LEVEL_ENTRIES[@]}"; do
+        IFS='|' read -r profile_name legacy_level current_level <<<"$level_entry"
+        level_value="${persisted_levels[$profile_name]:-}"
+        if [[ "$level_value" == "$legacy_level" || "$level_value" == "$current_level" ]]; then
+            candidate_entries+=("$level_entry")
+        fi
+    done
+
+    if [[ ${#candidate_entries[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # 以目标镜像内置 sample 为准, 升级和回滚都对齐到目标版本默认值.
+    if ! server_image="$(server_get_compose_image)" \
+        || ! target_sample="$(server_read_image_upload_sample "$server_image")"; then
+        log_warn "无法读取 server 目标镜像的 upload.yaml 默认配置, 跳过视频档位 level 调整"
+        return 1
+    fi
+
+    while IFS='|' read -r profile_name level_value _; do
+        if [[ -n "$profile_name" && -z "${target_levels[$profile_name]+set}" ]]; then
+            target_levels["$profile_name"]="$level_value"
+        fi
+    done < <(server_upload_video_levels <<<"$target_sample")
+
+    for level_entry in "${candidate_entries[@]}"; do
+        IFS='|' read -r profile_name legacy_level current_level <<<"$level_entry"
+        level_value="${persisted_levels[$profile_name]}"
+        target_level="${target_levels[$profile_name]:-}"
+        if [[ "$target_level" != "$level_value" ]] \
+            && [[ "$target_level" == "$legacy_level" || "$target_level" == "$current_level" ]]; then
+            printf '%s|%s|%s|%s\n' "${persisted_lines[$profile_name]}" "$level_value" "$target_level" "$profile_name"
+        fi
+    done
+}
+
+# server_upload_video_level_config_needs_migration 判断 upload.yaml 视频档位 level 是否需要对齐目标镜像默认值.
+# 参数: 无.
+# 返回: 需要调整时返回 0, 已对齐或无法读取目标镜像默认配置时返回 1.
+server_upload_video_level_config_needs_migration() {
+    local level_updates=""
+
+    level_updates="$(server_upload_video_level_updates)" || return 1
+    [[ -n "$level_updates" ]]
+}
+
+# server_migrate_upload_video_level_config 将 upload.yaml 中仍为默认值的视频档位 level 调整为目标镜像默认值.
+# 参数: 无.
+# 返回: 调整成功或无需调整时返回 0, 无法读取目标镜像默认配置或写入失败时返回非 0.
+server_migrate_upload_video_level_config() {
+    local upload_config_file="$DATA_VOLUME_DIR/blog-server/config/upload.yaml"
+    local level_updates=""
+    local level_line=""
+    local from_level=""
+    local to_level=""
+    local profile_name=""
+    local update_summary=""
+    local -a sed_args=()
+
+    level_updates="$(server_upload_video_level_updates)" || return 1
+
+    while IFS='|' read -r level_line from_level to_level profile_name; do
+        [[ -n "$level_line" ]] || continue
+        # 只替换 level 值, 保留缩进, 引号, 行尾注释和换行符.
+        sed_args+=(-e "${level_line}s/^([[:space:]]*(-[[:space:]]+)?level:[[:space:]]*[\"']?)${from_level//./[.]}/\\1${to_level}/")
+        update_summary+="${update_summary:+, }${profile_name} ${from_level} -> ${to_level}"
+    done <<<"$level_updates"
+
+    if [[ ${#sed_args[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if ! sudo sed -E -i "${sed_args[@]}" "$upload_config_file"; then
+        log_error "配置迁移失败, 无法调整 $upload_config_file 的视频档位 level"
+        return 1
+    fi
+
+    log_info "server upload.yaml 视频档位 level 已对齐目标镜像: $update_summary"
 }
 
 # server_run_legacy_config_migrations 按注册表执行仍需处理的旧版配置迁移.

@@ -91,6 +91,7 @@
         "redisbloom",
         "requirepass",
         "retag",
+        "RLENGTH",
         "rolname",
         "rootfs",
         "sadd",
@@ -140,5 +141,11 @@
         "statusBar.debuggingForeground": "#FDFAFE",
         "statusBar.noFolderBackground": "#4C0A64",
         "statusBar.noFolderForeground": "#FDFAFE"
+    },
+    "chat.tools.terminal.autoApprove": {
+        "/^for a in mawk nawk original-awk busybox; do printf '%s: ' \"\\$a\"; command -v \"\\$a\" \\|\\| echo \"none\"; done; bash --version \\| head -1; sed --version \\| head -1; tar --version \\| head -1; sudo -n docker version --format '\\{\\{\\.Server\\.Version\\}\\}'; ls /usr/share/doc \\| grep -i -E '\\^mawk' ; apt-cache policy mawk 2>/dev/null \\| head -3$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

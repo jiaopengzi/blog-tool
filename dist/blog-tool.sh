@@ -7662,14 +7662,23 @@ SERVER_LEGACY_VISIT_STATS_REDIS_ENTRIES=(
     'id_limit_expire_visit_report: 3600'
 )
 
+SERVER_UPLOAD_VIDEO_LEVEL_ENTRIES=(
+    "8k|5.1|6.0"
+    "2k|4.1|5.0"
+    "480p|2.2|3.1"
+)
+
 SERVER_LEGACY_CONFIG_MIGRATION_NAMES=(
     "访问统计配置"
+    "upload.yaml 视频档位 level"
 )
 SERVER_LEGACY_CONFIG_MIGRATION_CHECKS=(
     "server_legacy_visit_stats_config_needs_migration"
+    "server_upload_video_level_config_needs_migration"
 )
 SERVER_LEGACY_CONFIG_MIGRATION_EXECUTORS=(
     "server_migrate_legacy_visit_stats_config"
+    "server_migrate_upload_video_level_config"
 )
 
 server_config_entries_complete() {
@@ -7727,6 +7736,219 @@ server_migrate_legacy_visit_stats_config() {
             "${config_entry%%:*}" \
             "$config_entry" || return 1
     done
+}
+
+server_get_compose_image() {
+    local server_image=""
+
+    if [[ ! -f "$DOCKER_COMPOSE_FILE_SERVER" ]]; then
+        return 1
+    fi
+
+    server_image="$(awk '
+        /^[[:space:]]*image:[[:space:]]*/ {
+            sub(/^[[:space:]]*image:[[:space:]]*/, "")
+            print
+            exit
+        }
+    ' "$DOCKER_COMPOSE_FILE_SERVER")"
+
+    [[ -n "$server_image" ]] || return 1
+    printf '%s\n' "$server_image"
+}
+
+server_read_image_upload_sample() {
+    local server_image="$1"
+    local sample_file="/home/blog-server/config/sample/upload.yaml"
+    local temp_container="temp_container_blog_server_config_migration"
+    local read_status=0
+
+    if ! sudo docker image inspect "$server_image" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    sudo docker rm -f -v "$temp_container" >/dev/null 2>&1 || true
+    if ! sudo docker create --name "$temp_container" "$server_image" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    (
+        set -o pipefail
+        sudo docker cp "$temp_container:$sample_file" - 2>/dev/null | tar -xOf - 2>/dev/null
+    ) || read_status=1
+
+    sudo docker rm -f -v "$temp_container" >/dev/null 2>&1 || true
+    return "$read_status"
+}
+
+server_upload_video_levels() {
+    awk '
+        function yaml_value(text,    quote, end_pos) {
+            sub(/^[ \t]+/, "", text)
+            quote = substr(text, 1, 1)
+            if (quote == "\"" || quote == "\047") {
+                end_pos = index(substr(text, 2), quote)
+                return end_pos ? substr(text, 2, end_pos - 1) : substr(text, 2)
+            }
+            sub(/[ \t]+#.*$/, "", text)
+            sub(/[ \t]+$/, "", text)
+            return text
+        }
+        function flush_item() {
+            if (item_name != "") {
+                print item_name "|" item_level "|" (item_line + 0)
+            }
+            item_name = ""
+            item_level = ""
+            item_line = 0
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+        }
+        line ~ /^[ \t]*(#.*)?$/ {
+            next
+        }
+        {
+            match(line, /^ */)
+            indent = RLENGTH
+        }
+        in_video && (indent < video_indent || (indent == video_indent && line !~ /^ *-([ \t]|$)/)) {
+            flush_item()
+            in_video = 0
+        }
+        indent == 0 {
+            in_ffmpeg = (line ~ /^ffmpeg:[ \t]*(#.*)?$/)
+            next
+        }
+        !in_ffmpeg {
+            next
+        }
+        !in_video {
+            if (line ~ /^ *video_quality:[ \t]*(#.*)?$/) {
+                in_video = 1
+                video_indent = indent
+            }
+            next
+        }
+        {
+            key_text = line
+            if (key_text ~ /^ *-([ \t]|$)/) {
+                flush_item()
+                sub(/^ *-[ \t]*/, "", key_text)
+            } else {
+                sub(/^ +/, "", key_text)
+            }
+            if (key_text ~ /^name:/) {
+                item_name = yaml_value(substr(key_text, 6))
+            } else if (key_text ~ /^level:/) {
+                item_level = yaml_value(substr(key_text, 7))
+                item_line = NR
+            }
+        }
+        END {
+            flush_item()
+        }
+    '
+}
+
+server_upload_video_level_updates() {
+    local upload_config_file="$DATA_VOLUME_DIR/blog-server/config/upload.yaml"
+    local server_image=""
+    local target_sample=""
+    local level_entry=""
+    local profile_name=""
+    local legacy_level=""
+    local current_level=""
+    local level_value=""
+    local level_line=""
+    local target_level=""
+    local -a candidate_entries=()
+    local -A persisted_levels=()
+    local -A persisted_lines=()
+    local -A target_levels=()
+
+    if [[ ! -f "$upload_config_file" ]]; then
+        return 0
+    fi
+
+    while IFS='|' read -r profile_name level_value level_line; do
+        if [[ -n "$profile_name" && -z "${persisted_levels[$profile_name]+set}" ]]; then
+            persisted_levels["$profile_name"]="$level_value"
+            persisted_lines["$profile_name"]="$level_line"
+        fi
+    done < <(server_upload_video_levels <"$upload_config_file")
+
+    for level_entry in "${SERVER_UPLOAD_VIDEO_LEVEL_ENTRIES[@]}"; do
+        IFS='|' read -r profile_name legacy_level current_level <<<"$level_entry"
+        level_value="${persisted_levels[$profile_name]:-}"
+        if [[ "$level_value" == "$legacy_level" || "$level_value" == "$current_level" ]]; then
+            candidate_entries+=("$level_entry")
+        fi
+    done
+
+    if [[ ${#candidate_entries[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if ! server_image="$(server_get_compose_image)" \
+        || ! target_sample="$(server_read_image_upload_sample "$server_image")"; then
+        log_warn "无法读取 server 目标镜像的 upload.yaml 默认配置, 跳过视频档位 level 调整"
+        return 1
+    fi
+
+    while IFS='|' read -r profile_name level_value _; do
+        if [[ -n "$profile_name" && -z "${target_levels[$profile_name]+set}" ]]; then
+            target_levels["$profile_name"]="$level_value"
+        fi
+    done < <(server_upload_video_levels <<<"$target_sample")
+
+    for level_entry in "${candidate_entries[@]}"; do
+        IFS='|' read -r profile_name legacy_level current_level <<<"$level_entry"
+        level_value="${persisted_levels[$profile_name]}"
+        target_level="${target_levels[$profile_name]:-}"
+        if [[ "$target_level" != "$level_value" ]] \
+            && [[ "$target_level" == "$legacy_level" || "$target_level" == "$current_level" ]]; then
+            printf '%s|%s|%s|%s\n' "${persisted_lines[$profile_name]}" "$level_value" "$target_level" "$profile_name"
+        fi
+    done
+}
+
+server_upload_video_level_config_needs_migration() {
+    local level_updates=""
+
+    level_updates="$(server_upload_video_level_updates)" || return 1
+    [[ -n "$level_updates" ]]
+}
+
+server_migrate_upload_video_level_config() {
+    local upload_config_file="$DATA_VOLUME_DIR/blog-server/config/upload.yaml"
+    local level_updates=""
+    local level_line=""
+    local from_level=""
+    local to_level=""
+    local profile_name=""
+    local update_summary=""
+    local -a sed_args=()
+
+    level_updates="$(server_upload_video_level_updates)" || return 1
+
+    while IFS='|' read -r level_line from_level to_level profile_name; do
+        [[ -n "$level_line" ]] || continue
+        sed_args+=(-e "${level_line}s/^([[:space:]]*(-[[:space:]]+)?level:[[:space:]]*[\"']?)${from_level//./[.]}/\\1${to_level}/")
+        update_summary+="${update_summary:+, }${profile_name} ${from_level} -> ${to_level}"
+    done <<<"$level_updates"
+
+    if [[ ${#sed_args[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    if ! sudo sed -E -i "${sed_args[@]}" "$upload_config_file"; then
+        log_error "配置迁移失败, 无法调整 $upload_config_file 的视频档位 level"
+        return 1
+    fi
+
+    log_info "server upload.yaml 视频档位 level 已对齐目标镜像: $update_summary"
 }
 
 server_run_legacy_config_migrations() {
