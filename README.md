@@ -14,10 +14,10 @@
 
 ### 1. 获取工具
 
-#### Gitee (国内用户)
+#### OSS (推荐)
 
 ```bash
-curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh
+curl -fsSL -o blog-tool.sh https://demo.jiaopengzi.com/sh/blog-tool.sh
 ```
 
 #### GitHub
@@ -46,10 +46,10 @@ sudo bash blog-tool.sh --auto
 
 也可以直接下载、保存并立即执行, 省去手动下载后再运行的步骤。
 
-#### Gitee (国内用户)
+#### OSS (推荐)
 
 ```bash
-curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh && sudo bash blog-tool.sh --auto
+curl -fsSL -o blog-tool.sh https://demo.jiaopengzi.com/sh/blog-tool.sh && sudo bash blog-tool.sh --auto
 ```
 
 #### GitHub
@@ -61,7 +61,7 @@ curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-too
 如果需要传入可选参数, 将参数追加到 `--auto` 后即可：
 
 ```bash
-curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/main/dist/blog-tool.sh && sudo bash blog-tool.sh --auto --domain=example.com --project_name=blog-server
+curl -fsSL -o blog-tool.sh https://demo.jiaopengzi.com/sh/blog-tool.sh && sudo bash blog-tool.sh --auto --domain=example.com --project_name=blog-server
 ```
 
 `--auto` 会自动接受免责声明, 安装基础依赖和 Docker, 拉取生产镜像, 初始化数据库, 并安装 `blog-server` 与 `blog-client`。如果当前机器已经安装 Docker, 脚本会直接退出, 避免覆盖已有 Docker 环境。
@@ -343,17 +343,16 @@ sudo docker logs blog
 
 ## 获取指定版本工具
 
-### Gitee (国内用户)
+### OSS (推荐)
 
 ```bash
-
-curl -fsSL -o blog-tool.sh https://gitee.com/jiaopengzi/blog-tool/raw/v0.4.1/dist/blog-tool.sh
+curl -fsSL -o blog-tool.sh https://demo.jiaopengzi.com/sh/blog-tool-v1.4.1.sh
 ```
 
 ### GitHub
 
 ```bash
-curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/v0.4.1/dist/blog-tool.sh
+curl -fsSL -o blog-tool.sh https://raw.githubusercontent.com/jiaopengzi/blog-tool/v1.4.1/dist/blog-tool.sh
 ```
 
 ## 许可证

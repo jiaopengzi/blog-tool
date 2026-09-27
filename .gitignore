@@ -27,3 +27,4 @@ python/*.pyo
 python/.pytest_cache/
 python/.venv/
 python/venv/
+.env
