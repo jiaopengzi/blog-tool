@@ -74,13 +74,13 @@ shellcheck utils/log.sh
 find . -name "*.sh" -not -path "./dist/*" -not -path "./.git/*" | xargs shellcheck
 ```
 
-### CI 构建(GitHub Actions)
+### CI 发布(GitHub Actions)
 
-- 触发条件：向 `main` 分支推送, 向 `v*` tag 推送, 或手动触发 `workflow_dispatch`
-- 工作流文件：`.github/workflows/build.yaml`
+- 触发条件：`main` 分支推送且 `dist/` 有变更, 向 `v*` tag 推送, 或手动触发 `workflow_dispatch`
+- 工作流文件：`.github/workflows/push-oss.yaml`
 - 流程：
-    - `main` 分支推送：`bash build.sh` → 提交 `dist/` → 覆盖上传 OSS latest 文件
-    - `v*` tag 推送：`bash build.sh` → 上传对应版本号的 OSS 文件
+    - `main` 分支推送：直接上传仓库中的 `dist/` 产物到 OSS latest 文件
+    - `v*` tag 推送：直接上传仓库中的 `dist/` 产物到对应版本号 OSS 文件
 
 ### 附加工作流
 

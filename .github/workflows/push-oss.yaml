@@ -1,0 +1,126 @@
+# FilePath    : blog-tool/.github/workflows/push-oss.yaml
+# Author      : jiaopengzi
+# Blog        : https://jiaopengzi.com
+# Copyright   : Copyright (c) 2026 by jiaopengzi, All Rights Reserved.
+# Description : CI/CD - 推送 dist 到 OSS
+
+name: push-oss
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "dist/**"
+    tags:
+      - "v*"
+
+  # 手动触发, 用于重新推送当前 ref 的 dist 产物
+  workflow_dispatch:
+
+concurrency:
+  group: blog-tool-ci
+  cancel-in-progress: false
+
+jobs:
+  push-oss:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:13
+    env:
+      OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+      OSS_REGION: ${{ vars.OSS_REGION }}
+      OSS_ENDPOINT: ${{ vars.OSS_ENDPOINT }}
+      OSS_BASE_URL: ${{ vars.OSS_BASE_URL }}
+      OSS_DIRECTORY: ${{ vars.OSS_DIRECTORY }}
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y curl openssl ca-certificates
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Upload dist to OSS
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        env:
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          # 校验 OSS 必需变量, 避免发布阶段静默失败.
+          required_vars=(
+            OSS_BUCKET
+            OSS_ENDPOINT
+            OSS_BASE_URL
+            OSS_ACCESS_KEY_ID
+            OSS_ACCESS_KEY_SECRET
+          )
+
+          for var_name in "${required_vars[@]}"; do
+            if [[ -z "${!var_name}" ]]; then
+              echo "❌ 错误: 缺少必需的 OSS 配置 ${var_name}" >&2
+              exit 1
+            fi
+          done
+
+          oss_directory=$(printf '%s' "${OSS_DIRECTORY:-}" | sed 's#^/*##; s#/*$##')
+          oss_bucket_host="${OSS_BUCKET}.${OSS_ENDPOINT}"
+          oss_base_url=$(printf '%s' "$OSS_BASE_URL" | sed 's#/*$##')
+          semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+
+          upload_oss_object() {
+            local file_path="$1"
+            local object_name="$2"
+            local content_type="text/x-shellscript"
+            local object_key=""
+            local date_hdr=""
+            local signature=""
+            local http_code=""
+
+            if [[ -n "$oss_directory" ]]; then
+              object_key="${oss_directory}/${object_name}"
+            else
+              object_key="$object_name"
+            fi
+
+            date_hdr=$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S GMT')
+            signature=$(printf 'PUT\n\n%s\n%s\n/%s/%s' "$content_type" "$date_hdr" "$OSS_BUCKET" "$object_key" | openssl dgst -sha1 -hmac "$OSS_ACCESS_KEY_SECRET" -binary | base64)
+
+            http_code=$(curl -sS -o /tmp/oss-upload-response.xml -w '%{http_code}' \
+              --connect-timeout 10 \
+              --max-time 60 \
+              -X PUT \
+              -T "$file_path" \
+              -H "Date: ${date_hdr}" \
+              -H "Content-Type: ${content_type}" \
+              -H "Authorization: OSS ${OSS_ACCESS_KEY_ID}:${signature}" \
+              "https://${oss_bucket_host}/${object_key}")
+
+            if [[ "$http_code" != "200" ]]; then
+              echo "❌ 错误: 上传 ${object_key} 失败, HTTP 状态码 ${http_code}" >&2
+              sed -n '1,20p' /tmp/oss-upload-response.xml >&2 || true
+              exit 1
+            fi
+
+            echo "✅ 已上传: ${oss_base_url}/${object_key}"
+          }
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if ! printf '%s' "$GITHUB_REF_NAME" | grep -E -q "$semver_re"; then
+              echo "❌ 错误: tag '$GITHUB_REF_NAME' 不符合 vX.Y.Z 语义化版本格式" >&2
+              exit 1
+            fi
+
+            upload_oss_object "dist/blog-tool.sh" "blog-tool-${GITHUB_REF_NAME}.sh"
+            upload_oss_object "dist/blog-tool-dev.sh" "blog-tool-dev-${GITHUB_REF_NAME}.sh"
+            upload_oss_object "dist/blog-tool-billing-center.sh" "blog-tool-billing-center-${GITHUB_REF_NAME}.sh"
+            exit 0
+          fi
+
+          upload_oss_object "dist/blog-tool.sh" "blog-tool.sh"
+          upload_oss_object "dist/blog-tool-dev.sh" "blog-tool-dev.sh"
+          upload_oss_object "dist/blog-tool-billing-center.sh" "blog-tool-billing-center.sh"
