@@ -31,6 +31,7 @@ jobs:
       contents: write
     env:
       OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+      OSS_REGION: ${{ vars.OSS_REGION }}
       OSS_ENDPOINT: ${{ vars.OSS_ENDPOINT }}
       OSS_BASE_URL: ${{ vars.OSS_BASE_URL }}
       OSS_DIRECTORY: ${{ vars.OSS_DIRECTORY }}
@@ -60,19 +61,29 @@ jobs:
           chmod +x ./build.sh
           ./build.sh
 
-      - name: Commit dist
+      - name: Detect dist changes
+        id: dist_changes
         if: github.ref_type == 'branch' && github.ref_name == 'main'
         working-directory: ${{ github.workspace }}
         run: |
           git add dist
           if git diff --cached --quiet; then
-            echo "ℹ️ dist 无变化, 跳过提交"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ dist 无变化, 跳过 latest 发布"
           else
-            git commit -m "Build(dist): sync generated scripts"
-            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "✅ dist 有变化, 允许提交并发布 latest"
           fi
 
+      - name: Commit dist
+        if: github.ref_type == 'branch' && github.ref_name == 'main' && steps.dist_changes.outputs.changed == 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          git commit -m "Build(dist): sync generated scripts"
+          git push origin HEAD:main
+
       - name: Upload dist to OSS
+        if: github.ref_type == 'tag' || (github.ref_type == 'branch' && github.ref_name == 'main' && steps.dist_changes.outputs.changed == 'true')
         working-directory: ${{ github.workspace }}
         env:
           GITHUB_REF_TYPE: ${{ github.ref_type }}
