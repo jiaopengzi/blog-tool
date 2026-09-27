@@ -149,6 +149,7 @@ sudo bash blog-tool.sh --uninstall
 
 - 所有发行版脚本均在本地执行 `bash build.sh` 后生成，并提交到仓库中的 `dist/` 目录。
 - GitHub Actions 工作流 [push-oss.yaml](.github/workflows/push-oss.yaml) 不再负责远端构建，只负责把仓库中已有的 `dist/` 产物推送到 OSS。
+- GitHub Actions 工作流 [sync_gitee.yaml](.github/workflows/sync_gitee.yaml) 只负责将 GitHub 仓库的 `main` 分支和 Git tags 同步到 Gitee 镜像仓库。
 - 向 `main` 分支推送且 `dist/` 有变更时，工作流会覆盖上传 OSS latest 文件。
 - 推送 `vX.Y.Z` Git tag 时，工作流会上传对应版本号的 OSS 文件，不会重新构建 `dist/`。
 

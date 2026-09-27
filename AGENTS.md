@@ -76,11 +76,13 @@ find . -name "*.sh" -not -path "./dist/*" -not -path "./.git/*" | xargs shellche
 
 ### CI 发布(GitHub Actions)
 
-- 触发条件：`main` 分支推送且 `dist/` 有变更, 向 `v*` tag 推送, 或手动触发 `workflow_dispatch`
-- 工作流文件：`.github/workflows/push-oss.yaml`
+- 工作流文件：`.github/workflows/push-oss.yaml`, `.github/workflows/sync_gitee.yaml`
+- `push-oss.yaml` 触发条件：`main` 分支推送且 `dist/` 有变更, 向 `v*` tag 推送, 或手动触发 `workflow_dispatch`
 - 流程：
     - `main` 分支推送：直接上传仓库中的 `dist/` 产物到 OSS latest 文件
     - `v*` tag 推送：直接上传仓库中的 `dist/` 产物到对应版本号 OSS 文件
+- `sync_gitee.yaml` 触发条件：向 `main` 分支或任意 tag 推送, 或手动触发 `workflow_dispatch`
+- `sync_gitee.yaml` 流程：同步 GitHub 当前仓库的 `main` 分支和全部 Git tags 到 Gitee 镜像仓库
 
 ### 附加工作流
 

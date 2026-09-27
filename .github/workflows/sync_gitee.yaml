@@ -1,0 +1,59 @@
+# FilePath    : blog-tool/.github/workflows/sync_gitee.yaml
+# Author      : jiaopengzi
+# Blog        : https://jiaopengzi.com
+# Copyright   : Copyright (c) 2026 by jiaopengzi, All Rights Reserved.
+# Description : CI/CD - 同步代码和 tag 到 Gitee
+
+name: Sync Gitee
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+
+  # 手动触发, 用于重新同步当前 ref.
+  workflow_dispatch:
+
+concurrency:
+  group: blog-tool-ci
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.GITEE_SSH_PRIVATE_KEY }}
+
+      - name: Add Gitee host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
+
+      - name: Push to Gitee
+        shell: bash
+        run: |
+          git remote remove gitee 2>/dev/null || true
+          git remote add gitee git@gitee.com:jiaopengzi/blog-tool.git
+
+          # 同步 main 分支和 tags, 并兼容 tag 事件下的 detached HEAD.
+          git fetch origin main:refs/remotes/origin/main --tags
+          git fetch gitee main --tags || true
+
+          remote_main_sha=$(git rev-parse -q --verify refs/remotes/gitee/main || true)
+          if [[ -n "$remote_main_sha" ]]; then
+            git push --force-with-lease=refs/heads/main:"$remote_main_sha" gitee refs/remotes/origin/main:refs/heads/main
+          else
+            git push gitee refs/remotes/origin/main:refs/heads/main
+          fi
+
+          git push gitee --tags
