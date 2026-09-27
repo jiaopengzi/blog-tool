@@ -22,9 +22,9 @@
 
 ### 🐞 Fix
 
+- 使用 git savetag 打标签
 - **upload.yaml:** 视频档位 level 更新
 - blog-client 和 billing-center 升级或回滚 nginx 自动重建
-- 使用 git savetag 打标签
 
 ### 📦 Build
 
