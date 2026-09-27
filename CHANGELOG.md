@@ -5,6 +5,25 @@
 该格式基于 [Keep a Changelog](https://keepachangelog.com),
 本项目遵循 [语义化版本控制](https://semver.org/spec/v2.0.0.html)。
 
+## [v1.4.1] - 2026-09-27
+
+### ⚙️ Ci
+
+- action ci 相关更新
+
+### ⚡️ Perf
+
+- 如果已经是最新本则不再执行重复迁移动作
+
+### 🐞 Fix
+
+- blog-client 和 billing-center 升级或回滚 nginx 自动重建
+- **upload.yaml:** 视频档位 level 更新
+
+### 📦 Build
+
+- nginx 依赖升级
+
 ## [v1.4.0] - 2026-09-16
 
 ### ♻️ Refactor
