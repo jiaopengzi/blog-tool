@@ -16,7 +16,7 @@ if [ $# -gt 0 ]; then
     exit 1
 fi
 
-# CI 使用: TAG_ONLY=true 时仅打 tag, 不提交 CHANGELOG.md
+# 本地辅助模式: TAG_ONLY=true 时仅打 tag, 不提交 CHANGELOG.md
 TAG_ONLY=${TAG_ONLY:-false}
 
 # 检查 CHANGELOG.md 是否存在

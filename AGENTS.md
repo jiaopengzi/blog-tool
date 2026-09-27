@@ -76,9 +76,11 @@ find . -name "*.sh" -not -path "./dist/*" -not -path "./.git/*" | xargs shellche
 
 ### CI 构建(GitHub Actions)
 
-- 触发条件：向 `main` 分支推送且 `CHANGELOG.md` 有变更, 或手动触发 `workflow_dispatch`
+- 触发条件：向 `main` 分支推送, 向 `v*` tag 推送, 或手动触发 `workflow_dispatch`
 - 工作流文件：`.github/workflows/build.yaml`
-- 流程：版本号校验 → `bash build.sh` → 提交 dist → 打 git tag
+- 流程：
+    - `main` 分支推送：`bash build.sh` → 提交 `dist/` → 覆盖上传 OSS latest 文件
+    - `v*` tag 推送：`bash build.sh` → 上传对应版本号的 OSS 文件
 
 ### 附加工作流
 
@@ -241,7 +243,7 @@ source "$UTILS_SCRIPT_DIR/log.sh"
 
 - 版本号格式：`vX.Y.Z`, 遵循[语义化版本控制](https://semver.org/lang/zh-CN/)
 - 版本号必须以小写 `v` 开头
-- 每次发版**必须先更新** `CHANGELOG.md`, CI 会自动从中提取版本号并打 tag
+- 每次发版**必须先更新** `CHANGELOG.md`, 然后在本地创建并推送对应的 Git tag
 - commit message 格式：`<Type>(<Scope>): <Subject>`(支持 Unicode/emoji Type)
 - CHANGELOG 格式遵循 [Keep a Changelog](https://keepachangelog.com/) 规范
 
