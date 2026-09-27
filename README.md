@@ -349,6 +349,12 @@ sudo docker logs blog
 curl -fsSL -o blog-tool.sh https://demo.jiaopengzi.com/sh/blog-tool-v1.4.1.sh
 ```
 
+说明:
+
+- `https://demo.jiaopengzi.com/sh/blog-tool.sh` 始终指向主分支最新构建产物.
+- `https://demo.jiaopengzi.com/sh/blog-tool-vX.Y.Z.sh` 仅在推送对应 Git tag 后生成.
+- `blog-tool-dev` 和 `blog-tool-billing-center` 也遵循同样的命名规则.
+
 ### GitHub
 
 ```bash

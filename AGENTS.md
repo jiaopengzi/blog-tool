@@ -82,8 +82,7 @@ find . -name "*.sh" -not -path "./dist/*" -not -path "./.git/*" | xargs shellche
 
 ### 附加工作流
 
-- `sync_gitee.yaml` — 构建完成后同步到 Gitee 镜像仓库
-- `.gitalias/savetag.sh` — CI 使用的 tag 创建脚本
+- `.gitalias/savetag.sh` — 本地辅助创建 Git tag 的脚本
 
 ---
 
