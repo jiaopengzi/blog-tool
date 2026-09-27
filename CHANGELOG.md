@@ -7,6 +7,10 @@
 
 ## [v1.5.0] - 2026-09-27
 
+### ♻️ Refactor
+
+- github action 只负责推送到 oss
+
 ### 💥 Boom
 
 - 使用 oss 来分发脚本
