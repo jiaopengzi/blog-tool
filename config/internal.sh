@@ -300,6 +300,7 @@ ES_END_IP=$IPV4_BASE_ES.$(((ES_NODE_COUNT + 1) % 256))
 ES_CLUSTER_NAME=docker-cluster # 集群名称
 ES_LICENSE=basic               # 设置 es 的许可证, 默认为 basic
 ES_PORT=9200                   # es 端口, 如果使用 127.0.0.1:9200 则表示只能本地访问
+ES_LOG_LEVEL=WARN              # es 根日志级别, 默认提升到 WARN 以减少容器 INFO 日志
 KIBANA_PORT=5601               # kibana 端口
 
 #============================== Elasticsearch 重要提示 ==============================

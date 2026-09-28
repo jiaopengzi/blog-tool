@@ -504,6 +504,7 @@ EOM
     environment:
       - node.name=es-$IMG_VERSION_ES-$formattedI
       - cluster.name=$ES_CLUSTER_NAME
+      - logger.level=$ES_LOG_LEVEL
 EOM
     # 仅当 $ES_NODE_COUNT > 1 时添加 cluster 部分
     if [ "$ES_NODE_COUNT" -gt 1 ]; then
