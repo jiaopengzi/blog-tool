@@ -149,6 +149,71 @@ cleanup_es_legacy_plugin_runtime_files() {
   done
 }
 
+# 备份单个 ES 节点的 IK 自定义配置目录.
+# 参数: $1: node_dir - 节点目录路径(如 $DATA_VOLUME_DIR/es/node-01/).
+# 参数: $2: backup_root_dir - 临时备份根目录.
+# 返回: analysis-ik 目录存在时完成备份, 否则直接返回.
+_backup_ik_custom_config_dir() {
+  log_debug "run _backup_ik_custom_config_dir"
+
+  local node_dir="$1"
+  local backup_root_dir="$2"
+  local ik_config_dir="${node_dir}config/analysis-ik"
+  local node_name=""
+  local backup_dir=""
+
+  if [ -z "$node_dir" ] || [ -z "$backup_root_dir" ]; then
+    log_error "备份 IK 自定义配置目录失败, 参数不能为空"
+    return 1
+  fi
+
+  if [[ ! -d "$ik_config_dir" ]]; then
+    return 0
+  fi
+
+  node_name=$(basename "$node_dir")
+  backup_dir="$backup_root_dir/$node_name"
+
+  rm -rf "$backup_dir"
+  mkdir -p "$backup_dir"
+  sudo cp -a "$ik_config_dir/." "$backup_dir/"
+
+  log_info "已备份 IK 自定义配置目录: $ik_config_dir"
+}
+
+# 恢复单个 ES 节点的 IK 自定义配置目录.
+# 参数: $1: node_dir - 节点目录路径(如 $DATA_VOLUME_DIR/es/node-01/).
+# 参数: $2: backup_root_dir - 临时备份根目录.
+# 返回: 存在备份目录时完成恢复, 否则直接返回.
+_restore_ik_custom_config_dir() {
+  log_debug "run _restore_ik_custom_config_dir"
+
+  local node_dir="$1"
+  local backup_root_dir="$2"
+  local node_name=""
+  local backup_dir=""
+  local ik_config_dir="${node_dir}config/analysis-ik"
+
+  if [ -z "$node_dir" ] || [ -z "$backup_root_dir" ]; then
+    log_error "恢复 IK 自定义配置目录失败, 参数不能为空"
+    return 1
+  fi
+
+  node_name=$(basename "$node_dir")
+  backup_dir="$backup_root_dir/$node_name"
+
+  if [[ ! -d "$backup_dir" ]]; then
+    return 0
+  fi
+
+  sudo rm -rf "$ik_config_dir"
+  setup_directory "$ES_UID" "$ES_GID" 755 "$ik_config_dir"
+  sudo cp -a "$backup_dir/." "$ik_config_dir/"
+  setup_directory "$ES_UID" "$ES_GID" 755 "$ik_config_dir"
+
+  log_info "已恢复 IK 自定义配置目录: $ik_config_dir"
+}
+
 # 复制 es 配置文件
 copy_es_config() {
   log_debug "run copy_es_config"
@@ -157,12 +222,19 @@ copy_es_config() {
   local ca_cert_file="$CA_CERT_DIR/ca.crt" # CA 证书文件
   local ca_key_file="$CA_CERT_DIR/ca.key"  # CA 私钥文件
   local es_image=""
+  local ik_backup_root=""
 
   # 生成 ca 证书
   gen_my_ca_cert
 
   ensure_es_image_with_ik "$IMG_VERSION_ES" || return 1
   es_image=$(get_es_image_with_ik "$IMG_VERSION_ES") || return 1
+
+  ik_backup_root=$(mktemp -d)
+  if [ -z "$ik_backup_root" ] || [ ! -d "$ik_backup_root" ]; then
+    log_error "创建 IK 自定义配置临时备份目录失败"
+    return 1
+  fi
 
   # 创建临时容器,用于复制配置文件
   sudo docker create --name temp_container_es -m 512MB "$es_image" >/dev/null 2>&1 || true
@@ -180,10 +252,11 @@ copy_es_config() {
     # 节点目录
     local dir_node="$DATA_VOLUME_DIR/es/node-$formattedI"
 
-    sudo rm -rf "$dir_node"                                                      # 删除原来的配置文件
+    _backup_ik_custom_config_dir "$dir_node/" "$ik_backup_root" || return 1
+
+    sudo rm -rf "$dir_node/config"                                                # 仅重建配置目录, 保留已有 data
     setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data"  # 创建目录
     sudo docker cp temp_container_es:/usr/share/elasticsearch/config "$dir_node" # 配置
-    sudo docker cp temp_container_es:/usr/share/elasticsearch/data "$dir_node"   # 数据
     sudo cp "$ca_cert_file" "$dir_node/config/ca.crt"                            # CA 证书
 
     # 生成证书
@@ -195,6 +268,8 @@ copy_es_config() {
       "$ca_cert_file" \
       "$ca_key_file"
 
+    _restore_ik_custom_config_dir "$dir_node/" "$ik_backup_root" || return 1
+
     # 再次赋权
     setup_directory "$ES_UID" "$ES_GID" 755 "$dir_node/config" "$dir_node/data"
 
@@ -205,6 +280,7 @@ copy_es_config() {
 
   # 删除临时容器
   sudo docker rm -f temp_container_es >/dev/null 2>&1 || true
+  sudo rm -rf "$ik_backup_root"
   cleanup_es_legacy_plugin_runtime_files
 
   # 是否包含 kibana
@@ -454,7 +530,7 @@ create_docker_compose_es() {
 
   # 如果存在 docker-compose.yaml 执行docker compose down
   if [ -f "$docker_compose_file" ]; then
-    sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down || true # 删除容器
+    sudo docker compose -f "$docker_compose_file" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down --remove-orphans || true # 删除容器
     touch "$docker_compose_file"
   fi
 
@@ -648,7 +724,159 @@ EOM
   # ========================================================= kibana 结束
 }
 
-# es kibana 并健康检查
+# 获取 ES 容器运行状态摘要.
+# 参数: $1: es_container - ES 容器名称.
+# 返回: 通过 stdout 输出 state|health|exit_code|error 格式的摘要, inspect 失败时输出空字符串.
+_get_es_container_runtime_summary() {
+  log_debug "run _get_es_container_runtime_summary"
+
+  local es_container="$1"
+
+  if [ -z "$es_container" ]; then
+    log_error "获取 ES 容器运行状态摘要失败, 参数不能为空"
+    return 1
+  fi
+
+  sudo docker inspect --format='{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.ExitCode}}|{{.State.Error}}' "$es_container" 2>/dev/null || true
+}
+
+# 输出 ES 启动失败时的诊断信息.
+# 参数: $1: es_container - ES 容器名称.
+# 返回: 始终返回 0, 仅用于输出诊断信息.
+_print_es_startup_failure_diagnostics() {
+  log_debug "run _print_es_startup_failure_diagnostics"
+
+  local es_container="$1"
+  local runtime_summary=""
+  local container_state="missing"
+  local container_health="unknown"
+  local exit_code="unknown"
+  local state_error=""
+
+  if [ -z "$es_container" ]; then
+    log_error "输出 ES 启动失败诊断信息失败, 参数不能为空"
+    return 1
+  fi
+
+  runtime_summary=$(_get_es_container_runtime_summary "$es_container")
+  if [ -n "$runtime_summary" ]; then
+    IFS='|' read -r container_state container_health exit_code state_error <<<"$runtime_summary"
+  fi
+
+  log_error "Elasticsearch 启动失败, 容器状态: state=$container_state, health=$container_health, exit_code=$exit_code"
+  if [ -n "$state_error" ]; then
+    log_error "Elasticsearch 容器错误信息: $state_error"
+  fi
+
+  log_warn "输出 ES docker compose 状态, 便于排查启动失败原因"
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" ps >&2 || true
+
+  if sudo docker ps -a --format '{{.Names}}' | grep -Fxq "$es_container"; then
+    log_warn "输出 ES 容器最近 80 行日志, 便于排查启动失败原因"
+    sudo docker logs --tail 80 "$es_container" >&2 || true
+  fi
+
+  return 0
+}
+
+# 等待 ES 容器通过健康检查.
+# 参数: $1: es_container - ES 容器名称.
+# 参数: $2: timeout_seconds - 超时时间(秒), 默认 300.
+# 参数: $3: interval_seconds - 轮询间隔(秒), 默认 10.
+# 返回: 容器健康时返回 0, 超时后输出诊断信息并返回 1.
+_wait_for_es_container_healthy() {
+  log_debug "run _wait_for_es_container_healthy"
+
+  local es_container="$1"
+  local timeout_seconds="${2:-300}"
+  local interval_seconds="${3:-10}"
+  local start_time=""
+  local current_time=""
+  local elapsed_time=0
+  local wait_seconds=0
+  local runtime_summary=""
+  local container_health=""
+
+  if [ -z "$es_container" ]; then
+    log_error "等待 ES 容器健康状态失败, 参数不能为空"
+    return 1
+  fi
+
+  log_warn "等待 Elasticsearch 启动, 这可能需要几分钟时间... 请勿中断！"
+  start_time=$(date +%s)
+
+  while true; do
+    runtime_summary=$(_get_es_container_runtime_summary "$es_container")
+    container_health=$(echo "$runtime_summary" | awk -F'|' '{print $2}')
+
+    if [ "$container_health" == "healthy" ]; then
+      return 0
+    fi
+
+    current_time=$(date +%s)
+    elapsed_time=$((current_time - start_time))
+    if [ "$elapsed_time" -ge "$timeout_seconds" ]; then
+      _print_es_startup_failure_diagnostics "$es_container"
+      log_error "等待 Elasticsearch 启动超时, 已超过 $timeout_seconds 秒"
+      return 1
+    fi
+
+    wait_seconds="$interval_seconds"
+    if [ $((timeout_seconds - elapsed_time)) -lt "$wait_seconds" ]; then
+      wait_seconds=$((timeout_seconds - elapsed_time))
+    fi
+
+    waiting "$wait_seconds"
+  done
+}
+
+# 等待 ES 安全接口可写, 以完成 kibana_system 密码设置.
+# 参数: $1: es_container - ES 容器名称.
+# 参数: $2: timeout_seconds - 超时时间(秒), 默认 120.
+# 参数: $3: interval_seconds - 轮询间隔(秒), 默认 5.
+# 返回: 密码设置成功返回 0, 超时后输出诊断信息并返回 1.
+_wait_for_es_kibana_password_ready() {
+  log_debug "run _wait_for_es_kibana_password_ready"
+
+  local es_container="$1"
+  local timeout_seconds="${2:-120}"
+  local interval_seconds="${3:-5}"
+  local start_time=""
+  local current_time=""
+  local elapsed_time=0
+  local wait_seconds=0
+
+  if [ -z "$es_container" ]; then
+    log_error "等待 ES 安全接口就绪失败, 参数不能为空"
+    return 1
+  fi
+
+  start_time=$(date +%s)
+
+  while true; do
+    if sudo docker exec "$es_container" curl -s --cacert /usr/share/elasticsearch/config/ca.crt -u "elastic:$ELASTIC_PASSWORD" -X POST -H "Content-Type: application/json" "https://localhost:9200/_security/user/kibana_system/_password" -d "{\"password\":\"$KIBANA_PASSWORD\"}" 2>/dev/null | grep -q "^{}"; then
+      return 0
+    fi
+
+    current_time=$(date +%s)
+    elapsed_time=$((current_time - start_time))
+    if [ "$elapsed_time" -ge "$timeout_seconds" ]; then
+      _print_es_startup_failure_diagnostics "$es_container"
+      log_error "等待 Elasticsearch 安全接口就绪超时, 已超过 $timeout_seconds 秒"
+      return 1
+    fi
+
+    wait_seconds="$interval_seconds"
+    if [ $((timeout_seconds - elapsed_time)) -lt "$wait_seconds" ]; then
+      wait_seconds=$((timeout_seconds - elapsed_time))
+    fi
+
+    waiting "$wait_seconds"
+  done
+}
+
+# es kibana 并健康检查.
+# 返回: ES 启动并完成 kibana_system 密码设置返回 0, 否则返回 1.
 health_check_db_es() {
   log_debug "run health_check_db_es"
 
@@ -656,24 +884,14 @@ health_check_db_es() {
   local kibana_password_masked=""
 
   es_container=$(get_runtime_es_container_name "$DOCKER_COMPOSE_FILE_ES" "01")
-  log_warn "等待 Elasticsearch 启动, 这可能需要几分钟时间... 请勿中断！"
-
-  # 通过 docker inspect 检查容器健康状态(依赖 docker-compose 中已配置的 healthcheck)
-  until sudo docker inspect --format='{{.State.Health.Status}}' "$es_container" 2>/dev/null | grep -q 'healthy'; do
-    # 等待 10 秒, 并显示动画
-    waiting 10
-  done
+  _wait_for_es_container_healthy "$es_container" || return 1
 
   log_info "Elasticsearch 启动完成"
 
   kibana_password_masked="${KIBANA_PASSWORD:0:3}***${KIBANA_PASSWORD: -3}"
   log_debug "设置 kibana_system 用户密码为 $kibana_password_masked"
 
-  # 通过 docker exec 在容器内执行, 避免宿主机网络问题
-  until sudo docker exec "$es_container" curl -s --cacert /usr/share/elasticsearch/config/ca.crt -u "elastic:$ELASTIC_PASSWORD" -X POST -H "Content-Type: application/json" "https://localhost:9200/_security/user/kibana_system/_password" -d "{\"password\":\"$KIBANA_PASSWORD\"}" 2>/dev/null | grep -q "^{}"; do
-    # 等待 5 秒, 并显示动画
-    waiting 5
-  done
+  _wait_for_es_kibana_password_ready "$es_container" || return 1
 }
 
 # 启动 es 容器
@@ -698,7 +916,7 @@ start_db_es() {
 # 停止 es 容器
 stop_db_es() {
   log_debug "run stop_db_es"
-  sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down || true
+  sudo docker compose -f "$DOCKER_COMPOSE_FILE_ES" -p "$DOCKER_COMPOSE_PROJECT_NAME_ES" down --remove-orphans || true
 }
 
 # 按当前 docker compose 直接重启 es 容器.
@@ -854,6 +1072,7 @@ sync_es_cert_version() {
       "$ca_cert_file" \
       "$ca_key_file"
 
+    _setup_ik_custom_dic "$node_dir"
     setup_directory "$ES_UID" "$ES_GID" 755 "$node_config_dir"
     generated_count=$((generated_count + 1))
   done
