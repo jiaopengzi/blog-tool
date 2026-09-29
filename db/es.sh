@@ -124,9 +124,10 @@ LABEL blog-tool.es.version="$es_version"
 EOM
 
   # 通过 docker build 生成最终运行镜像. 这里不再使用 --pull, 避免 BuildKit 在国内非腾讯云环境绕过区域感知拉取而直接访问 docker.io.
+  # 同时保留 BuildKit 默认的 auto 进度模式, 避免将 IK 插件安装阶段已知的上游兼容性提示原样放大为安装告警.
   # 这一步成功后, 后续 docker compose up 只负责启动容器, 不再承担插件安装职责.
   log_info "开始构建带 IK 分词器的 ES 镜像: $es_image"
-  sudo DOCKER_BUILDKIT=1 docker build --no-cache --progress=plain -t "$es_image" "$build_context_dir"
+  sudo DOCKER_BUILDKIT=1 docker build --no-cache --progress=auto -t "$es_image" "$build_context_dir"
 }
 
 # 清理旧版运行期插件安装配置.
