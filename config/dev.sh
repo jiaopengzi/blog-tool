@@ -44,14 +44,6 @@ COSIGN_PRIVATE_KEY="${COSIGN_PRIVATE_KEY:-}"         # Cosign 私钥文件绝对
 COSIGN_PRIVATE_KEY_PWD="${COSIGN_PRIVATE_KEY_PWD:-}" # Cosign 私钥密码
 COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"               # Cosign 标准密码环境变量
 
-# docker 镜像版本
-IMG_VERSION_ALPINE="latest"
-IMG_VERSION_GOLANG="1.27.1-alpine"
-IMG_VERSION_NODE="24.21.0"
-IMG_VERSION_NGINX="1.31.6-alpine"
-IMG_VERSION_REGISTRY="3"
-IMG_VERSION_HTTPD="2"
-
 HOST_NAME=""    # 默认主机名, 通过 check_dev_var 交互式加载
 SSH_PORT=""     # 默认 SSH 端口, 通过 check_dev_var 交互式加载
 GATEWAY_IPV4="" # 默认网关, 通过 check_dev_var 交互式加载

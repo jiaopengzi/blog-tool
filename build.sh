@@ -23,6 +23,7 @@ OUTPUT_FILE_DEV="$OUTPUT_DIR/blog-tool-dev.sh"                       # 开发版
 OUTPUT_FILE_USER="$OUTPUT_DIR/blog-tool.sh"                          # 用户版
 OUTPUT_FILE_BILLING_CENTER="$OUTPUT_DIR/blog-tool-billing-center.sh" # 计费中心版
 DEV_SH="config/dev.sh"                                               # 开发配置文件路径
+VERSIONS_SH="config/versions.sh"                                     # 依赖版本清单, 先于其他模块合并
 USER_SH="config/user.sh"                                             # 用户配置文件路径
 USER_BILLING_CENTER_SH="config/user_billing_center.sh"               # 计费中心用户配置文件路径
 LOG_SH="utils/log.sh"                                                # 日志核心脚本路径
@@ -228,7 +229,7 @@ should_skip_file() {
 
     # 跳过已单独处理的文件(用户配置文件、日志脚本)和模块入口文件 _.sh
     case "$file" in
-    "$USER_SH" | "$USER_BILLING_CENTER_SH" | "$LOG_SH" | "$LOG_UI_SH") return 0 ;;
+    "$VERSIONS_SH" | "$USER_SH" | "$USER_BILLING_CENTER_SH" | "$LOG_SH" | "$LOG_UI_SH") return 0 ;;
     esac
     [[ "$filename" == "_.sh" ]] && return 0
 
@@ -266,6 +267,8 @@ append_script_content() {
 }
 
 # 处理其他脚本文件
+# 参数: $1: 目标文件路径. $2: 构建类型, 默认 dev.
+# 返回: 合并成功返回 0, 目标文件不存在时退出.
 handle_other() {
     local target_file=$1
     local build_type="${2:-dev}" # 构建类型: dev | user | billing_center
@@ -284,6 +287,9 @@ handle_other() {
     # 遍历目录并合并文件
     for dir in "${DIRS[@]}"; do
         [[ ! -d "$dir" ]] && continue
+        if [[ "$dir" == "config" ]]; then
+            append_script_content "$VERSIONS_SH" "$target_file"
+        fi
         for file in "$dir"/*.sh; do
             local filename
             filename=$(basename "$file")

@@ -277,6 +277,29 @@ EOL
 PY_BASE64_MAIN='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'
 # shellcheck disable=SC2034
 
+IMG_VERSION_PGSQL="18.6"
+IMG_VERSION_PGSQL_MAJOR="${IMG_VERSION_PGSQL%%.*}"
+IMG_VERSION_REDIS="8.6.8"
+IMG_VERSION_ES="9.5.5"
+IMG_VERSION_KIBANA="$IMG_VERSION_ES"
+
+IMG_VERSION_ALPINE="latest"
+DEP_VERSION_GOLANG="1.27.3"
+IMG_VERSION_GOLANG="${DEP_VERSION_GOLANG}-alpine"
+IMG_VERSION_NODE="24.22.1"
+DEP_VERSION_NGINX="1.31.8"
+IMG_VERSION_NGINX="${DEP_VERSION_NGINX}-alpine"
+IMG_VERSION_REGISTRY="3"
+IMG_VERSION_HTTPD="2"
+
+IMG_VERSION_UBUNTU="24.04"
+SINGLE_UBUNTU_CODENAME="noble"
+SINGLE_NGINX_PACKAGE_SUFFIX="1~${SINGLE_UBUNTU_CODENAME}"
+
+COSIGN_RELEASE_CHANNEL="latest"
+
+# shellcheck disable=SC2034
+
 RUN_MODE="pro"
 
 BLOG_TOOL_BUILD_TYPE="${BLOG_TOOL_BUILD_TYPE:-dev}"
@@ -450,13 +473,6 @@ refresh_host_intranet_network
 
 CA_CERT_DIR="$DATA_VOLUME_DIR/certs_ca"
 CERT_DAYS_VALID=36525
-
-IMG_VERSION_REDIS="8.6.5"    # redis 版本
-IMG_VERSION_PGSQL="18.4"     # pgsql 版本
-IMG_VERSION_PGSQL_MAJOR="18" # pgsql主要版本号
-
-IMG_VERSION_ES="9.4.4"     # 7.17.28 8.18.1
-IMG_VERSION_KIBANA="9.4.4" # 与 es 保持版本一致
 
 JPZ_UID=2025    # 服务端用户
 JPZ_GID=2025    # 服务端用户组
@@ -2700,75 +2716,6 @@ detect_docker_region() {
     DOCKER_REGION_CACHE="$region"
     log_debug "检测到 docker 镜像源区域: $region"
     echo "$region"
-}
-
-DOWNLOAD_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.0-latest-linux64-gpl-8.0.tar.xz" # BtbN 官方最新预编译版下载地址
-TEMP_DIR="/tmp/ffmpeg_install"                                                                                          # 临时下载和解压目录
-INSTALL_DIR="/usr/local/bin"                                                                                            # 安装目录
-
-install_ffmpeg() {
-    log_debug "run install_ffmpeg"
-    log_info "开始安装预编译版 FFmpeg(来自 BtbN 官方构建)"
-    log_info "下载地址: $DOWNLOAD_URL"
-    log_info "安装目录: $INSTALL_DIR"
-
-    sudo mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR" || exit 1
-
-    echo "[1/6] 正在下载 FFmpeg 预编译二进制包..."
-    sudo wget -O ffmpeg.tar.xz "$DOWNLOAD_URL"
-
-    if [ ! -f "ffmpeg.tar.xz" ]; then
-        log_error "下载失败, 请检查网络连接或下载地址是否有效"
-        exit 1
-    fi
-
-    echo "[2/6] 正在解压 ffmpeg.tar.xz..."
-    sudo tar -xvf ffmpeg.tar.xz
-
-    FFMPEG_EXTRACTED_DIR=$(sudo find . -type d -name "*linux64-gpl*" | sudo head -n 1)
-
-    if [ -z "$FFMPEG_EXTRACTED_DIR" ]; then
-        log_error "未找到解压后的 FFmpeg 目录"
-        ls -l
-        exit 1
-    fi
-
-    echo "[3/6] 解压到的目录: $FFMPEG_EXTRACTED_DIR"
-
-    if [ ! -d "$INSTALL_DIR" ]; then
-        log_info "创建安装目录: $INSTALL_DIR"
-        sudo mkdir -p "$INSTALL_DIR"
-    fi
-
-    echo "[4/6] 正在复制 FFmpeg 可执行文件到 $INSTALL_DIR ..."
-    sudo cp "$FFMPEG_EXTRACTED_DIR/bin/ffmpeg" "$INSTALL_DIR/"
-    sudo cp "$FFMPEG_EXTRACTED_DIR/bin/ffprobe" "$INSTALL_DIR/"
-    sudo cp "$FFMPEG_EXTRACTED_DIR/bin/ffplay" "$INSTALL_DIR/"
-
-    echo "[5/6] 赋权并完成安装..."
-    sudo chmod +x "$INSTALL_DIR/ffmpeg"
-    sudo chmod +x "$INSTALL_DIR/ffprobe"
-    sudo chmod +x "$INSTALL_DIR/ffplay"
-
-    echo "[6/6] 清理临时文件..."
-    cd /tmp || exit 1
-    sudo rm -rf "$TEMP_DIR"
-
-    log_info "FFmpeg 预编译版 安装完成！"
-    log_info "📍 FFmpeg 安装位置: $INSTALL_DIR"
-    log_info "🔗 全局命令: ffmpeg, ffprobe, ffplay; 可通过以下命令验证：ffmpeg -version | which ffmpeg"
-}
-
-uninstall_ffmpeg() {
-    log_debug "run uninstall_ffmpeg"
-    log_info "开始卸载 FFmpeg 预编译版..."
-
-    sudo rm -f "$INSTALL_DIR/ffmpeg"
-    sudo rm -f "$INSTALL_DIR/ffprobe"
-    sudo rm -f "$INSTALL_DIR/ffplay"
-
-    log_info "FFmpeg 预编译版 已卸载！"
 }
 
 git_clone() {
@@ -5431,7 +5378,7 @@ install_cosign() {
 
     local latest_version
     latest_version=$(curl --connect-timeout 10 --max-time 30 -fsSL \
-        https://api.github.com/repos/sigstore/cosign/releases/latest 2>/dev/null |
+        "https://api.github.com/repos/sigstore/cosign/releases/${COSIGN_RELEASE_CHANNEL}" 2>/dev/null |
         grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/') || true
 
     if [ -z "$latest_version" ]; then

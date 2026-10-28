@@ -2,13 +2,16 @@
 # blog 单镜像 Dockerfile
 # 1. 直接消费 jiaopengzi/blog-client 与 jiaopengzi/blog-server 的已发布镜像.
 
-ARG NODE_VERSION=24.21.0
-ARG UBUNTU_VERSION=24.04
-ARG POSTGRES_VERSION=18.4
-ARG POSTGRES_MAJOR=18
-ARG REDIS_VERSION=8.6.5
-ARG ELASTICSEARCH_VERSION=9.4.4
-ARG NGINX_VERSION=1.31.6
+# 依赖参数由 config/versions.sh 经 single 构建入口传入, 此处不维护默认版本.
+ARG NODE_VERSION
+ARG UBUNTU_VERSION
+ARG POSTGRES_VERSION
+ARG POSTGRES_MAJOR
+ARG REDIS_VERSION
+ARG ELASTICSEARCH_VERSION
+ARG NGINX_VERSION
+ARG UBUNTU_CODENAME
+ARG NGINX_PACKAGE_SUFFIX
 ARG CLIENT_IMAGE=jiaopengzi/blog-client:latest
 ARG SERVER_IMAGE=jiaopengzi/blog-server:latest
 ARG BLOG_ENV_IMAGE=blog-env-fallback
@@ -66,7 +69,7 @@ RUN set -eux; \
 
 FROM ubuntu-build-base AS elasticsearch-with-ik
 
-ARG ELASTICSEARCH_VERSION=9.4.4
+ARG ELASTICSEARCH_VERSION
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -94,7 +97,7 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
 
 FROM ubuntu-build-base AS redis-binaries
 
-ARG REDIS_VERSION=8.6.5
+ARG REDIS_VERSION
 
 RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
     set -eux; \
@@ -162,9 +165,11 @@ RUN --mount=from=cached-assets,source=/blog-cache,target=/blog-cache,ro \
 
 FROM ubuntu-runtime-base AS blog-env-fallback
 
-ARG POSTGRES_VERSION=18.4
-ARG POSTGRES_MAJOR=18
-ARG NGINX_VERSION=1.31.6
+ARG POSTGRES_VERSION
+ARG POSTGRES_MAJOR
+ARG NGINX_VERSION
+ARG UBUNTU_CODENAME
+ARG NGINX_PACKAGE_SUFFIX
 
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8
@@ -172,7 +177,7 @@ ENV LC_ALL=C.UTF-8
 ENV PATH=/usr/lib/postgresql/${POSTGRES_MAJOR}/bin:${PATH}
 
 RUN set -eux; \
-    nginx_apt_version="${NGINX_VERSION}-1~noble"; \
+    nginx_apt_version="${NGINX_VERSION}-${NGINX_PACKAGE_SUFFIX}"; \
     postgres_version_prefix="${POSTGRES_VERSION}-"; \
     printf '%s\n' '#!/bin/sh' 'exit 101' >/usr/sbin/policy-rc.d; \
     chmod +x /usr/sbin/policy-rc.d; \
@@ -182,9 +187,9 @@ RUN set -eux; \
     printf '%s\n' 'create_main_cluster = false' >/etc/postgresql-common/createcluster.conf; \
     install -d /usr/share/postgresql-common/pgdg /usr/share/keyrings; \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
-    printf '%s\n' 'Types: deb' 'URIs: https://apt.postgresql.org/pub/repos/apt' 'Suites: noble-pgdg' 'Components: main' 'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' >/etc/apt/sources.list.d/pgdg.sources; \
+    printf '%s\n' 'Types: deb' 'URIs: https://apt.postgresql.org/pub/repos/apt' "Suites: ${UBUNTU_CODENAME}-pgdg" 'Components: main' 'Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc' >/etc/apt/sources.list.d/pgdg.sources; \
     curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg; \
-    printf '%s\n' 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu noble nginx' >/etc/apt/sources.list.d/nginx.list; \
+    printf '%s\n' "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu ${UBUNTU_CODENAME} nginx" >/etc/apt/sources.list.d/nginx.list; \
     printf 'Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n' >/etc/apt/preferences.d/99nginx; \
     /usr/local/bin/apt-retry apt-get update; \
     postgresql_apt_version="$(apt-cache madison "postgresql-${POSTGRES_MAJOR}" | awk -v version_prefix="$postgres_version_prefix" '$3 ~ ("^" version_prefix) { print $3; exit }')"; \
@@ -219,7 +224,7 @@ COPY --chown=elasticsearch:elasticsearch --from=elasticsearch-with-ik /opt/elast
 # 复制 Alpine Node 的最小 musl 运行时, 使 Nitro 产物中的 sharp 等 musl 原生模块可加载.
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-runtime /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1 /lib/
-COPY --from=node-runtime /usr/lib/libgcc_s.so.1 /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6.0.34 /usr/lib/
+COPY --from=node-runtime /usr/lib/libgcc_s.so.1 /usr/lib/libstdc++.so.6* /usr/lib/
 
 VOLUME ["/data"]
 

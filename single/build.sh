@@ -1151,6 +1151,7 @@ single_require_env_image() {
 
 # 构建单镜像本地 build 标签.
 # 参数: $1: 是否强制重建, true 表示即使本地已存在也重新构建.
+# 返回: 构建成功或复用已有镜像返回 0, Dockerfile 不存在或构建失败返回非 0.
 single_build_env_image() {
     log_debug "run single_build_env_image"
 
@@ -1174,11 +1175,15 @@ single_build_env_image() {
     log_info "开始构建单镜像运行时环境镜像: $SINGLE_ENV_IMAGE_NAME"
 
     sudo DOCKER_BUILDKIT=1 docker build --no-cache --progress=plain \
+        --build-arg NODE_VERSION="$IMG_VERSION_NODE" \
+        --build-arg UBUNTU_VERSION="$IMG_VERSION_UBUNTU" \
         --build-arg POSTGRES_VERSION="$IMG_VERSION_PGSQL" \
         --build-arg POSTGRES_MAJOR="$IMG_VERSION_PGSQL_MAJOR" \
         --build-arg REDIS_VERSION="$IMG_VERSION_REDIS" \
         --build-arg ELASTICSEARCH_VERSION="$IMG_VERSION_ES" \
-        --build-arg NGINX_VERSION="${IMG_VERSION_NGINX%-alpine}" \
+        --build-arg NGINX_VERSION="$DEP_VERSION_NGINX" \
+        --build-arg UBUNTU_CODENAME="$SINGLE_UBUNTU_CODENAME" \
+        --build-arg NGINX_PACKAGE_SUFFIX="$SINGLE_NGINX_PACKAGE_SUFFIX" \
         -t "$SINGLE_ENV_IMAGE_NAME" \
         -f "$dockerfile_path" \
         "$SINGLE_CONTEXT_DIR" || return 1

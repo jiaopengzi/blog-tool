@@ -10,6 +10,31 @@
 - **架构**: x86_64 (amd64)
 - **权限**: root 或具有 sudo 权限的用户
 
+## 依赖版本维护
+
+[config/versions.sh](config/versions.sh) 是本仓库依赖版本的唯一维护入口.
+数据库、搜索组件、Node、nginx、Go、开发镜像及 single 基础系统版本均在此配置.
+PostgreSQL 主版本、Kibana 版本及镜像变体由基础版本派生, 不重复手填.
+ES、IK、Kibana 保持同版本, 升级前先确认 IK 对应版本已发布.
+
+- 只修改需要升级的基础版本. Ubuntu 版本与发行代号、nginx 包修订号需配套核验.
+- 升级 Node 时核验 Alpine 原生模块兼容性; C++ 运行库从同一 Node 镜像自动复制, 无需维护文件版本号.
+- Cosign 保留动态查询最新发布的策略.
+  `COSIGN_RELEASE_CHANNEL` 也可设为 `tags/vX.Y.Z`, 查询指定 GitHub Release.
+- 执行 `cd python && python3 -m unittest test_main.py test_versions.py -v` 检查配置与构建链路.
+  测试在临时目录生成三个发行版, 不访问现有业务、Docker 或仓库的发行产物.
+- 执行 `bash build.sh` 重新生成发行脚本. 版本清单会先于内部配置合并, Docker 资产仍按原方式嵌入.
+- single 构建继续使用原有 `--env-single` 和 `--build-single` 命令.
+  修改依赖后需先执行 `--env-single` 重建环境镜像, 不会自动替换已有镜像或升级运行中的服务.
+
+两份 single 环境 Dockerfile 不再提供依赖版本默认值, 统一由构建入口传入.
+绕过工具直接执行 `docker build` 时, 必须自行传入同名 `ARG`, 包括基础系统与兼容性参数.
+已生成的发行脚本保留生成时的版本快照, 不会在线同步仓库配置.
+
+此清单不控制前后端独立仓库 Dockerfile 的依赖、应用发布版本或现有 Compose 的实际运行版本.
+CI 的 Action、runner、任务容器版本仍在工作流内原生声明, Dockerfile syntax 版本仍保留原生声明.
+宿主机 apt 软件与 Docker 安装脚本继续沿用原更新策略, 本次不改为锁版本安装.
+
 ## 快速开始
 
 ### 1. 获取工具

@@ -91,6 +91,8 @@ install_common_software() {
 
 # 安装 cosign（官方二进制，适配 Debian/Ubuntu）
 # 若网络无法访问 github.com 则跳过安装, 不阻断主流程
+# 参数: 无. 发布通道由统一依赖清单配置.
+# 返回: 安装成功, 已安装或网络不可用时返回 0.
 install_cosign() {
     log_debug "run install_cosign"
 
@@ -113,7 +115,7 @@ install_cosign() {
     # 获取最新版本号, 设置连接超时与最大等待时间, 避免 github 不可达时长时间阻塞
     local latest_version
     latest_version=$(curl --connect-timeout 10 --max-time 30 -fsSL \
-        https://api.github.com/repos/sigstore/cosign/releases/latest 2>/dev/null |
+        "https://api.github.com/repos/sigstore/cosign/releases/${COSIGN_RELEASE_CHANNEL}" 2>/dev/null |
         grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/') || true
 
     if [ -z "$latest_version" ]; then

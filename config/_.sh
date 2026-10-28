@@ -7,6 +7,7 @@
 
 # shellcheck disable=SC1091
 CONFIG_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$CONFIG_SCRIPT_DIR/versions.sh"
 source "$CONFIG_SCRIPT_DIR/dev.sh"
 source "$CONFIG_SCRIPT_DIR/internal.sh"
 source "$CONFIG_SCRIPT_DIR/user.sh"
